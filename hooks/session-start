@@ -1,0 +1,28 @@
+#!/bin/bash
+# Conference Capture session-start hook
+# Loads the Designpowers using-designpowers skill from its installation path
+
+SKILL_FILE="/Users/andrewtang/Documents/designpowers/skills/using-designpowers/SKILL.md"
+
+if [ ! -f "$SKILL_FILE" ]; then
+  echo "Warning: Designpowers skill not found at $SKILL_FILE" >&2
+  exit 0
+fi
+
+SKILL_CONTENT=$(cat "$SKILL_FILE" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+
+if [ -n "$CURSOR_SESSION" ]; then
+  cat <<EOF
+{
+  "role": "system",
+  "content": "EXTREMELY_IMPORTANT: The following skill MUST be followed in this session:\\n\\n${SKILL_CONTENT}"
+}
+EOF
+else
+  cat <<EOF
+{
+  "role": "user",
+  "content": "EXTREMELY_IMPORTANT: The following skill MUST be followed in this session:\\n\\n${SKILL_CONTENT}"
+}
+EOF
+fi

@@ -1,15 +1,15 @@
 # Design State: Conference Capture
 
-_Last updated: 2026-05-15 by user (Figma)_
+_Last updated: 2026-05-22 by design-lead_
 
 ## Brief
 - **Problem:** Knowledge workers lose the value of conference talks because no single tool captures notes, photos, and audio together — and nothing turns the capture into a shareable output
 - **Primary persona:** Curious cross-disciplinary knowledge worker who attends talks regularly; thinks in connections; the person who built this is this person
 - **Success metric:** Capture faster than 3 apps; review useful without cleanup; export a shareable deck in under 2 minutes
-- **Brief document:** products/noteapp/briefs/2026-05-08-conference-capture.md
+- **Brief document:** design/briefs/2026-05-08-conference-capture.md
 
 ## Personas
-**Document:** products/noteapp/personas/2026-05-10-conference-capture-personas.md
+**Document:** design/personas/2026-05-10-conference-capture-personas.md
 - **Marcus** — 34, product strategist; situational one-handed use, high cognitive load
 - **Priya** — 52, academic researcher; presbyopia, wrist pain, slower mobile typist, Android
 - **James** — 28, UX designer; ADHD, burst capture, zero tolerance for friction
@@ -29,7 +29,7 @@ _Last updated: 2026-05-15 by user (Figma)_
 - **Modes:** Dark (primary) / Light (secondary)
 - **Key references:** Nothing Phone 4a Pro (visual only), Superdot Studio, Kim Albrecht, Mohr/Chuanqisun dot grid, andrewdesigns.info
 - **Aesthetic principles:** Negative space is structure · One color earns its place · The grid is always underneath · Data is the design · Editorial restraint
-- **Taste document:** products/noteapp/taste/2026-05-08-conference-capture-taste.md
+- **Taste document:** design/taste/2026-05-08-conference-capture-taste.md
 
 ## Decisions Log
 
@@ -77,16 +77,16 @@ _Last updated: 2026-05-15 by user (Figma)_
 
 | Artefact | Path | Status |
 |----------|------|--------|
-| Brief v4 | products/noteapp/briefs/2026-05-08-conference-capture.md | Approved |
-| Taste profile | products/noteapp/taste/2026-05-08-conference-capture-taste.md | Approved |
-| Personas | products/noteapp/personas/2026-05-10-conference-capture-personas.md | Complete |
-| Strategy | products/noteapp/strategy/2026-05-08-conference-capture-strategy.md | Approved |
-| Design plan | products/noteapp/plans/2026-05-08-conference-capture-plan.md | Approved |
-| Tokens | products/noteapp/tokens/tokens.md | Complete — Task 1 ✅ |
-| Timeline items | products/noteapp/components/timeline-items.md | Complete — Task 4 ✅ |
-| Navigation model | products/noteapp/screens/navigation.md | Complete — Task 2 ✅ |
-| Capture screen | products/noteapp/screens/capture.md | Complete — Task 3 ✅ |
-| Capture screen mockup | products/noteapp/screens/mockups/capture-screen.png | Complete — Task 3 ✅ |
+| Brief v4 | design/briefs/2026-05-08-conference-capture.md | Approved |
+| Taste profile | design/taste/2026-05-08-conference-capture-taste.md | Approved |
+| Personas | design/personas/2026-05-10-conference-capture-personas.md | Complete |
+| Strategy | design/strategy/2026-05-08-conference-capture-strategy.md | Approved |
+| Design plan | design/plans/2026-05-08-conference-capture-plan.md | Approved |
+| Tokens | design/tokens/tokens.md | Complete — Task 1 ✅ |
+| Timeline items | design/components/timeline-items.md | Complete — Task 4 ✅ |
+| Navigation model | design/screens/navigation.md | Complete — Task 2 ✅ |
+| Capture screen | design/screens/capture.md | Complete — Task 3 ✅ |
+| Capture screen mockups | design/screens/mockups/ | Complete — Task 3 ✅ (v1 programmatic, v2 from Figma) |
 
 ## Design Debt Register
 

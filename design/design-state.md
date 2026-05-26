@@ -47,6 +47,7 @@ _Last updated: 2026-05-22 by design-lead_
 | 2026-05-08 | design-taste | Nothing Phone is visual reference only | OS agnostic product — borrow the aesthetic (dot grid, monochrome), not the platform |
 | 2026-05-08 | design-taste | Flagship quality level | User has refined aesthetic sensibility; this is not a prototype |
 | 2026-05-08 | design-taste | One vivid accent on monochrome base | Judicial use of color — color means something when it appears |
+| 2026-05-25 | user override | Camera: native API (AVFoundation/CameraX), reticle = fixed framing guide only, no auto-detection in v1 | Simpler, more reliable; detection deferred to v2 |
 | 2026-05-19 | user override | Note input: float style (no background), Return key = paragraph break, commit = circle-check icon | Teal circle + gray #9B9A94 checkmark inside |
 | 2026-05-17 | user override (Figma) | Viewfinder reticle corners locked: #00F0E0, 2pt stroke, 28×28pt, 100% opacity | User spec confirmed |
 | 2026-05-14 | user override (Figma) | Recording dot colour → pink/magenta (changed from teal #00F0E0) | User edit in Figma |
@@ -87,6 +88,7 @@ _Last updated: 2026-05-22 by design-lead_
 | Navigation model | design/screens/navigation.md | Complete — Task 2 ✅ |
 | Capture screen | design/screens/capture.md | Complete — Task 3 ✅ |
 | Capture screen mockups | design/screens/mockups/ | Complete — Task 3 ✅ (v1 programmatic, v2 from Figma) |
+| Camera capture interaction | design/interactions/camera-capture.md | Complete — Task 6 ✅ |
 
 ## Design Debt Register
 

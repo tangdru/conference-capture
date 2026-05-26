@@ -143,7 +143,7 @@ No background surface. Camera icon and note pill float directly on `bg-base` —
 
 ## Camera Viewfinder
 
-A fullscreen in-app viewfinder. Does not hand off to the system camera app — keeps the user in context with the session timer visible.
+Uses the native camera API (iOS `AVFoundation` / Android `CameraX`). Does not hand off to the system camera app — the viewfinder is rendered inside the app so the session timer and controls stay visible. Tap-to-focus, pinch-to-zoom, and exposure handling are provided by the native API at no implementation cost.
 
 ### Layout
 ```
@@ -178,7 +178,7 @@ A fullscreen in-app viewfinder. Does not hand off to the system camera app — k
 | Element | Spec |
 |---------|------|
 | Background | Live camera feed |
-| Reticle | Corner brackets — `#00F0E0`, 2pt stroke, 28×28pt per corner, 100% opacity. Auto-detects rectangular shapes (slides, whiteboards, screens). |
+| Reticle | Fixed framing guide — teal corner brackets, `#00F0E0`, 2pt stroke, 28×28pt per corner, 100% opacity. Helps the user manually frame a slide. No auto-detection or edge-snapping in v1. |
 | Orientation | Responds to device rotation — portrait and landscape both supported |
 | Landscape | User rotates counter-clockwise 90° to frame a 16:9 slide; viewfinder fills the full landscape screen; shutter moves to right-side strip for thumb reach |
 

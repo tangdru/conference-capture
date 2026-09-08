@@ -4,11 +4,11 @@ This is the Conference Capture product — a mobile-first app for capturing note
 
 ## Designpowers
 
-This project uses the Designpowers design workflow system, installed at `/Users/andrewtang/Documents/designpowers/`.
+This project uses the Designpowers design workflow system, vendored in this repo at `.designpowers/` (from https://github.com/Owl-Listener/designpowers) so it loads in any session — local, cloud, or mobile.
 
 ## Mandatory: Welcome Sequence First
 
-**Before doing anything else in a new session**, you MUST run the welcome sequence defined in `/Users/andrewtang/Documents/designpowers/skills/using-designpowers/SKILL.md`. This is non-negotiable.
+**Before doing anything else in a new session**, you MUST run the welcome sequence defined in `.designpowers/skills/using-designpowers/SKILL.md`. This is non-negotiable.
 
 1. Invoke the `using-designpowers` skill using the Skill tool **before** responding to any user message
 2. The skill will show the bird welcome screen and handle onboarding
@@ -20,11 +20,11 @@ The welcome sequence checks for a returning user (taste profile at `~/.designpow
 
 ## Skills
 
-All design skills live in `/Users/andrewtang/Documents/designpowers/skills/`. The entry point is `/Users/andrewtang/Documents/designpowers/skills/using-designpowers/SKILL.md` which orchestrates the entire workflow. Never bypass it.
+All design skills live in `.designpowers/skills/`. The entry point is `.designpowers/skills/using-designpowers/SKILL.md` which orchestrates the entire workflow. Never bypass it.
 
 ## Agents
 
-Design agents live in `/Users/andrewtang/Documents/designpowers/agents/`. They are invoked by the workflow — do not call them directly without going through the skill orchestration.
+Design agents live in `.designpowers/agents/`. They are invoked by the workflow — do not call them directly without going through the skill orchestration.
 
 ## Project Structure
 

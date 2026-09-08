@@ -1,8 +1,11 @@
 #!/bin/bash
 # Conference Capture session-start hook
-# Loads the Designpowers using-designpowers skill from its installation path
+# Loads the Designpowers using-designpowers skill, vendored in this repo at .designpowers/
 
-SKILL_FILE="/Users/andrewtang/Documents/designpowers/skills/using-designpowers/SKILL.md"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+SKILL_FILE="$REPO_ROOT/.designpowers/skills/using-designpowers/SKILL.md"
 
 if [ ! -f "$SKILL_FILE" ]; then
   echo "Warning: Designpowers skill not found at $SKILL_FILE" >&2

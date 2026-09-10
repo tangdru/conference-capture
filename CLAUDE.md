@@ -30,9 +30,17 @@ Design agents live in `.designpowers/agents/`. They are invoked by the workflow 
 
 ```
 design/          Design documentation — briefs, strategy, personas, tokens, screens, components
-src/             App source code (tech stack TBD)
+src/             App source code (React + TypeScript + Vite)
 public/          Static assets
 ```
+
+## Prototype
+
+A working prototype (React + TypeScript + Vite, client-only) lives in `src/` and
+deploys to GitHub Pages via `.github/workflows/deploy.yml` on push to `main`. It
+implements the design tasks completed so far (tokens, navigation, capture
+screen, timeline items, camera capture, audio recording states) — see
+`design/design-state.md` for what's built vs. still being designed.
 
 ## Design State
 

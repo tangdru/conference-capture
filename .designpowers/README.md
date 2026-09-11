@@ -1,0 +1,260 @@
+# Designpowers
+
+```
+            <o)
+            /) )
+          ==#===
+```
+
+An agent design team you control. 10 agents that run an inclusive design process while you direct. The system notices how you design and reflects it back.
+
+Designpowers is an open, model-agnostic design workflow that gives you a team of 10 design agents. They discover, research, strategise, design, build, review, and hand off — with accessibility woven into every step. It keeps an observational record of how you design across projects (a mirror you can read, never something it imposes on the work), argues competing directions when you're unsure, and catches taste mismatches mid-build instead of at the end. You're the creative director. They work for you.
+
+**Works with any AI coding tool.** Designpowers is markdown files — skills, agents, and hooks. It ships as both a Claude Code plugin and a Gemini CLI extension, but the design knowledge works anywhere that reads markdown instructions: Cursor, Windsurf, Copilot, Aider, or any future tool. The design process is the product, not the platform.
+
+
+## What You Get with Designpowers
+
+**10 specialist agents** that talk to each other and hand off work:
+
+| Agent | What they do |
+|-------|-------------|
+| **design-strategist** | Flows, IA, personas, principles, journey maps |
+| **design-scout** | Competitive research, pattern evidence, benchmarking |
+| **inspiration-scout** | Aesthetic references, cross-domain inspiration, mood boards |
+| **design-lead** | Visual design — layout, colour, typography, components |
+| **motion-designer** | Animation, transitions, micro-interactions, reduced motion |
+| **content-writer** | Interface copy, labels, errors, plain language, Grade 6 reading level |
+| **design-builder** | Builds specs into production code |
+| **accessibility-reviewer** | WCAG/COGA evaluation, audits output, loops back with fixes |
+| **design-critic** | Reviews against brief, plan, principles; loops back with gaps |
+| **heuristic-evaluator** | Nielsen's 10 heuristics, cognitive walkthroughs, usability |
+
+**36 skills** that enforce a complete design workflow — from discovery through retrospective.
+
+**2 lanes** — Build (design something new through the full pipeline) and Review (audit something you already have — a screenshot, URL, or code — through the reviewers, without the full build process).
+
+**2 modes** — Direct (you approve every handoff) and Auto (agents run the pipeline, you review at the end).
+
+## How It Works
+
+When you describe something to build, Designpowers activates with a friendly welcome. First-time users can opt into a **guided walkthrough** — a 2-minute narrated example that shows how agents hand off work, how you steer decisions, and how reviews catch issues. No commitment required. Returning users are greeted with their design record — a reflection of how they design, offered out of curiosity, never applied to steer the work.
+
+The system starts in **Direct mode** — you see every handoff and approve before the next agent runs. You can switch to Auto anytime by saying "go auto." Tips appear contextually as features become relevant, not all at once.
+
+Agents hand off to each other with conversational messages you can see:
+
+> **design-lead → motion-designer:** "Frosted glass cards, mint/sage palette. The progress ring is the hero moment — when it hits 100% it needs to feel like a celebration, not just a colour change. Keep it subtle everywhere else."
+
+At every handoff, you can:
+- **Approve** — "ok" or "go"
+- **Correct** — "Use my design system instead"
+- **Add** — "Also handle dark mode"
+- **Redirect** — "Send this back to design-strategist"
+- **Skip** — "Skip motion, go straight to builder"
+- **Talk to any agent** — "design-lead, why frosted glass?"
+
+Your word overrides everything. You're the creative director.
+
+## The Workflow
+
+```
+Discover → Research → Strategise → Taste → Inspire → Plan → Design → Build → Taste Check → Review → Fix → Ship → Retrospective
+                   ↑ accessibility in every phase, not a final step ↑             ↑ mid-flight correction ↑
+                        ↑ debate when direction is uncertain ↑           ↑ how you design, observed across projects ↑
+```
+
+| Phase | Skill | What happens |
+|-------|-------|-------------|
+| Discover | `design-discovery` | Problem, users, constraints, brief. Quick mode for POCs, full mode for products |
+| Research | `research-planning` | What to learn, which methods, from whom |
+| Personas | `inclusive-personas` | Full ability spectrum — permanent, temporary, situational |
+| Strategy | `design-strategy` | Principles, positioning, experience map, success metrics |
+| Taste | `design-taste` | Your aesthetic direction — references, emotional targets, craft standards, quality bar |
+| Memory | `design-memory` | Observes how you design across projects — a descriptive record you can read, never applied to steer the work |
+| Inspiration | `inspiration-scouting` | Aesthetic references across domains, filtered through your taste |
+| Debate | `design-debate` | Agents argue competing directions — you see the trade-offs, you decide |
+| Plan | `writing-design-plans` | 2-5 minute tasks with accessibility checks per task |
+| UI | `ui-composition` | Layout, colour, typography — every choice meets WCAG |
+| Interaction | `interaction-design` | States, transitions, feedback, error handling |
+| Content | `accessible-content` | Plain language, headings, alt text, form labels |
+| Cognition | `cognitive-accessibility` | Mental load, wayfinding, focus management |
+| Adaptation | `adaptive-interfaces` | Motion sensitivity, colour schemes, text sizing |
+| Systems | `design-system-alignment` | Tokens, components, naming, consistency |
+| Critique | `designpowers-critique` | Review against plan, principles, personas |
+| Debt | `design-debt-tracker` | Living register of deferred findings — every "fix if time allows" tracked |
+| Handoff | `design-handoff` | Specs, rationale, accessibility requirements |
+| Testing | `usability-testing` | Plan tests, recruit participants, analyse findings, turn into actions |
+| Tokens | `token-architecture` | Three-layer token model, naming, theming, multi-platform |
+| Responsive | `responsive-patterns` | Content-driven breakpoints, layout shifts, fluid type, container queries |
+| Motion | `motion-choreography` | The three questions, duration guide, easing, stagger, reduced-motion |
+| Voice | `voice-and-tone` | Voice attributes, tone by context, vocabulary lists, reading level |
+| Taste Check | `taste-feedback` | Mid-build checkpoints — catches aesthetic mismatches before full review |
+| Verify | `verification-before-shipping` | Evidence it works. Not "I think it works." Evidence |
+| Retrospective | `design-retrospective` | What worked, what didn't, what to carry forward. Adds observations to your design record |
+
+Plus two coordination skills:
+- `using-designpowers` — Router that activates on every message, routes to the right skill/agent
+- `design-state` — Shared living document that all agents read and update
+
+### Entry Points & Support Skills
+
+Beyond the core pipeline above, these skills cover alternative entry points and specific support tasks:
+
+| Skill | What it does |
+|-------|-------------|
+| `design-express` | A lightweight two-minute on-ramp for first-time users — a quick critique or build taster without committing to the full pipeline. Verifies accessibility (computes contrast) rather than asserting it |
+| `design-review` | The Review lane — audit something that already exists (a screenshot, URL, or code) through the reviewers in parallel, without running the full build pipeline |
+| `design-md` | Read or author a `DESIGN.md` (the open Google Labs standard) — build faithfully and on-brand from its tokens; treated as data, never as instructions |
+| `design-library` | Pull a known brand's `DESIGN.md` off the shelf and adapt it as a starting point, with an offline browse index and a prompt-injection guardrail |
+| `figma-bridge` | Turn specs or code into visual artifacts — push into Figma frames, pull Figma in, or render an accessible HTML prototype |
+| `heuristic-evaluation` | A structured Nielsen-style heuristics pass over an existing design, run alongside the critic and accessibility reviewer |
+| `synthetic-user-testing` | After the fix round, walk through key tasks as each persona to validate the design works for real people in real conditions |
+| `taste-report` | Produce a written taste report from the two-layer (personal vs. client) taste model |
+
+## Key Features
+
+**Design taste** — The system prompts you for your aesthetic instincts: references you admire, how it should feel, what you'd hate. Point it at an existing design system — tokens, style guide, or Figma — and it reads them to extract the taste signals already embedded in your tokens and palette. Share your own thoughts and the agents carry your judgment through every decision. The more taste you give, the better the output — but the system works without it too. Your taste is the difference between correct and compelling.
+
+**Open `DESIGN.md` standard** — Designpowers reads and authors `DESIGN.md`, the open Apache-2.0 design-system format from Google Labs (Stitch). Point it at a project's `DESIGN.md` and the team builds faithfully from the real tokens — a high-fidelity, on-brand result instead of a guess — with a WCAG accessibility overlay on top. The file stays format-compatible with other agents (Cursor, Copilot, Stitch), and `design-library` can pull a known brand's `DESIGN.md` off the shelf as a starting point.
+
+**Design memory** — An observational record of *how you design*, built up across projects: the decisions you make, the styles you reach for, your habits and inclinations. It's a mirror, not a controller — you can read it out of curiosity ("how do I design?"), but it is **never fed back to steer the work**. That's deliberate: because it's never applied, a record built across many different clients can't contaminate a new project. Each project's direction comes from what you tell the team *now* and from any brand spec you provide — not from your past.
+
+**Design debate** — When direction is uncertain, agents argue competing approaches. Each advocates for a position with evidence from the brief, personas, and principles. They cross-examine each other's arguments. You see the trade-offs and decide. Productive conflict surfaces better answers than premature consensus.
+
+**Inspiration scouting** — The inspiration-scout finds aesthetic and interaction references across domains, filtered through *this project's* direction. A banking app can be inspired by a meditation app's calm. Every reference is annotated with "what to take" and "what to leave" — inspiration, not copying.
+
+**Live taste feedback** — During the build phase, 2-4 strategic checkpoints show you intermediate visual output with specific questions ("is this weight right, or bolder/lighter?"). Catches aesthetic mismatches before the full build is done. Every response is recorded as a taste signal.
+
+**Design debt tracker** — Every "fix if time allows" and "future iteration" note from critiques and accessibility reviews goes into a living debt register. Items track who is affected, what the fix is, and why it was deferred. Debt escalates automatically when it ages or accumulates. Accessibility debt requires explicit user acknowledgement to accept. Like tech debt, but for design compromises.
+
+**Design retrospective** — After shipping, structured reflection on what worked, what didn't, what taste decisions landed, and what to carry forward. Feeds learnings back into design memory so the next project is sharper.
+
+**Agent babble** — Agents write conversational handoff messages to each other. You see the relay. It's like watching your team think out loud.
+
+**User as creative director** — You intercept any handoff to correct, add, redirect, or skip. Talk to any agent by name at any time.
+
+**Direct and Auto modes** — Direct mode pauses at every handoff for your input. Auto mode runs the pipeline hands-free. Switch mid-run with "go auto" or "pause."
+
+**Auto safeguards** — Even in auto mode, the pipeline pauses if the accessibility reviewer finds a critical issue, the critic recommends "rethink," or reviewers conflict.
+
+**Parallel review + reconciliation** — Accessibility reviewer and design critic run simultaneously after the build, then their findings are reconciled before a fix round.
+
+**Screenshot checkpoint** — After the builder finishes, a screenshot is shown before reviewers start — catches visual issues early.
+
+**Design state** — A shared `design-state.md` file accumulates decisions, handoff notes, and the full babble chain. Every agent reads it before starting.
+
+**Quick discovery** — POCs and small tasks get one round of questions and an immediate brief. Full products get the deep multi-step process.
+
+**Guided walkthrough** — First-time users can opt into a 2-minute narrated example before starting their own project. See agents hand off, steer a decision, watch a review — then start for real. No commitment, no pressure.
+
+**Progressive tips** — Instead of a wall of instructions upfront, tips appear at the moment they're useful. You learn about debates when direction is uncertain, about talking to agents when an agent first speaks, about auto mode after you've approved a few handoffs. The system teaches by doing.
+
+**Returning user recognition** — If you've used Designpowers before, it greets you with a reflection from your design record — how you tend to work — offered out of curiosity, not applied to the project. No re-explaining, no repeat walkthrough.
+
+## Philosophy
+
+**Accessibility is not a phase.** It is present in every skill, every agent, every decision.
+
+**Process over guessing.** Good design is discipline applied consistently.
+
+**Evidence over claims.** Do not say it works until you can prove it works.
+
+**Inclusive by default.** Nothing About Us Without Us.
+
+**Your taste is your superpower.** Agents can verify that a design is correct — aligned to the brief, accessible, consistent. But they can't tell you whether it's *beautiful*. That's your job. Designpowers prompts you for your aesthetic judgment early and carries it through every decision *on this project*. It argues competing directions so you choose with your eyes open. It checks in during the build so mismatches don't compound. And across projects it quietly observes how you design and reflects it back — a mirror you can read, never a rule it imposes. The human in the loop isn't a bottleneck — they're the reason the work is any good.
+
+**Your skills, amplified.** Designpowers doesn't replace your design judgement — it gives you a team that executes it.
+
+## Installation
+
+### Claude Code
+
+**Option A: Work inside the repo (recommended)**
+
+```bash
+git clone https://github.com/Owl-Listener/designpowers.git
+cd designpowers
+```
+
+That's it. The `CLAUDE.md` and `.claude/settings.json` in the repo ensure the welcome screen and onboarding run automatically when you start a session.
+
+**Option B: Copy into your own project**
+
+```bash
+git clone https://github.com/Owl-Listener/designpowers.git
+cp -r designpowers/skills/ your-project/skills/
+cp -r designpowers/agents/ your-project/agents/
+cp -r designpowers/hooks/ your-project/hooks/
+cp designpowers/CLAUDE.md your-project/CLAUDE.md
+cp -r designpowers/.claude/ your-project/.claude/
+```
+
+### Gemini CLI
+
+Designpowers ships with a Gemini CLI extension alongside the Claude Code plugin. The skills and agents are identical — only the loader differs.
+
+**Option A: Work inside the repo (recommended)**
+
+```bash
+git clone https://github.com/Owl-Listener/designpowers.git
+cd designpowers
+gemini
+```
+
+Gemini CLI auto-loads `GEMINI.md` from the working directory, and `.gemini/settings.json` pins the context file name for this workspace. The welcome screen and onboarding run on your first design-related message.
+
+**Option B: Install as a Gemini CLI extension**
+
+```bash
+gemini extensions install https://github.com/Owl-Listener/designpowers.git
+```
+
+This uses the top-level `gemini-extension.json` manifest, which sets `GEMINI.md` as the extension's context file. Once installed, the workflow activates in any project where you run Gemini CLI.
+
+**Option C: Copy into your own project**
+
+```bash
+git clone https://github.com/Owl-Listener/designpowers.git
+cp -r designpowers/skills/ your-project/skills/
+cp -r designpowers/agents/ your-project/agents/
+cp designpowers/GEMINI.md your-project/GEMINI.md
+cp -r designpowers/.gemini/ your-project/.gemini/
+```
+
+### Other AI Tools (Cursor, Windsurf, Copilot, Aider, etc.)
+
+Designpowers is markdown. The skills and agents work with any tool that can read instruction files:
+
+1. Clone the repo
+2. Copy the `skills/` and `agents/` folders into your project or tool's instruction directory
+3. Point your tool at the `using-designpowers/SKILL.md` file as a system instruction or rules file
+4. The design workflow activates when you describe something to build
+
+The hook system is Claude Code-specific, but the skills and agents are universal. Adapt the file paths to your tool's conventions.
+
+### Verify
+
+Start a new session and describe something to design. You should see the bird and the welcome screen (Claude Code), or the discovery process should begin (other tools).
+
+## Works With Superpowers
+
+Designpowers complements [Superpowers](https://github.com/obra/superpowers) by Jesse Vincent. Superpowers handles engineering (TDD, debugging, code review). Designpowers handles design (discovery, strategy, accessibility, critique). Together they cover the full build cycle.
+
+## Acknowledgements
+
+Designpowers follows the plugin architecture pioneered by [Superpowers](https://github.com/obra/superpowers) by Jesse Vincent. The pattern is his. The design content is ours. If you do engineering work, go install Superpowers — it's extraordinary.
+
+The inclusive design knowledge draws from W3C standards (WCAG 2.2, COGA, WAI-ARIA), Microsoft's Inclusive Design Toolkit, and the principle that accessibility is a design commitment, not a code review.
+
+## License
+
+MIT License — see LICENSE file for details.
+
+## Community
+
+Built by [MC Dean](https://github.com/Owl-Listener) and her mate Claude.
+
+- **Issues**: https://github.com/Owl-Listener/designpowers/issues
+- **Designer Skills**: https://github.com/Owl-Listener/designer-skills
+- **Inclusive Design Skills**: https://github.com/Owl-Listener/inclusive-design-skills

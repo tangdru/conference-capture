@@ -1,0 +1,60 @@
+.note-pill {
+  flex: 1;
+  height: 40px;
+  background: var(--bg-base);
+  border: 2px solid var(--accent);
+  border-radius: 24px;
+  padding: 0 16px;
+  color: var(--text-muted);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-input-active {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.note-input-active__field {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.4;
+  max-height: 120px;
+  padding: 8px 0;
+  caret-color: var(--accent);
+  font-family: var(--font-ui);
+}
+
+.note-input-active__field::placeholder {
+  color: var(--text-muted);
+}
+
+.commit-button {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.commit-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

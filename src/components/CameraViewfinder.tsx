@@ -3,7 +3,7 @@ import './CameraViewfinder.css'
 
 interface CameraViewfinderProps {
   sessionTimer: string
-  onCapture: (dataUrl: string) => void
+  onCapture: (blob: Blob) => void
   onClose: () => void
 }
 
@@ -50,11 +50,17 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.82)
 
-    if (navigator.vibrate) navigator.vibrate(30)
-    setShots((prev) => [...prev, dataUrl])
-    onCapture(dataUrl)
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) return
+        if (navigator.vibrate) navigator.vibrate(30)
+        setShots((prev) => [...prev, URL.createObjectURL(blob)])
+        onCapture(blob)
+      },
+      'image/jpeg',
+      0.82,
+    )
   }
 
   function handleTouchStart(e: React.TouchEvent) {

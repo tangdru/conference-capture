@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
+import type { Session as AuthSession } from '@supabase/supabase-js'
 import type { Session } from './types'
-import { loadSessions, saveSessions, makeId } from './storage'
+import * as db from './db'
+import { supabase } from './supabaseClient'
+import { AuthGate } from './auth/AuthGate'
 import { HomeScreen } from './screens/HomeScreen'
 import { CaptureScreen } from './screens/CaptureScreen'
 import { ReviewStub } from './screens/ReviewStub'
@@ -8,39 +11,47 @@ import { ReviewStub } from './screens/ReviewStub'
 type Route = { screen: 'home' } | { screen: 'capture' | 'review'; sessionId: string }
 
 export default function App() {
-  const [sessions, setSessions] = useState<Session[]>(() => loadSessions())
+  return <AuthGate>{(authSession) => <AuthedApp authSession={authSession} />}</AuthGate>
+}
+
+function AuthedApp({ authSession }: { authSession: AuthSession }) {
+  const userId = authSession.user.id
+  const [sessions, setSessions] = useState<Session[] | null>(null)
   const [route, setRoute] = useState<Route>({ screen: 'home' })
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
-    saveSessions(sessions)
-  }, [sessions])
+    db.fetchSessions(userId)
+      .then(setSessions)
+      .catch((err) => setLoadError(err.message ?? 'Failed to load sessions'))
+  }, [userId])
 
-  function updateSession(id: string, updater: (session: Session) => Session) {
-    setSessions((prev) => prev.map((s) => (s.id === id ? updater(s) : s)))
+  function updateSessionLocally(id: string, updater: (session: Session) => Session) {
+    setSessions((prev) => (prev ? prev.map((s) => (s.id === id ? updater(s) : s)) : prev))
   }
 
-  function startNewSession() {
-    const session: Session = {
-      id: makeId(),
-      title: 'Session',
-      status: 'recording',
-      startedAt: Date.now(),
-      accumulatedMs: 0,
-      liveSpanStartedAt: Date.now(),
-      items: [],
-    }
-    setSessions((prev) => [...prev, session])
+  async function startNewSession() {
+    const session = await db.createSession(userId)
+    setSessions((prev) => (prev ? [session, ...prev] : [session]))
     setRoute({ screen: 'capture', sessionId: session.id })
   }
 
   function openSession(id: string) {
-    const session = sessions.find((s) => s.id === id)
+    const session = sessions?.find((s) => s.id === id)
     if (!session) return
     if (session.status === 'recording' || session.status === 'suspended') {
       setRoute({ screen: 'capture', sessionId: id })
     } else {
       setRoute({ screen: 'review', sessionId: id })
     }
+  }
+
+  if (sessions === null) {
+    return loadError ? (
+      <div className="load-error">Couldn't load your sessions: {loadError}</div>
+    ) : (
+      <div className="auth-loading" />
+    )
   }
 
   if (route.screen === 'capture') {
@@ -52,7 +63,8 @@ export default function App() {
     return (
       <CaptureScreen
         session={session}
-        onUpdate={(updater) => updateSession(session.id, updater)}
+        userId={userId}
+        onUpdateLocal={(updater) => updateSessionLocally(session.id, updater)}
         onEnded={() => setRoute({ screen: 'home' })}
         onBack={() => setRoute({ screen: 'home' })}
       />
@@ -69,6 +81,11 @@ export default function App() {
   }
 
   return (
-    <HomeScreen sessions={sessions} onOpenSession={openSession} onNewSession={startNewSession} />
+    <HomeScreen
+      sessions={sessions}
+      onOpenSession={openSession}
+      onNewSession={startNewSession}
+      onSignOut={() => supabase.auth.signOut()}
+    />
   )
 }

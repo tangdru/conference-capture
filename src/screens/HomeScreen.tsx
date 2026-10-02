@@ -7,9 +7,10 @@ interface HomeScreenProps {
   sessions: Session[]
   onOpenSession: (id: string) => void
   onNewSession: () => void
+  onSignOut: () => void
 }
 
-export function HomeScreen({ sessions, onOpenSession, onNewSession }: HomeScreenProps) {
+export function HomeScreen({ sessions, onOpenSession, onNewSession, onSignOut }: HomeScreenProps) {
   const [now, setNow] = useState(Date.now())
 
   useEffect(() => {
@@ -25,7 +26,12 @@ export function HomeScreen({ sessions, onOpenSession, onNewSession }: HomeScreen
   return (
     <div className="home-screen">
       <header className="home-header">
-        <h1 className="home-header__title">Conference Capture</h1>
+        <div className="home-header__row">
+          <h1 className="home-header__title">Conference Capture</h1>
+          <button className="home-header__sign-out" onClick={onSignOut}>
+            Sign out
+          </button>
+        </div>
         <button className="new-session-btn" onClick={onNewSession} aria-label="Start new session">
           + New Session
         </button>

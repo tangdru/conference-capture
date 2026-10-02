@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { TimelineItemData } from '../types'
 import { formatClock } from '../format'
+import { resolvePhotoUrl } from '../db'
 import './Timeline.css'
 
 interface TimelineProps {
@@ -83,13 +84,30 @@ function PhotoRow({
   item: Extract<TimelineItemData, { type: 'photo' }>
   onTap: () => void
 }) {
+  const [resolvedUrl, setResolvedUrl] = useState(item.dataUrl)
+
+  useEffect(() => {
+    if (item.dataUrl) return
+    let cancelled = false
+    resolvePhotoUrl(item.photoPath)
+      .then((url) => {
+        if (!cancelled) setResolvedUrl(url)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [item.dataUrl, item.photoPath])
+
   return (
     <button
       className="photo-row"
       onClick={onTap}
       aria-label={`${item.caption || 'Photo'}, photo captured at ${formatClock(item.timestamp)}`}
     >
-      <img className="photo-row__thumb" src={item.dataUrl} alt="" />
+      <div className="photo-row__thumb">
+        {resolvedUrl && <img className="photo-row__thumb-img" src={resolvedUrl} alt="" />}
+      </div>
       <div className="photo-row__body">
         <p className={`photo-row__caption${item.addedLater ? ' photo-row__caption--later' : ''}`}>
           {item.caption}

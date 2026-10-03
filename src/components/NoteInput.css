@@ -30,7 +30,9 @@
   border: none;
   outline: none;
   color: var(--text-primary);
-  font-size: 15px;
+  /* iOS Safari auto-zooms the page on focus for any input/textarea under
+     16px -- avoid triggering it. */
+  font-size: 16px;
   line-height: 1.4;
   max-height: 120px;
   padding: 8px 0;

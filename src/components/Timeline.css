@@ -114,7 +114,11 @@
   resize: none;
   overflow: hidden;
   font-family: var(--font-ui);
-  font-size: 15px;
+  /* iOS Safari auto-zooms the page on focus for any input/textarea under
+     16px, to make the text legible -- that zoom is what was throwing off
+     scroll-into-view. 16px here (vs. 15px for the static note text) avoids
+     triggering it at all. */
+  font-size: 16px;
   line-height: 1.5;
   color: var(--text-primary);
   caret-color: var(--accent);

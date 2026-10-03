@@ -4,6 +4,7 @@ import { formatElapsed } from '../format'
 import { Timeline } from '../components/Timeline'
 import { NoteInput } from '../components/NoteInput'
 import { CameraViewfinder } from '../components/CameraViewfinder'
+import { useViewportHeight } from '../hooks/useViewportHeight'
 import * as db from '../db'
 import './CaptureScreen.css'
 
@@ -23,6 +24,7 @@ function elapsedFor(session: Session, now: number): number {
 }
 
 export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack }: CaptureScreenProps) {
+  useViewportHeight()
   const [now, setNow] = useState(Date.now())
   const [cameraOpen, setCameraOpen] = useState(false)
   const [confirmingEnd, setConfirmingEnd] = useState(false)

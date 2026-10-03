@@ -65,13 +65,35 @@ body,
   height: 100%;
 }
 
+/* iOS Safari's "scroll the focused input into view" behavior operates on
+   the document, not on position:fixed descendants -- our screens are all
+   fixed-position shells that manage their own internal scrolling (see
+   .timeline, .home-screen). If the document itself can scroll, iOS tries to
+   scroll it to reveal a focused input inside one of those shells anyway,
+   even though the shell doesn't need to move -- and fails to repaint the
+   fixed content at the new scroll position, leaving it blank. Locking the
+   document so it has no scrollable area of its own removes the
+   precondition for that glitch entirely, instead of compensating for it
+   after the fact. */
+html {
+  overflow: hidden;
+}
+
 body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
   margin: 0;
+  overflow: hidden;
   background: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
+}
+
+#root {
+  overflow: hidden;
 }
 
 button {

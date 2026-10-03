@@ -127,6 +127,19 @@ function NoteRowEditor({
     el.focus()
     el.setSelectionRange(el.value.length, el.value.length)
     autoGrow(el)
+
+    // iOS Safari's automatic "scroll the focused field above the keyboard"
+    // behavior only reliably applies to the main document -- it doesn't
+    // extend into a custom overflow:auto container like .timeline, so the
+    // note being edited can end up hidden behind the keyboard with nothing
+    // bringing it back into view. Do that scroll ourselves whenever the
+    // visual viewport changes (i.e. the keyboard opening/closing/resizing).
+    const bringIntoView = () => {
+      requestAnimationFrame(() => el?.scrollIntoView({ block: 'center', behavior: 'smooth' }))
+    }
+    bringIntoView()
+    window.visualViewport?.addEventListener('resize', bringIntoView)
+    return () => window.visualViewport?.removeEventListener('resize', bringIntoView)
   }, [])
 
   function autoGrow(el: HTMLTextAreaElement) {

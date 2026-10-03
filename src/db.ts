@@ -125,6 +125,21 @@ export async function addNote(sessionId: string, userId: string, text: string): 
   return { id: data.id, type: 'note', text, timestamp: new Date(data.item_timestamp).getTime() }
 }
 
+export async function updateNoteText(itemId: string, text: string): Promise<void> {
+  const { error } = await supabase.from('cc_timeline_items').update({ text }).eq('id', itemId)
+  if (error) throw error
+}
+
+export async function deleteTimelineItem(item: TimelineItemData): Promise<void> {
+  if (item.type === 'photo') {
+    // Best-effort -- an orphaned storage object is a minor cleanup issue,
+    // not something that should block the item disappearing for the user.
+    await supabase.storage.from(PHOTOS_BUCKET).remove([item.photoPath])
+  }
+  const { error } = await supabase.from('cc_timeline_items').delete().eq('id', item.id)
+  if (error) throw error
+}
+
 export async function addPhoto(sessionId: string, userId: string, blob: Blob): Promise<PhotoItem> {
   const path = `${userId}/${sessionId}/${crypto.randomUUID()}.jpg`
 

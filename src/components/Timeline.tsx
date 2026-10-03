@@ -1,17 +1,21 @@
-import { useEffect, useRef } from 'react'
-import type { TimelineItemData } from '../types'
+import { useEffect, useRef, useState } from 'react'
+import type { NoteItem, PhotoItem, TimelineItemData } from '../types'
 import { formatClock } from '../format'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
+import { SwipeToDelete } from './SwipeToDelete'
 import './Timeline.css'
 
 interface TimelineProps {
   items: TimelineItemData[]
   onPhotoTap: (id: string) => void
+  onEditNote: (item: NoteItem) => void
+  onDeleteItem: (item: TimelineItemData) => void
 }
 
-export function Timeline({ items, onPhotoTap }: TimelineProps) {
+export function Timeline({ items, onPhotoTap, onEditNote, onDeleteItem }: TimelineProps) {
   const endRef = useRef<HTMLDivElement>(null)
   const userScrolledUp = useRef(false)
+  const [revealedId, setRevealedId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!userScrolledUp.current) {
@@ -38,16 +42,24 @@ export function Timeline({ items, onPhotoTap }: TimelineProps) {
         const el = e.currentTarget
         const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
         userScrolledUp.current = distanceFromBottom > 40
+        setRevealedId(null)
       }}
     >
       {items.map((item, index) => (
         <div key={item.id}>
           {index > 0 && <div className="dot-divider" aria-hidden="true" />}
-          {item.type === 'note' ? (
-            <NoteRow item={item} />
-          ) : (
-            <PhotoRow item={item} onTap={() => onPhotoTap(item.id)} />
-          )}
+          <SwipeToDelete
+            id={item.id}
+            revealedId={revealedId}
+            onReveal={setRevealedId}
+            onDelete={() => onDeleteItem(item)}
+          >
+            {item.type === 'note' ? (
+              <NoteRow item={item} onTap={() => onEditNote(item)} />
+            ) : (
+              <PhotoRow item={item} onTap={() => onPhotoTap(item.id)} />
+            )}
+          </SwipeToDelete>
         </div>
       ))}
       <div ref={endRef} />
@@ -55,15 +67,15 @@ export function Timeline({ items, onPhotoTap }: TimelineProps) {
   )
 }
 
-function NoteRow({ item }: { item: Extract<TimelineItemData, { type: 'note' }> }) {
+function NoteRow({ item, onTap }: { item: NoteItem; onTap: () => void }) {
   const label = item.addedLater
     ? `${item.text}, added later at ${formatClock(item.timestamp)}`
     : `${item.text}, captured at ${formatClock(item.timestamp)}`
   return (
-    <div
+    <button
       className={`note-row${item.addedLater ? ' note-row--later' : ''}`}
-      role="text"
-      aria-label={label}
+      onClick={onTap}
+      aria-label={`${label}. Double tap to edit.`}
     >
       <div className="note-row__bar" aria-hidden="true" />
       <div className="note-row__body">
@@ -73,17 +85,11 @@ function NoteRow({ item }: { item: Extract<TimelineItemData, { type: 'note' }> }
         <span className="mono-timestamp">{formatClock(item.timestamp)}</span>
         {item.addedLater && <span className="added-later">Added later</span>}
       </div>
-    </div>
+    </button>
   )
 }
 
-function PhotoRow({
-  item,
-  onTap,
-}: {
-  item: Extract<TimelineItemData, { type: 'photo' }>
-  onTap: () => void
-}) {
+function PhotoRow({ item, onTap }: { item: PhotoItem; onTap: () => void }) {
   const resolvedUrl = usePhotoUrl(item)
 
   return (

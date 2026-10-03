@@ -18,13 +18,14 @@ export function useViewportHeight() {
     }
 
     update()
+    // Only 'resize' (keyboard open/close, orientation change) — 'scroll'
+    // fires during ordinary pinch-zoom panning and isn't relevant here;
+    // reacting to it just risks a spurious reflow mid-gesture.
     vv?.addEventListener('resize', update)
-    vv?.addEventListener('scroll', update)
     window.addEventListener('resize', update)
 
     return () => {
       vv?.removeEventListener('resize', update)
-      vv?.removeEventListener('scroll', update)
       window.removeEventListener('resize', update)
     }
   }, [])

@@ -7,6 +7,7 @@
      the real visible height via useViewportHeight so the note input and its
      commit button stay reachable instead of sliding behind the keyboard. */
   height: var(--app-vh, 100dvh);
+  overflow: hidden;
   background: var(--bg-base);
   display: flex;
   flex-direction: column;

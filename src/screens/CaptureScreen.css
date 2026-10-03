@@ -7,13 +7,6 @@
      the real visible height via useViewportHeight so the note input and its
      commit button stay reachable instead of sliding behind the keyboard. */
   height: var(--app-vh, 100dvh);
-  /* `fixed` pins to the layout viewport, not the visual one. The keyboard
-     (and/or zoom) can pan the visual viewport away from the layout
-     viewport's origin -- visualViewport.offsetLeft/offsetTop go non-zero --
-     which otherwise scrolls this entire shell off-screen even though its
-     own position never changed. Compensate so it stays visually anchored
-     to whatever is actually on screen. */
-  transform: translate(var(--app-vv-x, 0px), var(--app-vv-y, 0px));
   overflow: hidden;
   background: var(--bg-base);
   display: flex;

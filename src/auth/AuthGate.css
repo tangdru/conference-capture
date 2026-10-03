@@ -1,0 +1,81 @@
+.auth-loading {
+  min-height: 100vh;
+  background: var(--bg-base);
+}
+
+.sign-in-screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg-base);
+}
+
+.sign-in-screen__title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 32px;
+}
+
+.sign-in-screen__form {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sign-in-screen__hint {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  text-align: center;
+}
+
+.sign-in-screen__input {
+  height: 48px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  padding: 0 16px;
+  font-size: 15px;
+  outline: none;
+}
+
+.sign-in-screen__input:focus {
+  border-color: var(--accent);
+}
+
+.sign-in-screen__submit {
+  height: 48px;
+  border-radius: 24px;
+  border: none;
+  background: var(--accent);
+  color: var(--bg-base);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.sign-in-screen__submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.sign-in-screen__sent {
+  color: var(--text-secondary);
+  font-size: 15px;
+  text-align: center;
+  max-width: 320px;
+}
+
+.sign-in-screen__error {
+  color: var(--semantic-error);
+  font-size: 13px;
+  margin: 0;
+  text-align: center;
+}

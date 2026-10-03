@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
-import type { Session, TimelineItemData } from '../types'
+import type { Session } from '../types'
 import { formatElapsed } from '../format'
 import { Timeline } from '../components/Timeline'
 import { NoteInput } from '../components/NoteInput'
 import { CameraViewfinder } from '../components/CameraViewfinder'
-import { makeId } from '../storage'
+import * as db from '../db'
 import './CaptureScreen.css'
 
 interface CaptureScreenProps {
   session: Session
-  onUpdate: (updater: (session: Session) => Session) => void
+  userId: string
+  onUpdateLocal: (updater: (session: Session) => Session) => void
   onEnded: () => void
   onBack: () => void
 }
@@ -21,10 +22,11 @@ function elapsedFor(session: Session, now: number): number {
   return session.accumulatedMs + live
 }
 
-export function CaptureScreen({ session, onUpdate, onEnded, onBack }: CaptureScreenProps) {
+export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack }: CaptureScreenProps) {
   const [now, setNow] = useState(Date.now())
   const [cameraOpen, setCameraOpen] = useState(false)
   const [confirmingEnd, setConfirmingEnd] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     if (session.status !== 'recording') return
@@ -34,45 +36,62 @@ export function CaptureScreen({ session, onUpdate, onEnded, onBack }: CaptureScr
 
   const elapsedMs = elapsedFor(session, now)
 
-  function addItem(item: TimelineItemData) {
-    onUpdate((s) => ({ ...s, items: [...s.items, item] }))
+  async function commitNote(text: string) {
+    try {
+      const item = await db.addNote(session.id, userId, text)
+      onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save note')
+    }
   }
 
-  function commitNote(text: string) {
-    addItem({ id: makeId(), type: 'note', text, timestamp: Date.now() })
+  async function commitPhoto(blob: Blob) {
+    try {
+      const item = await db.addPhoto(session.id, userId, blob)
+      onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save photo')
+    }
   }
 
-  function commitPhoto(dataUrl: string) {
-    addItem({
-      id: makeId(),
-      type: 'photo',
-      dataUrl,
-      caption: 'Untitled photo',
-      timestamp: Date.now(),
-    })
+  async function stop() {
+    const accumulatedMs = elapsedFor(session, Date.now())
+    onUpdateLocal((s) => ({ ...s, status: 'suspended', accumulatedMs, liveSpanStartedAt: null }))
+    try {
+      await db.updateSession(session.id, { status: 'suspended', accumulatedMs, liveSpanStartedAt: null })
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save')
+    }
   }
 
-  function stop() {
-    onUpdate((s) => ({
-      ...s,
-      status: 'suspended',
-      accumulatedMs: elapsedFor(s, Date.now()),
-      liveSpanStartedAt: null,
-    }))
+  async function resume() {
+    const liveSpanStartedAt = Date.now()
+    onUpdateLocal((s) => ({ ...s, status: 'recording', liveSpanStartedAt }))
+    try {
+      await db.updateSession(session.id, { status: 'recording', liveSpanStartedAt })
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save')
+    }
   }
 
-  function resume() {
-    onUpdate((s) => ({ ...s, status: 'recording', liveSpanStartedAt: Date.now() }))
-  }
-
-  function confirmEnd() {
-    onUpdate((s) => ({ ...s, status: 'enriching' }))
+  async function confirmEnd() {
+    onUpdateLocal((s) => ({ ...s, status: 'enriching' }))
     setConfirmingEnd(false)
     onEnded()
-    // Simulate background enrichment.
-    window.setTimeout(() => {
-      onUpdate((s) => ({ ...s, status: 'complete' }))
-    }, 3000)
+    try {
+      await db.updateSession(session.id, { status: 'enriching' })
+      // Simulate background enrichment.
+      window.setTimeout(async () => {
+        onUpdateLocal((s) => ({ ...s, status: 'complete' }))
+        try {
+          await db.updateSession(session.id, { status: 'complete' })
+        } catch {
+          // Best-effort — the session still shows complete locally.
+        }
+      }, 3000)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save')
+    }
   }
 
   return (
@@ -115,6 +134,12 @@ export function CaptureScreen({ session, onUpdate, onEnded, onBack }: CaptureScr
           )}
         </div>
       </header>
+
+      {saveError && (
+        <div className="save-error" role="alert">
+          {saveError} <button onClick={() => setSaveError(null)}>Dismiss</button>
+        </div>
+      )}
 
       <Timeline items={session.items} onPhotoTap={() => {}} />
 

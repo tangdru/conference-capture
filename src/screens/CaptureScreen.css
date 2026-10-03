@@ -91,6 +91,28 @@
   height: 36px;
 }
 
+.save-error {
+  flex-shrink: 0;
+  background: rgba(255, 107, 107, 0.12);
+  color: var(--semantic-error);
+  font-size: 13px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.save-error button {
+  background: none;
+  border: none;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
 .capture-actions {
   flex-shrink: 0;
   display: flex;

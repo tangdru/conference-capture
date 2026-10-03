@@ -11,7 +11,10 @@ export interface NoteItem {
 export interface PhotoItem {
   id: string
   type: 'photo'
-  dataUrl: string
+  /** Object URL for immediate display. Present once resolved (freshly captured, or lazily fetched from storage). */
+  dataUrl?: string
+  /** Storage path in the cc-photos bucket — the persisted source of truth. */
+  photoPath: string
   caption: string
   timestamp: number
   addedLater?: boolean

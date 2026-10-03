@@ -4,6 +4,7 @@ import { formatElapsed } from '../format'
 import { Timeline } from '../components/Timeline'
 import { NoteInput } from '../components/NoteInput'
 import { CameraViewfinder } from '../components/CameraViewfinder'
+import { PhotoViewer } from '../components/PhotoViewer'
 import { useViewportHeight } from '../hooks/useViewportHeight'
 import * as db from '../db'
 import './CaptureScreen.css'
@@ -29,6 +30,7 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
   const [cameraOpen, setCameraOpen] = useState(false)
   const [confirmingEnd, setConfirmingEnd] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [viewingPhotoId, setViewingPhotoId] = useState<string | null>(null)
 
   useEffect(() => {
     if (session.status !== 'recording') return
@@ -37,6 +39,9 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
   }, [session.status])
 
   const elapsedMs = elapsedFor(session, now)
+  const viewingPhoto = session.items.find(
+    (i): i is Extract<typeof i, { type: 'photo' }> => i.type === 'photo' && i.id === viewingPhotoId,
+  )
 
   async function commitNote(text: string) {
     try {
@@ -143,7 +148,7 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
         </div>
       )}
 
-      <Timeline items={session.items} onPhotoTap={() => {}} />
+      <Timeline items={session.items} onPhotoTap={setViewingPhotoId} />
 
       <div className="capture-actions">
         <button
@@ -162,6 +167,10 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
         </button>
         <NoteInput onCommit={commitNote} />
       </div>
+
+      {viewingPhoto && (
+        <PhotoViewer item={viewingPhoto} onClose={() => setViewingPhotoId(null)} />
+      )}
 
       {cameraOpen && (
         <CameraViewfinder

@@ -1,6 +1,13 @@
 .timeline {
   flex: 1;
+  /* Without this, a flex child defaults to min-height:auto, so once content
+     (notes/photos) grows taller than the available space, the item refuses
+     to shrink and the whole screen overflows/drags instead of just this
+     scrolling internally. */
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 0 20px;
   display: flex;
   flex-direction: column;

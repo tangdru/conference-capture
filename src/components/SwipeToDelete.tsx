@@ -19,11 +19,13 @@ interface SwipeToDeleteProps {
   revealedId: string | null
   onReveal: (id: string | null) => void
   onDelete: () => void
+  /** Suppresses the swipe gesture entirely, e.g. while this row is being edited inline. */
+  disabled?: boolean
   children: ReactNode
 }
 
-export function SwipeToDelete({ id, revealedId, onReveal, onDelete, children }: SwipeToDeleteProps) {
-  const isRevealed = revealedId === id
+export function SwipeToDelete({ id, revealedId, onReveal, onDelete, disabled, children }: SwipeToDeleteProps) {
+  const isRevealed = !disabled && revealedId === id
   const contentRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<DragState | null>(null)
   // A browser can still synthesize a click after pointerup even when the
@@ -49,6 +51,7 @@ export function SwipeToDelete({ id, revealedId, onReveal, onDelete, children }: 
   }, [isRevealed])
 
   function onPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
+    if (disabled) return
     if (e.pointerType === 'mouse' && e.button !== 0) return
     dragRef.current = {
       startX: e.clientX,

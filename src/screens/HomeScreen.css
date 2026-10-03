@@ -1,5 +1,10 @@
 .home-screen {
-  min-height: 100%;
+  /* The document itself no longer scrolls (see index.css) -- this screen
+     owns its own scroll region instead of relying on body scroll. */
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 24px 20px calc(48px + env(safe-area-inset-bottom));
   max-width: 480px;
   margin: 0 auto;

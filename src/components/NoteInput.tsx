@@ -2,13 +2,23 @@ import { useEffect, useRef, useState } from 'react'
 import './NoteInput.css'
 
 interface NoteInputProps {
+  /** Set when editing an existing note — pre-fills and activates the input. */
+  editing: { id: string; text: string } | null
   onCommit: (text: string) => void
+  onCancelEdit: () => void
 }
 
-export function NoteInput({ onCommit }: NoteInputProps) {
+export function NoteInput({ editing, onCommit, onCancelEdit }: NoteInputProps) {
   const [active, setActive] = useState(false)
   const [text, setText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (editing) {
+      setText(editing.text)
+      setActive(true)
+    }
+  }, [editing?.id])
 
   useEffect(() => {
     if (active) textareaRef.current?.focus()
@@ -24,6 +34,7 @@ export function NoteInput({ onCommit }: NoteInputProps) {
   function cancel() {
     setText('')
     setActive(false)
+    if (editing) onCancelEdit()
   }
 
   if (!active) {
@@ -55,7 +66,7 @@ export function NoteInput({ onCommit }: NoteInputProps) {
       <button
         className="commit-button"
         onClick={commit}
-        aria-label="Commit note"
+        aria-label={editing ? 'Save note' : 'Commit note'}
         disabled={!text.trim()}
       >
         <svg viewBox="0 0 26 26" width="26" height="26" aria-hidden="true">

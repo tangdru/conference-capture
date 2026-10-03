@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Session } from '../types'
+import type { NoteItem, Session, TimelineItemData } from '../types'
 import { formatElapsed } from '../format'
 import { Timeline } from '../components/Timeline'
 import { NoteInput } from '../components/NoteInput'
@@ -31,6 +31,7 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
   const [confirmingEnd, setConfirmingEnd] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [viewingPhotoId, setViewingPhotoId] = useState<string | null>(null)
+  const [editingNote, setEditingNote] = useState<{ id: string; text: string } | null>(null)
 
   useEffect(() => {
     if (session.status !== 'recording') return
@@ -43,12 +44,41 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
     (i): i is Extract<typeof i, { type: 'photo' }> => i.type === 'photo' && i.id === viewingPhotoId,
   )
 
-  async function commitNote(text: string) {
+  async function commitNoteInput(text: string) {
+    if (editingNote) {
+      const { id } = editingNote
+      setEditingNote(null)
+      onUpdateLocal((s) => ({
+        ...s,
+        items: s.items.map((i) => (i.id === id && i.type === 'note' ? { ...i, text } : i)),
+      }))
+      try {
+        await db.updateNoteText(id, text)
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : 'Failed to save note')
+      }
+      return
+    }
+
     try {
       const item = await db.addNote(session.id, userId, text)
       onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save note')
+    }
+  }
+
+  function editNote(item: NoteItem) {
+    setEditingNote({ id: item.id, text: item.text })
+  }
+
+  async function deleteItem(item: TimelineItemData) {
+    if (editingNote?.id === item.id) setEditingNote(null)
+    onUpdateLocal((s) => ({ ...s, items: s.items.filter((i) => i.id !== item.id) }))
+    try {
+      await db.deleteTimelineItem(item)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to delete')
     }
   }
 
@@ -148,7 +178,12 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
         </div>
       )}
 
-      <Timeline items={session.items} onPhotoTap={setViewingPhotoId} />
+      <Timeline
+        items={session.items}
+        onPhotoTap={setViewingPhotoId}
+        onEditNote={editNote}
+        onDeleteItem={deleteItem}
+      />
 
       <div className="capture-actions">
         <button
@@ -165,7 +200,11 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
             <circle cx="12" cy="13" r="3.2" stroke="var(--accent)" strokeWidth="1.6" />
           </svg>
         </button>
-        <NoteInput onCommit={commitNote} />
+        <NoteInput
+          editing={editingNote}
+          onCommit={commitNoteInput}
+          onCancelEdit={() => setEditingNote(null)}
+        />
       </div>
 
       {viewingPhoto && (

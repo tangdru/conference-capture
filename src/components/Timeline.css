@@ -61,6 +61,11 @@
   align-items: flex-start;
   padding: 8px 0;
   gap: 14px;
+  width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
 }
 
 .note-row__bar {

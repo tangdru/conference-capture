@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import type { TimelineItemData } from '../types'
 import { formatClock } from '../format'
-import { resolvePhotoUrl } from '../db'
+import { usePhotoUrl } from '../hooks/usePhotoUrl'
 import './Timeline.css'
 
 interface TimelineProps {
@@ -84,20 +84,7 @@ function PhotoRow({
   item: Extract<TimelineItemData, { type: 'photo' }>
   onTap: () => void
 }) {
-  const [resolvedUrl, setResolvedUrl] = useState(item.dataUrl)
-
-  useEffect(() => {
-    if (item.dataUrl) return
-    let cancelled = false
-    resolvePhotoUrl(item.photoPath)
-      .then((url) => {
-        if (!cancelled) setResolvedUrl(url)
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [item.dataUrl, item.photoPath])
+  const resolvedUrl = usePhotoUrl(item)
 
   return (
     <button

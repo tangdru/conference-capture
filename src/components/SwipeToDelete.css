@@ -13,7 +13,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--semantic-error);
+  background: transparent;
   border: none;
   cursor: pointer;
 }

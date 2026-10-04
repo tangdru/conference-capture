@@ -5,7 +5,7 @@
   height: 100dvh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 24px 20px calc(48px + env(safe-area-inset-bottom));
+  padding: 24px 20px calc(96px + env(safe-area-inset-bottom));
   max-width: 480px;
   margin: 0 auto;
 }
@@ -13,7 +13,6 @@
 .home-header {
   display: flex;
   flex-direction: column;
-  gap: 16px;
   margin-bottom: 24px;
 }
 
@@ -39,7 +38,9 @@
 }
 
 .new-session-btn {
-  align-self: flex-start;
+  position: fixed;
+  left: 20px;
+  bottom: calc(24px + env(safe-area-inset-bottom));
   background: var(--accent);
   color: var(--bg-base);
   border: none;
@@ -49,6 +50,7 @@
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
 .home-list {

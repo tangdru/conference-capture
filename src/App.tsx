@@ -47,8 +47,51 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     }
   }
 
-  function exportSession(id: string) {
-    setRoute({ screen: 'review', sessionId: id })
+  async function generateDeckForSession(id: string) {
+    updateSessionLocally(id, (s) => ({ ...s, deckStatus: 'generating', deckError: null }))
+    try {
+      await db.generateDeck(id)
+    } catch {
+      // Fall through — the refetch below reads the authoritative state the
+      // edge function itself recorded, whether this call failed or not.
+    }
+    try {
+      const state = await db.fetchSessionDeckState(id)
+      updateSessionLocally(id, (s) => ({ ...s, ...state }))
+    } catch (err) {
+      updateSessionLocally(id, (s) => ({
+        ...s,
+        deckStatus: 'error',
+        deckError: err instanceof Error ? err.message : 'Failed to generate presentation',
+      }))
+    }
+  }
+
+  async function viewDeck(id: string) {
+    const session = sessions?.find((s) => s.id === id)
+    if (!session?.deckPath) return
+    try {
+      const url = await db.resolveDeckUrl(session.deckPath)
+      window.open(url, '_blank', 'noopener')
+    } catch (err) {
+      setHomeError(err instanceof Error ? err.message : 'Failed to open presentation')
+    }
+  }
+
+  async function downloadDeck(id: string) {
+    const session = sessions?.find((s) => s.id === id)
+    if (!session?.deckPath) return
+    try {
+      const url = await db.resolveDeckUrl(session.deckPath)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${session.title.replace(/[^\w\- ]+/g, '').trim() || 'presentation'}.html`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+    } catch (err) {
+      setHomeError(err instanceof Error ? err.message : 'Failed to download presentation')
+    }
   }
 
   async function deleteSession(id: string) {
@@ -98,7 +141,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       <ReviewStub
         session={session}
         onBack={() => setRoute({ screen: 'home' })}
-        onUpdateLocal={(updater) => updateSessionLocally(session.id, updater)}
+        onGenerateDeck={generateDeckForSession}
       />
     )
   }
@@ -109,7 +152,9 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       onOpenSession={openSession}
       onNewSession={startNewSession}
       onSignOut={() => supabase.auth.signOut()}
-      onExportSession={exportSession}
+      onGenerateDeck={generateDeckForSession}
+      onViewDeck={viewDeck}
+      onDownloadDeck={downloadDeck}
       onDeleteSession={deleteSession}
       error={homeError}
       onDismissError={() => setHomeError(null)}

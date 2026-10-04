@@ -34,25 +34,29 @@ export function HomeScreen({ sessions, onOpenSession, onNewSession, onSignOut }:
         </div>
       </header>
 
-      <div className="home-list">
-        {active && (
-          <SessionCard session={active} now={now} onTap={() => onOpenSession(active.id)} />
-        )}
+      <div className="home-scroll">
+        <div className="home-list">
+          {active && (
+            <SessionCard session={active} now={now} onTap={() => onOpenSession(active.id)} />
+          )}
 
-        {others.length === 0 && !active && (
-          <p className="home-empty">
-            No sessions yet. Tap "New Session" to start capturing your first talk.
-          </p>
-        )}
+          {others.length === 0 && !active && (
+            <p className="home-empty">
+              No sessions yet. Tap "New Session" to start capturing your first talk.
+            </p>
+          )}
 
-        {others.map((s) => (
-          <SessionCard key={s.id} session={s} now={now} onTap={() => onOpenSession(s.id)} />
-        ))}
+          {others.map((s) => (
+            <SessionCard key={s.id} session={s} now={now} onTap={() => onOpenSession(s.id)} />
+          ))}
+        </div>
       </div>
 
-      <button className="new-session-btn" onClick={onNewSession} aria-label="Start new session">
-        + New Session
-      </button>
+      <div className="home-footer">
+        <button className="new-session-btn" onClick={onNewSession} aria-label="Start new session">
+          + New Session
+        </button>
+      </div>
     </div>
   )
 }

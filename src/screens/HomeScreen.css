@@ -1,19 +1,23 @@
 .home-screen {
   /* 100dvh (not 100%/100vh) so this matches the actually-visible area if
-     the keyboard is ever open, same as every other screen. This screen
-     owns its own scroll region rather than relying on document scroll. */
+     the keyboard is ever open, same as every other screen. A flex column
+     with a scrollable middle -- same pattern as CaptureScreen -- so the
+     header and the "+ New Session" button stay pinned in place and only
+     the session list scrolls between them. */
   height: 100dvh;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  padding: 24px 20px calc(96px + env(safe-area-inset-bottom));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   max-width: 480px;
   margin: 0 auto;
+  width: 100%;
 }
 
 .home-header {
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  margin-bottom: 24px;
+  padding: 24px 20px 16px;
 }
 
 .home-header__row {
@@ -37,10 +41,35 @@
   cursor: pointer;
 }
 
+.home-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 20px;
+}
+
+.home-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 24px;
+}
+
+.home-empty {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 32px 0;
+  text-align: center;
+}
+
+.home-footer {
+  flex-shrink: 0;
+  padding: 16px 20px calc(16px + env(safe-area-inset-bottom));
+}
+
 .new-session-btn {
-  position: fixed;
-  left: 20px;
-  bottom: calc(24px + env(safe-area-inset-bottom));
   background: var(--accent);
   color: var(--bg-base);
   border: none;
@@ -50,19 +79,4 @@
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-}
-
-.home-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.home-empty {
-  color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 1.6;
-  padding: 32px 0;
-  text-align: center;
 }

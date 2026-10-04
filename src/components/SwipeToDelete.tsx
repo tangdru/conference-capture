@@ -143,13 +143,11 @@ export function SwipeToDelete({ id, revealedId, onReveal, onDelete, disabled, ch
 
 function TrashIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="9" y="3" width="6" height="2.5" rx="1.25" fill="var(--recording-dot)" />
       <path
-        d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m-8 0h10l-1 13a1 1 0 01-1 1H8a1 1 0 01-1-1L6 7z"
-        stroke="#fff"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        d="M5 7a1 1 0 011-1h12a1 1 0 110 2h-.9l-.94 12.2A2 2 0 0114.17 22H9.83a2 2 0 01-1.99-1.8L6.9 8H6a1 1 0 01-1-1z"
+        fill="var(--recording-dot)"
       />
     </svg>
   )

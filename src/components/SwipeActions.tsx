@@ -190,6 +190,9 @@ export function ViewIcon() {
         d="M2 13c3.2-5.3 7.4-8 11-8s7.8 2.7 11 8c-3.2 5.3-7.4 8-11 8S5.2 18.3 2 13z"
         fill="var(--accent)"
       />
+      <circle cx="13" cy="13" r="5" fill="var(--bg-base)" />
+      <circle cx="13" cy="13" r="3.2" fill="var(--accent)" />
+      <circle cx="11.8" cy="11.8" r="1" fill="var(--bg-base)" />
     </svg>
   )
 }
@@ -197,8 +200,8 @@ export function ViewIcon() {
 export function DownloadIcon() {
   return (
     <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
-      <path d="M10.5 2h5v10h4.5L13 20L5.5 12H10z" fill="var(--accent)" />
-      <rect x="4" y="22" width="18" height="2.4" rx="1.2" fill="var(--accent)" />
+      <path d="M10 3h6v10h5L13 22L3 13h5z" fill="var(--accent)" />
+      <rect x="5" y="23.5" width="16" height="2.5" rx="1" fill="var(--accent)" />
     </svg>
   )
 }
@@ -206,14 +209,10 @@ export function DownloadIcon() {
 export function RegenerateIcon() {
   return (
     <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
-      <path
-        d="M13 3a10 10 0 0 0-9.3 6.4 1.2 1.2 0 1 0 2.24.86A7.6 7.6 0 0 1 13 5.4V8l5-4-5-4z"
-        fill="var(--accent)"
-      />
-      <path
-        d="M13 23a10 10 0 0 0 9.3-6.4 1.2 1.2 0 1 0-2.24-.86A7.6 7.6 0 0 1 13 20.6V18l-5 4 5 4z"
-        fill="var(--accent)"
-      />
+      <path d="M5.21,17.5 A9,9 0 0,1 17.5,5.21" fill="none" stroke="var(--accent)" strokeWidth="3" />
+      <path d="M21,7.2 L16.3,7.4 L18.8,3 Z" fill="var(--accent)" />
+      <path d="M20.79,8.5 A9,9 0 0,1 8.5,20.79" fill="none" stroke="var(--accent)" strokeWidth="3" />
+      <path d="M5,18.8 L9.7,18.6 L7.2,23 Z" fill="var(--accent)" />
     </svg>
   )
 }

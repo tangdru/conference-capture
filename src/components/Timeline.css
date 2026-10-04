@@ -100,6 +100,15 @@
   color: var(--text-secondary);
 }
 
+.note-add-row {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.note-add-row .note-row__text {
+  color: var(--text-muted);
+}
+
 .note-row--editing {
   cursor: default;
 }
@@ -123,6 +132,10 @@
   color: var(--text-primary);
   caret-color: var(--accent);
   outline: none;
+}
+
+.note-row__editor::placeholder {
+  color: var(--text-muted);
 }
 
 .note-row__commit {

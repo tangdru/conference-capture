@@ -2,10 +2,8 @@ import { useEffect, useState } from 'react'
 import type { Session, TimelineItemData } from '../types'
 import { formatElapsed } from '../format'
 import { Timeline } from '../components/Timeline'
-import { NoteInput } from '../components/NoteInput'
 import { CameraViewfinder } from '../components/CameraViewfinder'
 import { PhotoViewer } from '../components/PhotoViewer'
-import { useViewportHeight } from '../hooks/useViewportHeight'
 import * as db from '../db'
 import './CaptureScreen.css'
 
@@ -25,13 +23,12 @@ function elapsedFor(session: Session, now: number): number {
 }
 
 export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack }: CaptureScreenProps) {
-  useViewportHeight()
   const [now, setNow] = useState(Date.now())
   const [cameraOpen, setCameraOpen] = useState(false)
   const [confirmingEnd, setConfirmingEnd] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [viewingPhotoId, setViewingPhotoId] = useState<string | null>(null)
-  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [activeId, setActiveId] = useState<string | 'new' | null>(null)
 
   useEffect(() => {
     if (session.status !== 'recording') return
@@ -44,7 +41,8 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
     (i): i is Extract<typeof i, { type: 'photo' }> => i.type === 'photo' && i.id === viewingPhotoId,
   )
 
-  async function commitNote(text: string) {
+  async function commitNewNote(text: string) {
+    setActiveId(null)
     try {
       const item = await db.addNote(session.id, userId, text)
       onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
@@ -54,7 +52,7 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
   }
 
   async function commitNoteEdit(id: string, text: string) {
-    setEditingNoteId(null)
+    setActiveId(null)
     onUpdateLocal((s) => ({
       ...s,
       items: s.items.map((i) => (i.id === id && i.type === 'note' ? { ...i, text } : i)),
@@ -67,7 +65,7 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
   }
 
   async function deleteItem(item: TimelineItemData) {
-    if (editingNoteId === item.id) setEditingNoteId(null)
+    if (activeId === item.id) setActiveId(null)
     onUpdateLocal((s) => ({ ...s, items: s.items.filter((i) => i.id !== item.id) }))
     try {
       await db.deleteTimelineItem(item)
@@ -175,10 +173,12 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
       <Timeline
         items={session.items}
         onPhotoTap={setViewingPhotoId}
-        editingNoteId={editingNoteId}
-        onStartEditNote={setEditingNoteId}
+        activeId={activeId}
+        onStartNewNote={() => setActiveId('new')}
+        onStartEditNote={setActiveId}
+        onCommitNewNote={commitNewNote}
         onCommitNoteEdit={commitNoteEdit}
-        onCancelNoteEdit={() => setEditingNoteId(null)}
+        onCancelActive={() => setActiveId(null)}
         onDeleteItem={deleteItem}
       />
 
@@ -197,7 +197,6 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
             <circle cx="12" cy="13" r="3.2" stroke="var(--accent)" strokeWidth="1.6" />
           </svg>
         </button>
-        <NoteInput onCommit={commitNote} />
       </div>
 
       {viewingPhoto && (

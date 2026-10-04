@@ -1,8 +1,5 @@
 .review-stub {
-  /* The document itself no longer scrolls (see index.css) -- this screen
-     owns its own scroll region instead of relying on body scroll. */
-  position: fixed;
-  inset: 0;
+  height: 100dvh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding: 24px 20px calc(48px + env(safe-area-inset-bottom));

@@ -1,8 +1,8 @@
 .home-screen {
-  /* The document itself no longer scrolls (see index.css) -- this screen
-     owns its own scroll region instead of relying on body scroll. */
-  position: fixed;
-  inset: 0;
+  /* 100dvh (not 100%/100vh) so this matches the actually-visible area if
+     the keyboard is ever open, same as every other screen. This screen
+     owns its own scroll region rather than relying on document scroll. */
+  height: 100dvh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding: 24px 20px calc(48px + env(safe-area-inset-bottom));

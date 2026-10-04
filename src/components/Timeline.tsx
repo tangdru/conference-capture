@@ -206,7 +206,7 @@ function NoteRowEditor({
         }}
         aria-label="Save note"
       >
-        <svg viewBox="0 0 26 26" width="26" height="26" aria-hidden="true">
+        <svg viewBox="0 0 26 26" width="20" height="20" aria-hidden="true">
           <path
             d="M5 13.5l5.5 5.5L21 7"
             fill="none"

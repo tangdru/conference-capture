@@ -159,7 +159,7 @@ export function SwipeActions({ id, revealedId, onReveal, actions, disabled, chil
 
 export function DeleteIcon() {
   return (
-    <svg viewBox="0 0 26 26" width="26" height="26" aria-hidden="true">
+    <svg viewBox="0 0 26 26" width="20" height="20" aria-hidden="true">
       <path
         d="M6 6l14 14M20 6L6 20"
         fill="none"
@@ -173,7 +173,7 @@ export function DeleteIcon() {
 
 export function GenerateIcon() {
   return (
-    <svg viewBox="0 0 26 26" width="26" height="26" aria-hidden="true">
+    <svg viewBox="0 0 26 26" width="20" height="20" aria-hidden="true">
       <path
         d="M13,2 C14,9 17,12 24,13 C17,14 14,17 13,24 C12,17 9,14 2,13 C9,12 12,9 13,2 Z"
         fill="var(--accent)"
@@ -188,7 +188,7 @@ export function GenerateIcon() {
 
 export function ViewIcon() {
   return (
-    <svg viewBox="0 0 26 26" width="26" height="26" aria-hidden="true">
+    <svg viewBox="0 0 26 26" width="20" height="20" aria-hidden="true">
       <path
         d="M2 13c3.2-5.3 7.4-8 11-8s7.8 2.7 11 8c-3.2 5.3-7.4 8-11 8S5.2 18.3 2 13z"
         fill="none"
@@ -203,7 +203,7 @@ export function ViewIcon() {
 
 export function DownloadIcon() {
   return (
-    <svg viewBox="0 0 26 26" width="26" height="26" aria-hidden="true">
+    <svg viewBox="0 0 26 26" width="20" height="20" aria-hidden="true">
       <path
         d="M13 2v15M6 10l7 7 7-7M4 22h18"
         fill="none"
@@ -218,7 +218,7 @@ export function DownloadIcon() {
 
 export function RegenerateIcon() {
   return (
-    <svg viewBox="0 0 26 26" width="26" height="26" aria-hidden="true">
+    <svg viewBox="0 0 26 26" width="20" height="20" aria-hidden="true">
       <path
         d="M4.5 12.5a8.5 8.5 0 0 1 14-6.5M20.5 2.5v6.5H14"
         fill="none"

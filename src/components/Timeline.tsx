@@ -206,13 +206,12 @@ function NoteRowEditor({
         }}
         aria-label="Save note"
       >
-        <svg viewBox="0 0 26 26" width="22" height="22" aria-hidden="true">
-          <circle cx="13" cy="13" r="11" fill="none" stroke="var(--accent)" strokeWidth="2" />
+        <svg viewBox="0 0 26 26" width="26" height="26" aria-hidden="true">
           <path
-            d="M8 13.5l3 3 7-7.5"
+            d="M5 13.5l5.5 5.5L21 7"
             fill="none"
-            stroke="var(--text-secondary)"
-            strokeWidth="2"
+            stroke="var(--accent)"
+            strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
           />

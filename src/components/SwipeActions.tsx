@@ -196,7 +196,7 @@ export function ViewIcon() {
         strokeWidth="2"
         strokeLinejoin="round"
       />
-      <circle cx="13" cy="13" r="3.2" fill="var(--accent)" />
+      <path d="M10.5 13h5" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
     </svg>
   )
 }

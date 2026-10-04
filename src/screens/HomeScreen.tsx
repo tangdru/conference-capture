@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Session } from '../types'
 import { SessionCard } from '../components/SessionCard'
+import { SwipeActions, DeleteIcon, ExportIcon } from '../components/SwipeActions'
 import './HomeScreen.css'
 
 interface HomeScreenProps {
@@ -8,10 +9,24 @@ interface HomeScreenProps {
   onOpenSession: (id: string) => void
   onNewSession: () => void
   onSignOut: () => void
+  onExportSession: (id: string) => void
+  onDeleteSession: (id: string) => void
+  error: string | null
+  onDismissError: () => void
 }
 
-export function HomeScreen({ sessions, onOpenSession, onNewSession, onSignOut }: HomeScreenProps) {
+export function HomeScreen({
+  sessions,
+  onOpenSession,
+  onNewSession,
+  onSignOut,
+  onExportSession,
+  onDeleteSession,
+  error,
+  onDismissError,
+}: HomeScreenProps) {
   const [now, setNow] = useState(Date.now())
+  const [revealedId, setRevealedId] = useState<string | null>(null)
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000)
@@ -22,6 +37,23 @@ export function HomeScreen({ sessions, onOpenSession, onNewSession, onSignOut }:
   const others = sessions
     .filter((s) => s.id !== active?.id)
     .sort((a, b) => b.startedAt - a.startedAt)
+
+  function renderCard(session: Session) {
+    return (
+      <SwipeActions
+        key={session.id}
+        id={session.id}
+        revealedId={revealedId}
+        onReveal={setRevealedId}
+        actions={[
+          { icon: <ExportIcon />, label: 'Export', onClick: () => onExportSession(session.id) },
+          { icon: <DeleteIcon />, label: 'Delete', onClick: () => onDeleteSession(session.id) },
+        ]}
+      >
+        <SessionCard session={session} now={now} onTap={() => onOpenSession(session.id)} />
+      </SwipeActions>
+    )
+  }
 
   return (
     <div className="home-screen">
@@ -34,11 +66,15 @@ export function HomeScreen({ sessions, onOpenSession, onNewSession, onSignOut }:
         </div>
       </header>
 
+      {error && (
+        <div className="home-error" role="alert">
+          {error} <button onClick={onDismissError}>Dismiss</button>
+        </div>
+      )}
+
       <div className="home-scroll">
         <div className="home-list">
-          {active && (
-            <SessionCard session={active} now={now} onTap={() => onOpenSession(active.id)} />
-          )}
+          {active && renderCard(active)}
 
           {others.length === 0 && !active && (
             <p className="home-empty">
@@ -46,9 +82,7 @@ export function HomeScreen({ sessions, onOpenSession, onNewSession, onSignOut }:
             </p>
           )}
 
-          {others.map((s) => (
-            <SessionCard key={s.id} session={s} now={now} onTap={() => onOpenSession(s.id)} />
-          ))}
+          {others.map(renderCard)}
         </div>
       </div>
 

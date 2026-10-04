@@ -113,6 +113,20 @@ export async function updateSession(
   if (error) throw error
 }
 
+export async function deleteSession(session: Session): Promise<void> {
+  const photoPaths = session.items
+    .filter((i): i is PhotoItem => i.type === 'photo')
+    .map((i) => i.photoPath)
+  if (photoPaths.length > 0) {
+    // Best-effort -- orphaned storage objects are a minor cleanup issue,
+    // not something that should block the session disappearing for the user.
+    await supabase.storage.from(PHOTOS_BUCKET).remove(photoPaths)
+  }
+  await supabase.from('cc_timeline_items').delete().eq('session_id', session.id)
+  const { error } = await supabase.from('cc_sessions').delete().eq('id', session.id)
+  if (error) throw error
+}
+
 export async function addNote(sessionId: string, userId: string, text: string): Promise<NoteItem> {
   const now = new Date().toISOString()
   const { data, error } = await supabase

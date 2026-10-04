@@ -124,7 +124,7 @@ export function SwipeToDelete({ id, revealedId, onReveal, onDelete, disabled, ch
   return (
     <div className="swipe-to-delete">
       <button className="swipe-to-delete__action" onClick={onDelete} aria-label="Delete">
-        <TrashIcon />
+        <DeleteIcon />
       </button>
       <div
         ref={contentRef}
@@ -141,13 +141,16 @@ export function SwipeToDelete({ id, revealedId, onReveal, onDelete, disabled, ch
   )
 }
 
-function TrashIcon() {
+function DeleteIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="9" y="3" width="6" height="2.5" rx="1.25" fill="var(--recording-dot)" />
+    <svg viewBox="0 0 26 26" width="22" height="22" aria-hidden="true">
+      <circle cx="13" cy="13" r="11" fill="none" stroke="var(--recording-dot)" strokeWidth="2" />
       <path
-        d="M5 7a1 1 0 011-1h12a1 1 0 110 2h-.9l-.94 12.2A2 2 0 0114.17 22H9.83a2 2 0 01-1.99-1.8L6.9 8H6a1 1 0 01-1-1z"
-        fill="var(--recording-dot)"
+        d="M9.5 9.5l7 7M16.5 9.5l-7 7"
+        fill="none"
+        stroke="var(--text-secondary)"
+        strokeWidth="2"
+        strokeLinecap="round"
       />
     </svg>
   )

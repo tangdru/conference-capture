@@ -103,12 +103,14 @@ export async function createSession(userId: string): Promise<Session> {
 export async function updateSession(
   sessionId: string,
   patch: Partial<{
+    title: string
     status: SessionStatus
     accumulatedMs: number
     liveSpanStartedAt: number | null
   }>,
 ): Promise<void> {
   const row: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (patch.title !== undefined) row.title = patch.title
   if (patch.status !== undefined) row.status = patch.status
   if (patch.accumulatedMs !== undefined) row.accumulated_ms = patch.accumulatedMs
   if (patch.liveSpanStartedAt !== undefined) {

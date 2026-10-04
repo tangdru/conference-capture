@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { NoteItem, PhotoItem, TimelineItemData } from '../types'
 import { formatClock } from '../format'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
-import { SwipeToDelete } from './SwipeToDelete'
+import { SwipeActions, DeleteIcon } from './SwipeActions'
 import './Timeline.css'
 
 /** 'new' means composing a brand-new note at the end of the list; a string is an existing item's id being edited; null means nothing is active. */
@@ -64,11 +64,11 @@ export function Timeline({
       {items.map((item, index) => (
         <div key={item.id}>
           {index > 0 && <div className="dot-divider" aria-hidden="true" />}
-          <SwipeToDelete
+          <SwipeActions
             id={item.id}
             revealedId={revealedId}
             onReveal={setRevealedId}
-            onDelete={() => onDeleteItem(item)}
+            actions={[{ icon: <DeleteIcon />, label: 'Delete', onClick: () => onDeleteItem(item) }]}
             disabled={item.type === 'note' && activeId === item.id}
           >
             {item.type === 'note' ? (
@@ -84,7 +84,7 @@ export function Timeline({
             ) : (
               <PhotoRow item={item} onTap={() => onPhotoTap(item.id)} />
             )}
-          </SwipeToDelete>
+          </SwipeActions>
         </div>
       ))}
 

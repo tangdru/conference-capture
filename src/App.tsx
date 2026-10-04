@@ -19,6 +19,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   const [sessions, setSessions] = useState<Session[] | null>(null)
   const [route, setRoute] = useState<Route>({ screen: 'home' })
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [homeError, setHomeError] = useState<string | null>(null)
 
   useEffect(() => {
     db.fetchSessions(userId)
@@ -43,6 +44,22 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       setRoute({ screen: 'capture', sessionId: id })
     } else {
       setRoute({ screen: 'review', sessionId: id })
+    }
+  }
+
+  function exportSession(id: string) {
+    setRoute({ screen: 'review', sessionId: id })
+  }
+
+  async function deleteSession(id: string) {
+    const session = sessions?.find((s) => s.id === id)
+    if (!session) return
+    setSessions((prev) => prev?.filter((s) => s.id !== id) ?? prev)
+    try {
+      await db.deleteSession(session)
+    } catch (err) {
+      setSessions((prev) => (prev ? [...prev, session] : prev))
+      setHomeError(err instanceof Error ? err.message : 'Failed to delete session')
     }
   }
 
@@ -86,6 +103,10 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       onOpenSession={openSession}
       onNewSession={startNewSession}
       onSignOut={() => supabase.auth.signOut()}
+      onExportSession={exportSession}
+      onDeleteSession={deleteSession}
+      error={homeError}
+      onDismissError={() => setHomeError(null)}
     />
   )
 }

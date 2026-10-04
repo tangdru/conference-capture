@@ -1,25 +1,29 @@
-.swipe-to-delete {
+.swipe-actions {
   position: relative;
   overflow: hidden;
   width: 100%;
 }
 
-.swipe-to-delete__action {
+.swipe-actions__row {
   position: absolute;
   top: 0;
   right: 0;
-  width: 72px;
+  height: 100%;
+  display: flex;
+}
+
+.swipe-actions__action {
+  flex: 1;
   height: 100%;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  padding-right: 16px;
+  justify-content: center;
   background: transparent;
   border: none;
   cursor: pointer;
 }
 
-.swipe-to-delete__content {
+.swipe-actions__content {
   position: relative;
   width: 100%;
   background: var(--bg-base);

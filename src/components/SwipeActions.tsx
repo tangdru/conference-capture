@@ -1,7 +1,7 @@
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
-import './SwipeToDelete.css'
+import './SwipeActions.css'
 
-const REVEAL_WIDTH = 72
+const ACTION_WIDTH = 72
 const OVERDRAG = 24
 /** Pixels of movement before committing to a horizontal (swipe) vs vertical (scroll) gesture. */
 const DIRECTION_LOCK_THRESHOLD = 8
@@ -14,17 +14,24 @@ interface DragState {
   pointerId: number
 }
 
-interface SwipeToDeleteProps {
+export interface SwipeAction {
+  icon: ReactNode
+  label: string
+  onClick: () => void
+}
+
+interface SwipeActionsProps {
   id: string
   revealedId: string | null
   onReveal: (id: string | null) => void
-  onDelete: () => void
+  actions: SwipeAction[]
   /** Suppresses the swipe gesture entirely, e.g. while this row is being edited inline. */
   disabled?: boolean
   children: ReactNode
 }
 
-export function SwipeToDelete({ id, revealedId, onReveal, onDelete, disabled, children }: SwipeToDeleteProps) {
+export function SwipeActions({ id, revealedId, onReveal, actions, disabled, children }: SwipeActionsProps) {
+  const revealWidth = actions.length * ACTION_WIDTH
   const isRevealed = !disabled && revealedId === id
   const contentRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<DragState | null>(null)
@@ -47,8 +54,8 @@ export function SwipeToDelete({ id, revealedId, onReveal, onDelete, disabled, ch
   // other than this row's own gesture (e.g. a different row opened and
   // this one must close) -- never during an active drag.
   useEffect(() => {
-    if (!dragRef.current) setTransform(isRevealed ? -REVEAL_WIDTH : 0, true)
-  }, [isRevealed])
+    if (!dragRef.current) setTransform(isRevealed ? -revealWidth : 0, true)
+  }, [isRevealed, revealWidth])
 
   function onPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
     if (disabled) return
@@ -83,8 +90,8 @@ export function SwipeToDelete({ id, revealedId, onReveal, onDelete, disabled, ch
 
     if (!state.dragging) return
 
-    const base = isRevealed ? -REVEAL_WIDTH : 0
-    const next = Math.min(0, Math.max(-REVEAL_WIDTH - OVERDRAG, base + dx))
+    const base = isRevealed ? -revealWidth : 0
+    const next = Math.min(0, Math.max(-revealWidth - OVERDRAG, base + dx))
     setTransform(next, false)
   }
 
@@ -96,11 +103,11 @@ export function SwipeToDelete({ id, revealedId, onReveal, onDelete, disabled, ch
     suppressNextClick.current = true
 
     const dx = e.clientX - state.startX
-    const base = isRevealed ? -REVEAL_WIDTH : 0
-    const finalPos = Math.min(0, Math.max(-REVEAL_WIDTH - OVERDRAG, base + dx))
-    const shouldOpen = finalPos < -REVEAL_WIDTH / 2
+    const base = isRevealed ? -revealWidth : 0
+    const finalPos = Math.min(0, Math.max(-revealWidth - OVERDRAG, base + dx))
+    const shouldOpen = finalPos < -revealWidth / 2
 
-    setTransform(shouldOpen ? -REVEAL_WIDTH : 0, true)
+    setTransform(shouldOpen ? -revealWidth : 0, true)
     onReveal(shouldOpen ? id : null)
   }
 
@@ -122,13 +129,22 @@ export function SwipeToDelete({ id, revealedId, onReveal, onDelete, disabled, ch
   }
 
   return (
-    <div className="swipe-to-delete">
-      <button className="swipe-to-delete__action" onClick={onDelete} aria-label="Delete">
-        <DeleteIcon />
-      </button>
+    <div className="swipe-actions">
+      <div className="swipe-actions__row" style={{ width: revealWidth }}>
+        {actions.map((action) => (
+          <button
+            key={action.label}
+            className="swipe-actions__action"
+            onClick={action.onClick}
+            aria-label={action.label}
+          >
+            {action.icon}
+          </button>
+        ))}
+      </div>
       <div
         ref={contentRef}
-        className="swipe-to-delete__content"
+        className="swipe-actions__content"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
@@ -141,7 +157,7 @@ export function SwipeToDelete({ id, revealedId, onReveal, onDelete, disabled, ch
   )
 }
 
-function DeleteIcon() {
+export function DeleteIcon() {
   return (
     <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
       <circle cx="13" cy="13" r="11" fill="none" stroke="var(--recording-dot)" strokeWidth="2" />
@@ -151,6 +167,22 @@ function DeleteIcon() {
         stroke="var(--recording-dot)"
         strokeWidth="2"
         strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+export function ExportIcon() {
+  return (
+    <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
+      <circle cx="13" cy="13" r="11" fill="none" stroke="var(--accent)" strokeWidth="2" />
+      <path
+        d="M13 17v-8M9.5 12.5L13 9l3.5 3.5M9 17h8"
+        fill="none"
+        stroke="var(--accent)"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   )

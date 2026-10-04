@@ -1,5 +1,5 @@
-import { supabase, PHOTOS_BUCKET } from './supabaseClient'
-import type { NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData } from './types'
+import { supabase, PHOTOS_BUCKET, DECKS_BUCKET } from './supabaseClient'
+import type { DeckStatus, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData } from './types'
 
 interface SessionRow {
   id: string
@@ -8,6 +8,9 @@ interface SessionRow {
   started_at: string
   accumulated_ms: number
   live_span_started_at: string | null
+  deck_status: DeckStatus
+  deck_path: string | null
+  deck_error: string | null
 }
 
 interface ItemRow {
@@ -30,6 +33,9 @@ function sessionFromRow(row: SessionRow, items: TimelineItemData[]): Session {
     accumulatedMs: row.accumulated_ms,
     liveSpanStartedAt: row.live_span_started_at ? new Date(row.live_span_started_at).getTime() : null,
     items,
+    deckStatus: row.deck_status,
+    deckPath: row.deck_path,
+    deckError: row.deck_error,
   }
 }
 
@@ -52,7 +58,7 @@ export async function fetchSessions(userId: string): Promise<Session[]> {
   const [{ data: sessionRows, error: sessionsError }, { data: itemRows, error: itemsError }] = await Promise.all([
     supabase
       .from('cc_sessions')
-      .select('id, title, status, started_at, accumulated_ms, live_span_started_at')
+      .select('id, title, status, started_at, accumulated_ms, live_span_started_at, deck_status, deck_path, deck_error')
       .eq('owner_id', userId)
       .order('started_at', { ascending: false }),
     supabase
@@ -87,7 +93,7 @@ export async function createSession(userId: string): Promise<Session> {
       accumulated_ms: 0,
       live_span_started_at: now,
     })
-    .select('id, title, status, started_at, accumulated_ms, live_span_started_at')
+    .select('id, title, status, started_at, accumulated_ms, live_span_started_at, deck_status, deck_path, deck_error')
     .single()
 
   if (error) throw error
@@ -199,4 +205,30 @@ export async function resolvePhotoUrl(path: string): Promise<string> {
   const url = URL.createObjectURL(data)
   photoUrlCache.set(path, url)
   return url
+}
+
+export async function generateDeck(sessionId: string): Promise<void> {
+  const { error } = await supabase.functions.invoke('generate-deck', { body: { sessionId } })
+  if (error) throw error
+}
+
+export async function fetchSessionDeckState(
+  sessionId: string,
+): Promise<{ deckStatus: DeckStatus; deckPath: string | null; deckError: string | null }> {
+  const { data, error } = await supabase
+    .from('cc_sessions')
+    .select('deck_status, deck_path, deck_error')
+    .eq('id', sessionId)
+    .single()
+  if (error) throw error
+  return { deckStatus: data.deck_status, deckPath: data.deck_path, deckError: data.deck_error }
+}
+
+// A Blob URL (rather than a signed URL) so the browser treats it as same-origin
+// -- the only way an <a download> actually saves the file instead of just
+// navigating to it, since the real file lives in a private, cross-origin bucket.
+export async function resolveDeckUrl(path: string): Promise<string> {
+  const { data, error } = await supabase.storage.from(DECKS_BUCKET).download(path)
+  if (error) throw error
+  return URL.createObjectURL(data)
 }

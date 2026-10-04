@@ -10,3 +10,4 @@ if (!url || !anonKey) {
 export const supabase = createClient(url, anonKey)
 
 export const PHOTOS_BUCKET = 'cc-photos'
+export const DECKS_BUCKET = 'cc-decks'

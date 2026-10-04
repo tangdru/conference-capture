@@ -161,11 +161,8 @@ export function DeleteIcon() {
   return (
     <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
       <path
-        d="M6 6l14 14M20 6L6 20"
-        fill="none"
-        stroke="var(--recording-dot)"
-        strokeWidth="2.5"
-        strokeLinecap="round"
+        d="M19 6.4L13 12.4L7 6.4L5.6 7.8L11.6 13.8L5.6 19.8L7 21.2L13 15.2L19 21.2L20.4 19.8L14.4 13.8L20.4 7.8Z"
+        fill="var(--recording-dot)"
       />
     </svg>
   )
@@ -191,12 +188,8 @@ export function ViewIcon() {
     <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
       <path
         d="M2 13c3.2-5.3 7.4-8 11-8s7.8 2.7 11 8c-3.2 5.3-7.4 8-11 8S5.2 18.3 2 13z"
-        fill="none"
-        stroke="var(--accent)"
-        strokeWidth="2"
-        strokeLinejoin="round"
+        fill="var(--accent)"
       />
-      <path d="M10.5 13h5" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
     </svg>
   )
 }
@@ -204,14 +197,8 @@ export function ViewIcon() {
 export function DownloadIcon() {
   return (
     <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
-      <path
-        d="M13 2v15M6 10l7 7 7-7M4 22h18"
-        fill="none"
-        stroke="var(--accent)"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M10.5 2h5v10h4.5L13 20L5.5 12H10z" fill="var(--accent)" />
+      <rect x="4" y="22" width="18" height="2.4" rx="1.2" fill="var(--accent)" />
     </svg>
   )
 }
@@ -220,20 +207,12 @@ export function RegenerateIcon() {
   return (
     <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
       <path
-        d="M4.5 12.5a8.5 8.5 0 0 1 14-6.5M20.5 2.5v6.5H14"
-        fill="none"
-        stroke="var(--accent)"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        d="M13 3a10 10 0 0 0-9.3 6.4 1.2 1.2 0 1 0 2.24.86A7.6 7.6 0 0 1 13 5.4V8l5-4-5-4z"
+        fill="var(--accent)"
       />
       <path
-        d="M21.5 13.5a8.5 8.5 0 0 1-14 6.5M5.5 23.5V17H12"
-        fill="none"
-        stroke="var(--accent)"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        d="M13 23a10 10 0 0 0 9.3-6.4 1.2 1.2 0 1 0-2.24-.86A7.6 7.6 0 0 1 13 20.6V18l-5 4 5 4z"
+        fill="var(--accent)"
       />
     </svg>
   )

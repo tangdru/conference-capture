@@ -6,9 +6,8 @@ import { supabase } from './supabaseClient'
 import { AuthGate } from './auth/AuthGate'
 import { HomeScreen } from './screens/HomeScreen'
 import { CaptureScreen } from './screens/CaptureScreen'
-import { ReviewStub } from './screens/ReviewStub'
 
-type Route = { screen: 'home' } | { screen: 'capture' | 'review'; sessionId: string }
+type Route = { screen: 'home' } | { screen: 'capture'; sessionId: string }
 
 export default function App() {
   return <AuthGate>{(authSession) => <AuthedApp authSession={authSession} />}</AuthGate>
@@ -38,13 +37,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   }
 
   function openSession(id: string) {
-    const session = sessions?.find((s) => s.id === id)
-    if (!session) return
-    if (session.status === 'recording' || session.status === 'suspended') {
-      setRoute({ screen: 'capture', sessionId: id })
-    } else {
-      setRoute({ screen: 'review', sessionId: id })
-    }
+    setRoute({ screen: 'capture', sessionId: id })
   }
 
   async function generateDeckForSession(id: string) {
@@ -129,15 +122,6 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         onBack={() => setRoute({ screen: 'home' })}
       />
     )
-  }
-
-  if (route.screen === 'review') {
-    const session = sessions.find((s) => s.id === route.sessionId)
-    if (!session) {
-      setRoute({ screen: 'home' })
-      return null
-    }
-    return <ReviewStub session={session} onBack={() => setRoute({ screen: 'home' })} />
   }
 
   return (

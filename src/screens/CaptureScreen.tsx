@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Session, TimelineItemData } from '../types'
-import { formatElapsed } from '../format'
+import { formatElapsed, formatSessionSubtitle } from '../format'
 import { Timeline } from '../components/Timeline'
 import { CameraViewfinder } from '../components/CameraViewfinder'
 import { PhotoViewer } from '../components/PhotoViewer'
@@ -40,6 +40,9 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
   const viewingPhoto = session.items.find(
     (i): i is Extract<typeof i, { type: 'photo' }> => i.type === 'photo' && i.id === viewingPhotoId,
   )
+  const isLive = session.status === 'recording' || session.status === 'suspended'
+  const noteCount = session.items.filter((i) => i.type === 'note').length
+  const photoCount = session.items.filter((i) => i.type === 'photo').length
 
   async function commitNewNote(text: string) {
     setActiveId(null)
@@ -71,6 +74,15 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
       await db.deleteTimelineItem(item)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to delete')
+    }
+  }
+
+  async function commitTitle(title: string) {
+    onUpdateLocal((s) => ({ ...s, title }))
+    try {
+      await db.updateSession(session.id, { title })
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save title')
     }
   }
 
@@ -126,39 +138,60 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
   return (
     <div className="capture-screen">
       <header className="capture-header">
-        <button className="capture-header__back" onClick={onBack} aria-label="Back to home">
-          ‹
-        </button>
-        <span
-          className={`rec-dot${session.status === 'recording' ? ' rec-dot--live' : ''}`}
-          aria-hidden="true"
-        />
-        <span
-          className="capture-header__timer mono-timestamp"
-          role="status"
-          aria-label={
-            session.status === 'recording'
-              ? `Recording active, ${formatElapsed(elapsedMs)} elapsed`
-              : `Recording paused, ${formatElapsed(elapsedMs)} recorded`
-          }
-        >
-          {formatElapsed(elapsedMs)}
-        </span>
+        <div className="capture-header__row1">
+          <button className="capture-header__back" onClick={onBack} aria-label="Back to home">
+            ‹
+          </button>
+          <EditableTitle title={session.title} onCommit={commitTitle} />
+        </div>
 
-        <div className="capture-header__controls">
-          {session.status === 'recording' && (
-            <button className="header-btn" onClick={stop} aria-label="Stop recording">
-              <span className="header-btn__square" />
-            </button>
-          )}
-          {session.status === 'suspended' && (
+        <div className="capture-header__row2">
+          {isLive ? (
             <>
-              <button className="header-btn" onClick={resume} aria-label="Resume recording">
-                <span className="header-btn__circle" />
-              </button>
-              <button className="end-btn" onClick={() => setConfirmingEnd(true)} aria-label="End session">
-                End
-              </button>
+              <span
+                className={`rec-dot${session.status === 'recording' ? ' rec-dot--live' : ''}`}
+                aria-hidden="true"
+              />
+              <span
+                className="capture-header__timer mono-timestamp"
+                role="status"
+                aria-label={
+                  session.status === 'recording'
+                    ? `Recording active, ${formatElapsed(elapsedMs)} elapsed`
+                    : `Recording paused, ${formatElapsed(elapsedMs)} recorded`
+                }
+              >
+                {formatElapsed(elapsedMs)}
+              </span>
+
+              <div className="capture-header__controls">
+                {session.status === 'recording' && (
+                  <button className="header-btn" onClick={stop} aria-label="Stop recording">
+                    <span className="header-btn__square" />
+                  </button>
+                )}
+                {session.status === 'suspended' && (
+                  <>
+                    <button className="header-btn" onClick={resume} aria-label="Resume recording">
+                      <span className="header-btn__circle" />
+                    </button>
+                    <button
+                      className="end-btn"
+                      onClick={() => setConfirmingEnd(true)}
+                      aria-label="End session"
+                    >
+                      End
+                    </button>
+                  </>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="capture-header__subtitle">{formatSessionSubtitle(session.startedAt)}</span>
+              <span className="capture-header__stats">
+                📝 {noteCount} &nbsp; 📷 {photoCount}
+              </span>
             </>
           )}
         </div>
@@ -229,5 +262,81 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
         </div>
       )}
     </div>
+  )
+}
+
+function EditableTitle({ title, onCommit }: { title: string; onCommit: (title: string) => void }) {
+  const [editing, setEditing] = useState(false)
+
+  if (!editing) {
+    return (
+      <h1 className="capture-header__title" onClick={() => setEditing(true)}>
+        {title}
+      </h1>
+    )
+  }
+
+  return (
+    <TitleInput
+      initialTitle={title}
+      onCommit={(text) => {
+        setEditing(false)
+        onCommit(text)
+      }}
+      onCancel={() => setEditing(false)}
+    />
+  )
+}
+
+function TitleInput({
+  initialTitle,
+  onCommit,
+  onCancel,
+}: {
+  initialTitle: string
+  onCommit: (title: string) => void
+  onCancel: () => void
+}) {
+  const [text, setText] = useState(initialTitle)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.focus()
+    el.setSelectionRange(el.value.length, el.value.length)
+
+    // Same iOS Safari keyboard-covers-the-field workaround as NoteRowEditor —
+    // a custom scroll container doesn't get the browser's automatic
+    // scroll-into-view when the keyboard opens.
+    const bringIntoView = () => {
+      requestAnimationFrame(() => el?.scrollIntoView({ block: 'center', behavior: 'smooth' }))
+    }
+    bringIntoView()
+    window.visualViewport?.addEventListener('resize', bringIntoView)
+    return () => window.visualViewport?.removeEventListener('resize', bringIntoView)
+  }, [])
+
+  function commit() {
+    const trimmed = text.trim()
+    if (trimmed && trimmed !== initialTitle) {
+      onCommit(trimmed)
+    } else {
+      onCancel()
+    }
+  }
+
+  return (
+    <input
+      ref={inputRef}
+      className="capture-header__title-input"
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onCancel()
+        if (e.key === 'Enter') e.currentTarget.blur()
+      }}
+    />
   )
 }

@@ -10,13 +10,18 @@
 }
 
 .capture-header {
-  height: 56px;
   flex-shrink: 0;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 16px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 16px;
   border-bottom: 1px dashed rgba(238, 238, 233, 0.08);
+}
+
+.capture-header__row1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .capture-header__back {
@@ -28,6 +33,58 @@
   font-size: 22px;
   cursor: pointer;
   margin-left: -8px;
+  flex-shrink: 0;
+}
+
+.capture-header__title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+}
+
+.capture-header__title-input {
+  font-size: 17px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--text-primary);
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--accent);
+  padding: 0;
+  outline: none;
+}
+
+.capture-header__row2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  /* Lines up under the title, skipping the back button's width. */
+  padding-left: 32px;
+}
+
+.capture-header__subtitle {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.capture-header__stats {
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .rec-dot {

@@ -5,23 +5,30 @@ import { usePhotoUrl } from '../hooks/usePhotoUrl'
 import { SwipeToDelete } from './SwipeToDelete'
 import './Timeline.css'
 
+/** 'new' means composing a brand-new note at the end of the list; a string is an existing item's id being edited; null means nothing is active. */
+type ActiveId = string | 'new' | null
+
 interface TimelineProps {
   items: TimelineItemData[]
   onPhotoTap: (id: string) => void
-  editingNoteId: string | null
+  activeId: ActiveId
+  onStartNewNote: () => void
   onStartEditNote: (id: string) => void
+  onCommitNewNote: (text: string) => void
   onCommitNoteEdit: (id: string, text: string) => void
-  onCancelNoteEdit: () => void
+  onCancelActive: () => void
   onDeleteItem: (item: TimelineItemData) => void
 }
 
 export function Timeline({
   items,
   onPhotoTap,
-  editingNoteId,
+  activeId,
+  onStartNewNote,
   onStartEditNote,
+  onCommitNewNote,
   onCommitNoteEdit,
-  onCancelNoteEdit,
+  onCancelActive,
   onDeleteItem,
 }: TimelineProps) {
   const endRef = useRef<HTMLDivElement>(null)
@@ -32,23 +39,13 @@ export function Timeline({
     if (!userScrolledUp.current) {
       endRef.current?.scrollIntoView({ block: 'end' })
     }
-  }, [items.length])
+  }, [items.length, activeId])
 
-  if (items.length === 0) {
-    return (
-      <div className="timeline timeline--empty">
-        <div className="timeline-empty">
-          <p className="timeline-empty__line1">Tap below to add a note.</p>
-          <p className="timeline-empty__line2">Tap 📷 to photograph a slide.</p>
-          <p className="timeline-empty__line2">Audio is recording.</p>
-        </div>
-      </div>
-    )
-  }
+  const isEmpty = items.length === 0
 
   return (
     <div
-      className="timeline"
+      className={`timeline${isEmpty && activeId !== 'new' ? ' timeline--empty' : ''}`}
       onScroll={(e) => {
         const el = e.currentTarget
         const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
@@ -56,6 +53,14 @@ export function Timeline({
         setRevealedId(null)
       }}
     >
+      {isEmpty && activeId !== 'new' && (
+        <div className="timeline-empty">
+          <p className="timeline-empty__line1">Tap below to add your first note.</p>
+          <p className="timeline-empty__line2">Tap 📷 to photograph a slide.</p>
+          <p className="timeline-empty__line2">Audio is recording.</p>
+        </div>
+      )}
+
       {items.map((item, index) => (
         <div key={item.id}>
           {index > 0 && <div className="dot-divider" aria-hidden="true" />}
@@ -64,14 +69,14 @@ export function Timeline({
             revealedId={revealedId}
             onReveal={setRevealedId}
             onDelete={() => onDeleteItem(item)}
-            disabled={item.type === 'note' && editingNoteId === item.id}
+            disabled={item.type === 'note' && activeId === item.id}
           >
             {item.type === 'note' ? (
-              editingNoteId === item.id ? (
+              activeId === item.id ? (
                 <NoteRowEditor
-                  item={item}
+                  initialText={item.text}
                   onCommit={(text) => onCommitNoteEdit(item.id, text)}
-                  onCancel={onCancelNoteEdit}
+                  onCancel={onCancelActive}
                 />
               ) : (
                 <NoteRow item={item} onTap={() => onStartEditNote(item.id)} />
@@ -82,6 +87,20 @@ export function Timeline({
           </SwipeToDelete>
         </div>
       ))}
+
+      {!isEmpty && <div className="dot-divider" aria-hidden="true" />}
+
+      {activeId === 'new' ? (
+        <NoteRowEditor initialText="" onCommit={onCommitNewNote} onCancel={onCancelActive} />
+      ) : (
+        <button className="note-row note-row--later note-add-row" onClick={onStartNewNote} aria-label="Add a note">
+          <div className="note-row__bar" aria-hidden="true" />
+          <div className="note-row__body">
+            <p className="note-row__text">+ Add a note…</p>
+          </div>
+        </button>
+      )}
+
       <div ref={endRef} />
     </div>
   )
@@ -110,15 +129,15 @@ function NoteRow({ item, onTap }: { item: NoteItem; onTap: () => void }) {
 }
 
 function NoteRowEditor({
-  item,
+  initialText,
   onCommit,
   onCancel,
 }: {
-  item: NoteItem
+  initialText: string
   onCommit: (text: string) => void
   onCancel: () => void
 }) {
-  const [text, setText] = useState(item.text)
+  const [text, setText] = useState(initialText)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -131,7 +150,7 @@ function NoteRowEditor({
     // iOS Safari's automatic "scroll the focused field above the keyboard"
     // behavior only reliably applies to the main document -- it doesn't
     // extend into a custom overflow:auto container like .timeline, so the
-    // note being edited can end up hidden behind the keyboard with nothing
+    // row being edited can end up hidden behind the keyboard with nothing
     // bringing it back into view. Do that scroll ourselves whenever the
     // visual viewport changes (i.e. the keyboard opening/closing/resizing).
     const bringIntoView = () => {
@@ -149,7 +168,7 @@ function NoteRowEditor({
 
   function commit() {
     const trimmed = text.trim()
-    if (trimmed && trimmed !== item.text) {
+    if (trimmed && trimmed !== initialText) {
       onCommit(trimmed)
     } else {
       onCancel()
@@ -164,6 +183,7 @@ function NoteRowEditor({
           ref={textareaRef}
           className="note-row__editor"
           value={text}
+          placeholder="Type a note…"
           onChange={(e) => {
             setText(e.target.value)
             autoGrow(e.target)

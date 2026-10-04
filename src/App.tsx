@@ -7,17 +7,11 @@ import { AuthGate } from './auth/AuthGate'
 import { HomeScreen } from './screens/HomeScreen'
 import { CaptureScreen } from './screens/CaptureScreen'
 import { ReviewStub } from './screens/ReviewStub'
-import { DebugHud } from './components/DebugHud'
 
 type Route = { screen: 'home' } | { screen: 'capture' | 'review'; sessionId: string }
 
 export default function App() {
-  return (
-    <>
-      <DebugHud />
-      <AuthGate>{(authSession) => <AuthedApp authSession={authSession} />}</AuthGate>
-    </>
-  )
+  return <AuthGate>{(authSession) => <AuthedApp authSession={authSession} />}</AuthGate>
 }
 
 function AuthedApp({ authSession }: { authSession: AuthSession }) {

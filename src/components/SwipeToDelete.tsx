@@ -143,12 +143,12 @@ export function SwipeToDelete({ id, revealedId, onReveal, onDelete, disabled, ch
 
 function DeleteIcon() {
   return (
-    <svg viewBox="0 0 26 26" width="22" height="22" aria-hidden="true">
+    <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
       <circle cx="13" cy="13" r="11" fill="none" stroke="var(--recording-dot)" strokeWidth="2" />
       <path
         d="M9.5 9.5l7 7M16.5 9.5l-7 7"
         fill="none"
-        stroke="var(--text-secondary)"
+        stroke="var(--recording-dot)"
         strokeWidth="2"
         strokeLinecap="round"
       />

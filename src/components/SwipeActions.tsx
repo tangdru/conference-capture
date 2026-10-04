@@ -159,13 +159,12 @@ export function SwipeActions({ id, revealedId, onReveal, actions, disabled, chil
 
 export function DeleteIcon() {
   return (
-    <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
-      <circle cx="13" cy="13" r="11" fill="none" stroke="var(--recording-dot)" strokeWidth="2" />
+    <svg viewBox="0 0 26 26" width="26" height="26" aria-hidden="true">
       <path
-        d="M9.5 9.5l7 7M16.5 9.5l-7 7"
+        d="M6 6l14 14M20 6L6 20"
         fill="none"
         stroke="var(--recording-dot)"
-        strokeWidth="2"
+        strokeWidth="2.5"
         strokeLinecap="round"
       />
     </svg>
@@ -174,45 +173,42 @@ export function DeleteIcon() {
 
 export function GenerateIcon() {
   return (
-    <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
-      <circle cx="13" cy="13" r="11" fill="none" stroke="var(--accent)" strokeWidth="2" />
+    <svg viewBox="0 0 26 26" width="26" height="26" aria-hidden="true">
       <path
-        d="M8.5 9.5h3.2l1.3 1.3h4.5a1 1 0 0 1 1 1v6.2a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1v-7.5a1 1 0 0 1 1-1z"
+        d="M2.5 6.5h6l2 2h12.5a1.4 1.4 0 0 1 1.4 1.4v11.2a1.4 1.4 0 0 1-1.4 1.4H3.9a1.4 1.4 0 0 1-1.4-1.4V6.5z"
         fill="none"
         stroke="var(--accent)"
-        strokeWidth="1.5"
+        strokeWidth="2"
         strokeLinejoin="round"
       />
-      <path d="M17.3 6.3v3.2M15.7 7.9h3.2" stroke="var(--accent)" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M21.5 1.5v5M19 4h5" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
     </svg>
   )
 }
 
 export function ViewIcon() {
   return (
-    <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
-      <circle cx="13" cy="13" r="11" fill="none" stroke="var(--accent)" strokeWidth="2" />
+    <svg viewBox="0 0 26 26" width="26" height="26" aria-hidden="true">
       <path
-        d="M7.5 13c1.8-3 4-4.5 5.5-4.5s3.7 1.5 5.5 4.5c-1.8 3-4 4.5-5.5 4.5S9.3 16 7.5 13z"
+        d="M2 13c3.2-5.3 7.4-8 11-8s7.8 2.7 11 8c-3.2 5.3-7.4 8-11 8S5.2 18.3 2 13z"
         fill="none"
         stroke="var(--accent)"
-        strokeWidth="1.5"
+        strokeWidth="2"
         strokeLinejoin="round"
       />
-      <circle cx="13" cy="13" r="1.6" fill="var(--accent)" />
+      <circle cx="13" cy="13" r="3.2" fill="var(--accent)" />
     </svg>
   )
 }
 
 export function DownloadIcon() {
   return (
-    <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
-      <circle cx="13" cy="13" r="11" fill="none" stroke="var(--accent)" strokeWidth="2" />
+    <svg viewBox="0 0 26 26" width="26" height="26" aria-hidden="true">
       <path
-        d="M13 8v8M9.5 12.5L13 16l3.5-3.5M9 17.5h8"
+        d="M13 2v15M6 10l7 7 7-7M4 22h18"
         fill="none"
         stroke="var(--accent)"
-        strokeWidth="2"
+        strokeWidth="2.5"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -222,21 +218,20 @@ export function DownloadIcon() {
 
 export function RegenerateIcon() {
   return (
-    <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
-      <circle cx="13" cy="13" r="11" fill="none" stroke="var(--accent)" strokeWidth="2" />
+    <svg viewBox="0 0 26 26" width="26" height="26" aria-hidden="true">
       <path
-        d="M9 10.3a5 5 0 0 1 8.2-1.5M17.2 8.2v3h-3"
+        d="M4.5 12.5a8.5 8.5 0 0 1 14-6.5M20.5 2.5v6.5H14"
         fill="none"
         stroke="var(--accent)"
-        strokeWidth="1.6"
+        strokeWidth="2.2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
-        d="M17 15.7a5 5 0 0 1-8.2 1.5M8.8 17.8v-3h3"
+        d="M21.5 13.5a8.5 8.5 0 0 1-14 6.5M5.5 23.5V17H12"
         fill="none"
         stroke="var(--accent)"
-        strokeWidth="1.6"
+        strokeWidth="2.2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />

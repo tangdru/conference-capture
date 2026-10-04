@@ -1,21 +1,20 @@
 import { useEffect, useState } from 'react'
 import type { Session } from '../types'
 import { formatSessionSubtitle } from '../format'
-import { fetchSessionDeckState, generateDeck, resolveDeckUrl } from '../db'
+import { resolveDeckUrl } from '../db'
 import './ReviewStub.css'
 
 interface ReviewStubProps {
   session: Session
   onBack: () => void
-  onUpdateLocal: (updater: (session: Session) => Session) => void
+  onGenerateDeck: (sessionId: string) => Promise<void>
 }
 
-export function ReviewStub({ session, onBack, onUpdateLocal }: ReviewStubProps) {
+export function ReviewStub({ session, onBack, onGenerateDeck }: ReviewStubProps) {
   const notes = session.items.filter((i) => i.type === 'note').length
   const photos = session.items.filter((i) => i.type === 'photo').length
   const hasContent = session.items.length > 0
 
-  const [isGenerating, setIsGenerating] = useState(false)
   const [deckUrl, setDeckUrl] = useState<string | null>(null)
   const [resolveError, setResolveError] = useState<string | null>(null)
 
@@ -37,31 +36,12 @@ export function ReviewStub({ session, onBack, onUpdateLocal }: ReviewStubProps) 
     }
   }, [session.deckStatus, session.deckPath])
 
-  async function handleGenerate() {
-    setIsGenerating(true)
+  function handleGenerate() {
     setResolveError(null)
-    onUpdateLocal((s) => ({ ...s, deckStatus: 'generating', deckError: null }))
-    try {
-      await generateDeck(session.id)
-    } catch {
-      // Fall through — the refetch below reads the authoritative state the
-      // edge function itself recorded, whether this call failed or not.
-    }
-    try {
-      const state = await fetchSessionDeckState(session.id)
-      onUpdateLocal((s) => ({ ...s, ...state }))
-    } catch (err) {
-      onUpdateLocal((s) => ({
-        ...s,
-        deckStatus: 'error',
-        deckError: err instanceof Error ? err.message : 'Failed to generate presentation',
-      }))
-    } finally {
-      setIsGenerating(false)
-    }
+    onGenerateDeck(session.id)
   }
 
-  const showGenerating = isGenerating || session.deckStatus === 'generating'
+  const showGenerating = session.deckStatus === 'generating'
 
   return (
     <div className="review-stub">

@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react'
 import type { Session } from '../types'
 import { SessionCard } from '../components/SessionCard'
-import { SwipeActions, DeleteIcon, ExportIcon } from '../components/SwipeActions'
+import {
+  SwipeActions,
+  type SwipeAction,
+  DeleteIcon,
+  GenerateIcon,
+  ViewIcon,
+  DownloadIcon,
+  RegenerateIcon,
+} from '../components/SwipeActions'
 import './HomeScreen.css'
 
 interface HomeScreenProps {
@@ -9,7 +17,9 @@ interface HomeScreenProps {
   onOpenSession: (id: string) => void
   onNewSession: () => void
   onSignOut: () => void
-  onExportSession: (id: string) => void
+  onGenerateDeck: (id: string) => void
+  onViewDeck: (id: string) => void
+  onDownloadDeck: (id: string) => void
   onDeleteSession: (id: string) => void
   error: string | null
   onDismissError: () => void
@@ -20,7 +30,9 @@ export function HomeScreen({
   onOpenSession,
   onNewSession,
   onSignOut,
-  onExportSession,
+  onGenerateDeck,
+  onViewDeck,
+  onDownloadDeck,
   onDeleteSession,
   error,
   onDismissError,
@@ -38,6 +50,21 @@ export function HomeScreen({
     .filter((s) => s.id !== active?.id)
     .sort((a, b) => b.startedAt - a.startedAt)
 
+  function deckActions(session: Session): SwipeAction[] {
+    switch (session.deckStatus) {
+      case 'ready':
+        return [
+          { icon: <ViewIcon />, label: 'View presentation', onClick: () => onViewDeck(session.id) },
+          { icon: <DownloadIcon />, label: 'Download presentation', onClick: () => onDownloadDeck(session.id) },
+          { icon: <RegenerateIcon />, label: 'Regenerate presentation', onClick: () => onGenerateDeck(session.id) },
+        ]
+      case 'generating':
+        return []
+      default:
+        return [{ icon: <GenerateIcon />, label: 'Generate presentation', onClick: () => onGenerateDeck(session.id) }]
+    }
+  }
+
   function renderCard(session: Session) {
     return (
       <SwipeActions
@@ -46,7 +73,7 @@ export function HomeScreen({
         revealedId={revealedId}
         onReveal={setRevealedId}
         actions={[
-          { icon: <ExportIcon />, label: 'Export', onClick: () => onExportSession(session.id) },
+          ...deckActions(session),
           { icon: <DeleteIcon />, label: 'Delete', onClick: () => onDeleteSession(session.id) },
         ]}
       >

@@ -172,15 +172,71 @@ export function DeleteIcon() {
   )
 }
 
-export function ExportIcon() {
+export function GenerateIcon() {
   return (
     <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
       <circle cx="13" cy="13" r="11" fill="none" stroke="var(--accent)" strokeWidth="2" />
       <path
-        d="M13 17v-8M9.5 12.5L13 9l3.5 3.5M9 17h8"
+        d="M8.5 9.5h3.2l1.3 1.3h4.5a1 1 0 0 1 1 1v6.2a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1v-7.5a1 1 0 0 1 1-1z"
+        fill="none"
+        stroke="var(--accent)"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path d="M17.3 6.3v3.2M15.7 7.9h3.2" stroke="var(--accent)" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function ViewIcon() {
+  return (
+    <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
+      <circle cx="13" cy="13" r="11" fill="none" stroke="var(--accent)" strokeWidth="2" />
+      <path
+        d="M7.5 13c1.8-3 4-4.5 5.5-4.5s3.7 1.5 5.5 4.5c-1.8 3-4 4.5-5.5 4.5S9.3 16 7.5 13z"
+        fill="none"
+        stroke="var(--accent)"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <circle cx="13" cy="13" r="1.6" fill="var(--accent)" />
+    </svg>
+  )
+}
+
+export function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
+      <circle cx="13" cy="13" r="11" fill="none" stroke="var(--accent)" strokeWidth="2" />
+      <path
+        d="M13 8v8M9.5 12.5L13 16l3.5-3.5M9 17.5h8"
         fill="none"
         stroke="var(--accent)"
         strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+export function RegenerateIcon() {
+  return (
+    <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
+      <circle cx="13" cy="13" r="11" fill="none" stroke="var(--accent)" strokeWidth="2" />
+      <path
+        d="M9 10.3a5 5 0 0 1 8.2-1.5M17.2 8.2v3h-3"
+        fill="none"
+        stroke="var(--accent)"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M17 15.7a5 5 0 0 1-8.2 1.5M8.8 17.8v-3h3"
+        fill="none"
+        stroke="var(--accent)"
+        strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       />

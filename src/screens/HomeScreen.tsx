@@ -32,9 +32,6 @@ export function HomeScreen({ sessions, onOpenSession, onNewSession, onSignOut }:
             Sign out
           </button>
         </div>
-        <button className="new-session-btn" onClick={onNewSession} aria-label="Start new session">
-          + New Session
-        </button>
       </header>
 
       <div className="home-list">
@@ -52,6 +49,10 @@ export function HomeScreen({ sessions, onOpenSession, onNewSession, onSignOut }:
           <SessionCard key={s.id} session={s} now={now} onTap={() => onOpenSession(s.id)} />
         ))}
       </div>
+
+      <button className="new-session-btn" onClick={onNewSession} aria-label="Start new session">
+        + New Session
+      </button>
     </div>
   )
 }

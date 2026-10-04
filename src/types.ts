@@ -1,4 +1,5 @@
 export type SessionStatus = 'recording' | 'suspended' | 'enriching' | 'complete'
+export type DeckStatus = 'none' | 'generating' | 'ready' | 'error'
 
 export interface NoteItem {
   id: string
@@ -32,4 +33,8 @@ export interface Session {
   /** Set while status is 'recording' — the wall-clock time the current live span began. */
   liveSpanStartedAt: number | null
   items: TimelineItemData[]
+  deckStatus: DeckStatus
+  /** Path in the cc-decks bucket once deckStatus is 'ready'. */
+  deckPath: string | null
+  deckError: string | null
 }

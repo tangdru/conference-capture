@@ -94,7 +94,13 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       setRoute({ screen: 'home' })
       return null
     }
-    return <ReviewStub session={session} onBack={() => setRoute({ screen: 'home' })} />
+    return (
+      <ReviewStub
+        session={session}
+        onBack={() => setRoute({ screen: 'home' })}
+        onUpdateLocal={(updater) => updateSessionLocally(session.id, updater)}
+      />
+    )
   }
 
   return (

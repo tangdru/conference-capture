@@ -175,13 +175,13 @@ export function GenerateIcon() {
   return (
     <svg viewBox="0 0 26 26" width="26" height="26" aria-hidden="true">
       <path
-        d="M2.5 6.5h6l2 2h12.5a1.4 1.4 0 0 1 1.4 1.4v11.2a1.4 1.4 0 0 1-1.4 1.4H3.9a1.4 1.4 0 0 1-1.4-1.4V6.5z"
-        fill="none"
-        stroke="var(--accent)"
-        strokeWidth="2"
-        strokeLinejoin="round"
+        d="M13,2 C14,9 17,12 24,13 C17,14 14,17 13,24 C12,17 9,14 2,13 C9,12 12,9 13,2 Z"
+        fill="var(--accent)"
       />
-      <path d="M21.5 1.5v5M19 4h5" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
+      <path
+        d="M6,17 C6.6,19 7.4,19.4 9,20 C7.4,20.6 6.6,21.4 6,23 C5.4,21.4 4.6,20.6 3,20 C4.6,19.4 5.4,19 6,17 Z"
+        fill="var(--accent)"
+      />
     </svg>
   )
 }

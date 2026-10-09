@@ -3,7 +3,6 @@ import type { Session, TimelineItemData, VideoItem } from '../types'
 import { formatElapsed, formatSessionSubtitle, formatDurationCompact } from '../format'
 import { Timeline } from '../components/Timeline'
 import { CameraViewfinder } from '../components/CameraViewfinder'
-import { VideoRecorder } from '../components/VideoRecorder'
 import { PhotoViewer } from '../components/PhotoViewer'
 import { VideoViewer } from '../components/VideoViewer'
 import { useAmbientTranscription } from '../hooks/useAmbientTranscription'
@@ -28,7 +27,6 @@ function elapsedFor(session: Session, now: number): number {
 export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack }: CaptureScreenProps) {
   const [now, setNow] = useState(Date.now())
   const [cameraOpen, setCameraOpen] = useState(false)
-  const [videoRecorderOpen, setVideoRecorderOpen] = useState(false)
   const [confirmingEnd, setConfirmingEnd] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [viewingPhotoId, setViewingPhotoId] = useState<string | null>(null)
@@ -101,15 +99,6 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
       onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save photo')
-    }
-  }
-
-  async function commitVideo(blob: Blob, durationMs: number) {
-    try {
-      const item = await db.addVideo(session.id, userId, blob, durationMs)
-      onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save video')
     }
   }
 
@@ -276,21 +265,6 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
             <circle cx="12" cy="13" r="3.2" stroke="var(--accent)" strokeWidth="1.6" />
           </svg>
         </button>
-        <button
-          className="video-trigger"
-          onClick={() => setVideoRecorderOpen(true)}
-          aria-label="Record video"
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <rect x="3" y="6" width="13" height="12" rx="1.5" stroke="var(--recording-dot)" strokeWidth="1.6" />
-            <path
-              d="M16 10.5l5-2.8v8.6l-5-2.8z"
-              stroke="var(--recording-dot)"
-              strokeWidth="1.6"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
       </div>
 
       {viewingPhoto && (
@@ -306,14 +280,6 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
           sessionTimer={formatElapsed(elapsedMs)}
           onCapture={commitPhoto}
           onClose={() => setCameraOpen(false)}
-        />
-      )}
-
-      {videoRecorderOpen && (
-        <VideoRecorder
-          sessionTimer={formatElapsed(elapsedMs)}
-          onCapture={commitVideo}
-          onClose={() => setVideoRecorderOpen(false)}
         />
       )}
 

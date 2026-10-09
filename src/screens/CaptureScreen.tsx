@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Session, TimelineItemData } from '../types'
-import { formatElapsed, formatSessionSubtitle } from '../format'
+import { formatElapsed, formatSessionSubtitle, formatDurationCompact } from '../format'
 import { Timeline } from '../components/Timeline'
 import { CameraViewfinder } from '../components/CameraViewfinder'
 import { PhotoViewer } from '../components/PhotoViewer'
@@ -188,10 +188,21 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
             </>
           ) : (
             <>
-              <span className="capture-header__subtitle">{formatSessionSubtitle(session.startedAt)}</span>
+              <span className="rec-dot rec-dot--done" aria-hidden="true" />
+              <span className="capture-header__subtitle">
+                {formatSessionSubtitle(session.startedAt)}
+                {session.accumulatedMs > 0 && ` · ${formatDurationCompact(session.accumulatedMs)}`}
+              </span>
               <span className="capture-header__stats">
                 📝 {noteCount} &nbsp; 📷 {photoCount}
               </span>
+              {session.deckStatus === 'ready' && session.deckGeneratedAt && (
+                session.updatedAt > session.deckGeneratedAt ? (
+                  <span className="capture-header__deck-warn">⚠ Edited since deck</span>
+                ) : (
+                  <span className="capture-header__deck-ok">Deck up to date</span>
+                )
+              )}
             </>
           )}
         </div>

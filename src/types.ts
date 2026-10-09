@@ -37,4 +37,7 @@ export interface Session {
   /** Path in the cc-decks bucket once deckStatus is 'ready'. */
   deckPath: string | null
   deckError: string | null
+  deckGeneratedAt: number | null
+  /** Last time any field on this session (or its items) was saved. */
+  updatedAt: number
 }

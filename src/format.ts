@@ -20,3 +20,13 @@ export function formatSessionSubtitle(startedAt: number): string {
   const date = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
   return `${time} · ${date}`
 }
+
+/** Compact duration for display next to a date, e.g. "47m" or "1h 12m". */
+export function formatDurationCompact(ms: number): string {
+  const totalMinutes = Math.round(ms / 60000)
+  if (totalMinutes < 1) return '<1m'
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (hours === 0) return `${minutes}m`
+  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`
+}

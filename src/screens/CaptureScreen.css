@@ -71,6 +71,8 @@
 .capture-header__row2 {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  row-gap: 4px;
   gap: 10px;
   min-height: 36px;
   /* Lines up under the title, skipping the back button's width. */
@@ -99,6 +101,23 @@
 .rec-dot--live {
   opacity: 1;
   animation: pulse 2s ease-in-out infinite;
+}
+
+.rec-dot--done {
+  background: var(--accent);
+  opacity: 1;
+}
+
+.capture-header__deck-warn {
+  flex-basis: 100%;
+  color: var(--semantic-warning);
+  font-size: 11px;
+}
+
+.capture-header__deck-ok {
+  flex-basis: 100%;
+  color: var(--text-muted);
+  font-size: 11px;
 }
 
 @keyframes pulse {

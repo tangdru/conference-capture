@@ -13,6 +13,7 @@
   --accent-subtle: rgba(0, 240, 224, 0.12);
   --semantic-error: #ff6b6b;
   --semantic-success: #4ade80;
+  --semantic-warning: #e8b339;
   --recording-dot: #ff2d78;
 
   /* Spacing — 4px base */

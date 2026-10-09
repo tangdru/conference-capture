@@ -21,7 +21,19 @@ export interface PhotoItem {
   addedLater?: boolean
 }
 
-export type TimelineItemData = NoteItem | PhotoItem
+export interface VideoItem {
+  id: string
+  type: 'video'
+  /** Object URL for immediate playback. Present once resolved (freshly captured, or lazily fetched from storage). */
+  dataUrl?: string
+  /** Storage path in the cc-videos bucket — the persisted source of truth. */
+  videoPath: string
+  durationMs: number
+  timestamp: number
+  addedLater?: boolean
+}
+
+export type TimelineItemData = NoteItem | PhotoItem | VideoItem
 
 export interface Session {
   id: string

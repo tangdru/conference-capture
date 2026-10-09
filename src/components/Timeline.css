@@ -186,6 +186,7 @@
   background: var(--bg-elevated);
   flex-shrink: 0;
   overflow: hidden;
+  position: relative;
 }
 
 .photo-row__thumb-img {
@@ -193,6 +194,28 @@
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.video-row__play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.video-row__duration {
+  position: absolute;
+  bottom: 3px;
+  right: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 1px 4px;
+  border-radius: 3px;
+  line-height: 1.3;
 }
 
 .photo-row__body {

@@ -38,3 +38,6 @@ _Defined 2026-10-09, user override. Scopes what Claude surfaces from the combina
 
 ## 8. Deliberately excluded
 - **Sentiment/audience-reaction analysis** — a judgment call dressed as fact, cuts against the "never chatty, never surprising" design principle
+
+## Backlog — not scoped for now
+- **True audio-based speaker diarization** — recognizing voices acoustically (not from text cues), so attribution works even on fast, unlabeled crosstalk where nobody says anyone's name. Deferred because it needs a separate on-device model (voice-embedding clustering, not Claude — Claude has no audio input) and retaining raw audio for the full session rather than discarding it per chunk. Only worth building if the text-only speaker attribution in section 3 proves insufficient in real-world use.

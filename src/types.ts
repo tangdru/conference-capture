@@ -33,7 +33,15 @@ export interface VideoItem {
   addedLater?: boolean
 }
 
-export type TimelineItemData = NoteItem | PhotoItem | VideoItem
+export interface TranscriptItem {
+  id: string
+  type: 'transcript'
+  text: string
+  timestamp: number
+  durationMs: number
+}
+
+export type TimelineItemData = NoteItem | PhotoItem | VideoItem | TranscriptItem
 
 export interface Session {
   id: string

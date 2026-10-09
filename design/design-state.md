@@ -35,6 +35,10 @@ _Last updated: 2026-05-22 by design-lead_
 
 | Date | Agent | Decision | Rationale |
 |------|-------|----------|-----------|
+| 2026-10-09 | user override | Ambient transcription runs fully on-device (Whisper via transformers.js/WASM), not a cloud API | No audio input type exists in the Claude API; keeps audio off third-party servers; fits the existing Supabase+Anthropic-only vendor footprint |
+| 2026-10-09 | user override | Transcription is chunked (~30s) and runs concurrently during the live session, not as a post-session batch job | The capture tab is already open the whole session for note-taking, so transcription piggybacks on that foreground time instead of needing the user to babysit a separate post-session wait |
+| 2026-10-09 | user override | Transcript text only — raw audio is discarded after each chunk is transcribed | Lighter storage, no raw-audio privacy exposure; nothing downstream needs the audio itself |
+| 2026-10-09 | user override | No custom battery-usage UI (dialog or monitoring) | The OS status bar's native battery indicator already covers it; the Battery Status API isn't available on iOS Safari anyway |
 | 2026-05-08 | design-discovery | Timeline stream as core interaction model | Most honest to how conferences work — chronological, chaotic, time-bound |
 | 2026-05-08 | design-discovery | Audio is ambient capture, not dictation | User intent: record the speaker, not themselves; transcript is a post-session reference layer |
 | 2026-05-08 | design-discovery | Review phase is editable, not read-only | Users need to correct, expand, and annotate after the session |

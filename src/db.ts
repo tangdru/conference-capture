@@ -1,5 +1,5 @@
 import { supabase, PHOTOS_BUCKET, VIDEOS_BUCKET, DECKS_BUCKET } from './supabaseClient'
-import type { DeckStatus, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData, VideoItem } from './types'
+import type { DeckStatus, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData, TranscriptItem, VideoItem } from './types'
 
 interface SessionRow {
   id: string
@@ -18,7 +18,7 @@ interface SessionRow {
 interface ItemRow {
   id: string
   session_id: string
-  type: 'note' | 'photo' | 'video'
+  type: 'note' | 'photo' | 'video' | 'transcript'
   text: string | null
   caption: string | null
   photo_path: string | null
@@ -59,6 +59,9 @@ function itemFromRow(row: ItemRow): TimelineItemData {
       timestamp,
       addedLater: row.added_later,
     }
+  }
+  if (row.type === 'transcript') {
+    return { id: row.id, type: 'transcript', text: row.text ?? '', timestamp, durationMs: row.duration_ms ?? 0 }
   }
   return {
     id: row.id,
@@ -283,6 +286,30 @@ export async function resolveVideoUrl(path: string): Promise<string> {
   const url = URL.createObjectURL(data)
   videoUrlCache.set(path, url)
   return url
+}
+
+export async function addTranscriptSegment(
+  sessionId: string,
+  userId: string,
+  text: string,
+  timestamp: number,
+  durationMs: number,
+): Promise<TranscriptItem> {
+  const { data, error } = await supabase
+    .from('cc_timeline_items')
+    .insert({
+      session_id: sessionId,
+      owner_id: userId,
+      type: 'transcript',
+      text,
+      duration_ms: durationMs,
+      item_timestamp: new Date(timestamp).toISOString(),
+    })
+    .select('id')
+    .single()
+
+  if (error) throw error
+  return { id: data.id, type: 'transcript', text, timestamp, durationMs }
 }
 
 export async function generateDeck(sessionId: string): Promise<void> {

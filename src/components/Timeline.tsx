@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { NoteItem, PhotoItem, TimelineItemData, VideoItem } from '../types'
+import type { NoteItem, PhotoItem, TimelineItemData, TranscriptItem, VideoItem } from '../types'
 import { formatClock, formatClipDuration } from '../format'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
 import { useVideoUrl } from '../hooks/useVideoUrl'
@@ -86,8 +86,10 @@ export function Timeline({
               )
             ) : item.type === 'photo' ? (
               <PhotoRow item={item} onTap={() => onPhotoTap(item.id)} />
-            ) : (
+            ) : item.type === 'video' ? (
               <VideoRow item={item} onTap={() => onVideoTap(item.id)} />
+            ) : (
+              <TranscriptRow item={item} />
             )}
           </SwipeActions>
         </div>
@@ -245,6 +247,22 @@ function PhotoRow({ item, onTap }: { item: PhotoItem; onTap: () => void }) {
       </div>
       <span className="mono-timestamp photo-row__timestamp">{formatClock(item.timestamp)}</span>
     </button>
+  )
+}
+
+function TranscriptRow({ item }: { item: TranscriptItem }) {
+  return (
+    <div
+      className="transcript-row"
+      role="group"
+      aria-label={`Transcript, captured at ${formatClock(item.timestamp)}: ${item.text}`}
+    >
+      <div className="transcript-row__bar" aria-hidden="true" />
+      <div className="transcript-row__body">
+        <p className="transcript-row__text">{item.text}</p>
+      </div>
+      <span className="mono-timestamp transcript-row__meta">{formatClock(item.timestamp)}</span>
+    </div>
   )
 }
 

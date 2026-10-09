@@ -6,6 +6,7 @@ import { CameraViewfinder } from '../components/CameraViewfinder'
 import { VideoRecorder } from '../components/VideoRecorder'
 import { PhotoViewer } from '../components/PhotoViewer'
 import { VideoViewer } from '../components/VideoViewer'
+import { useAmbientTranscription } from '../hooks/useAmbientTranscription'
 import * as db from '../db'
 import './CaptureScreen.css'
 
@@ -111,6 +112,22 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
       setSaveError(err instanceof Error ? err.message : 'Failed to save video')
     }
   }
+
+  async function commitTranscriptSegment(text: string, startedAt: number, durationMs: number) {
+    try {
+      const item = await db.addTranscriptSegment(session.id, userId, text, startedAt, durationMs)
+      onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
+    } catch {
+      // Best-effort -- a dropped transcript segment isn't worth surfacing as
+      // an error; the next segment will still come through.
+    }
+  }
+
+  useAmbientTranscription({
+    active: session.status === 'recording',
+    onSegment: commitTranscriptSegment,
+    onError: setSaveError,
+  })
 
   async function stop() {
     const accumulatedMs = elapsedFor(session, Date.now())

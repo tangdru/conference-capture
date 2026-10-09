@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import type { NoteItem, PhotoItem, TimelineItemData } from '../types'
-import { formatClock } from '../format'
+import type { NoteItem, PhotoItem, TimelineItemData, VideoItem } from '../types'
+import { formatClock, formatClipDuration } from '../format'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
+import { useVideoUrl } from '../hooks/useVideoUrl'
 import { SwipeActions, DeleteIcon } from './SwipeActions'
 import './Timeline.css'
 
@@ -11,6 +12,7 @@ type ActiveId = string | 'new' | null
 interface TimelineProps {
   items: TimelineItemData[]
   onPhotoTap: (id: string) => void
+  onVideoTap: (id: string) => void
   activeId: ActiveId
   onStartNewNote: () => void
   onStartEditNote: (id: string) => void
@@ -23,6 +25,7 @@ interface TimelineProps {
 export function Timeline({
   items,
   onPhotoTap,
+  onVideoTap,
   activeId,
   onStartNewNote,
   onStartEditNote,
@@ -81,8 +84,10 @@ export function Timeline({
               ) : (
                 <NoteRow item={item} onTap={() => onStartEditNote(item.id)} />
               )
-            ) : (
+            ) : item.type === 'photo' ? (
               <PhotoRow item={item} onTap={() => onPhotoTap(item.id)} />
+            ) : (
+              <VideoRow item={item} onTap={() => onVideoTap(item.id)} />
             )}
           </SwipeActions>
         </div>
@@ -237,6 +242,35 @@ function PhotoRow({ item, onTap }: { item: PhotoItem; onTap: () => void }) {
         <p className={`photo-row__caption${item.addedLater ? ' photo-row__caption--later' : ''}`}>
           {item.caption}
         </p>
+      </div>
+      <span className="mono-timestamp photo-row__timestamp">{formatClock(item.timestamp)}</span>
+    </button>
+  )
+}
+
+function VideoRow({ item, onTap }: { item: VideoItem; onTap: () => void }) {
+  const resolvedUrl = useVideoUrl(item)
+  const clipLabel = `Video, ${formatClipDuration(item.durationMs)}`
+
+  return (
+    <button
+      className="photo-row"
+      onClick={onTap}
+      aria-label={`${clipLabel}, captured at ${formatClock(item.timestamp)}`}
+    >
+      <div className="photo-row__thumb">
+        {resolvedUrl && (
+          <video className="photo-row__thumb-img" src={resolvedUrl} muted playsInline preload="metadata" />
+        )}
+        <span className="video-row__play" aria-hidden="true">
+          <svg viewBox="0 0 26 26" width="14" height="14">
+            <path d="M7 3L7 23L21 13Z" fill="#fff" />
+          </svg>
+        </span>
+        <span className="video-row__duration">{formatClipDuration(item.durationMs)}</span>
+      </div>
+      <div className="photo-row__body">
+        <p className={`photo-row__caption${item.addedLater ? ' photo-row__caption--later' : ''}`}>Video</p>
       </div>
       <span className="mono-timestamp photo-row__timestamp">{formatClock(item.timestamp)}</span>
     </button>

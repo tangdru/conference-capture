@@ -1,0 +1,54 @@
+.video-recorder__timer {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+
+.video-recorder__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--recording-dot);
+  animation: video-recorder-pulse 1s ease-in-out infinite;
+}
+
+@keyframes video-recorder-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.video-recorder__shutter {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--recording-dot);
+  border: 1.5px solid var(--recording-dot);
+  box-shadow: 0 0 0 4px var(--bg-base), 0 0 0 5.5px var(--recording-dot);
+  cursor: pointer;
+  transition: border-radius 0.15s ease, width 0.15s ease, height 0.15s ease;
+}
+
+.video-recorder__shutter:active {
+  transform: scale(0.94);
+}
+
+.video-recorder__shutter--recording {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.video-recorder__shutter:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

@@ -1,5 +1,5 @@
-import { supabase, PHOTOS_BUCKET, DECKS_BUCKET } from './supabaseClient'
-import type { DeckStatus, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData } from './types'
+import { supabase, PHOTOS_BUCKET, VIDEOS_BUCKET, DECKS_BUCKET } from './supabaseClient'
+import type { DeckStatus, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData, VideoItem } from './types'
 
 interface SessionRow {
   id: string
@@ -18,10 +18,12 @@ interface SessionRow {
 interface ItemRow {
   id: string
   session_id: string
-  type: 'note' | 'photo'
+  type: 'note' | 'photo' | 'video'
   text: string | null
   caption: string | null
   photo_path: string | null
+  video_path: string | null
+  duration_ms: number | null
   item_timestamp: string
   added_later: boolean
 }
@@ -48,6 +50,16 @@ function itemFromRow(row: ItemRow): TimelineItemData {
   if (row.type === 'note') {
     return { id: row.id, type: 'note', text: row.text ?? '', timestamp, addedLater: row.added_later }
   }
+  if (row.type === 'video') {
+    return {
+      id: row.id,
+      type: 'video',
+      videoPath: row.video_path ?? '',
+      durationMs: row.duration_ms ?? 0,
+      timestamp,
+      addedLater: row.added_later,
+    }
+  }
   return {
     id: row.id,
     type: 'photo',
@@ -67,7 +79,7 @@ export async function fetchSessions(userId: string): Promise<Session[]> {
       .order('started_at', { ascending: false }),
     supabase
       .from('cc_timeline_items')
-      .select('id, session_id, type, text, caption, photo_path, item_timestamp, added_later')
+      .select('id, session_id, type, text, caption, photo_path, video_path, duration_ms, item_timestamp, added_later')
       .eq('owner_id', userId)
       .order('item_timestamp', { ascending: true }),
   ])
@@ -134,6 +146,12 @@ export async function deleteSession(session: Session): Promise<void> {
     // not something that should block the session disappearing for the user.
     await supabase.storage.from(PHOTOS_BUCKET).remove(photoPaths)
   }
+  const videoPaths = session.items
+    .filter((i): i is VideoItem => i.type === 'video')
+    .map((i) => i.videoPath)
+  if (videoPaths.length > 0) {
+    await supabase.storage.from(VIDEOS_BUCKET).remove(videoPaths)
+  }
   await supabase.from('cc_timeline_items').delete().eq('session_id', session.id)
   const { error } = await supabase.from('cc_sessions').delete().eq('id', session.id)
   if (error) throw error
@@ -161,6 +179,8 @@ export async function deleteTimelineItem(item: TimelineItemData): Promise<void> 
     // Best-effort -- an orphaned storage object is a minor cleanup issue,
     // not something that should block the item disappearing for the user.
     await supabase.storage.from(PHOTOS_BUCKET).remove([item.photoPath])
+  } else if (item.type === 'video') {
+    await supabase.storage.from(VIDEOS_BUCKET).remove([item.videoPath])
   }
   const { error } = await supabase.from('cc_timeline_items').delete().eq('id', item.id)
   if (error) throw error
@@ -210,6 +230,58 @@ export async function resolvePhotoUrl(path: string): Promise<string> {
   if (error) throw error
   const url = URL.createObjectURL(data)
   photoUrlCache.set(path, url)
+  return url
+}
+
+export async function addVideo(
+  sessionId: string,
+  userId: string,
+  blob: Blob,
+  durationMs: number,
+): Promise<VideoItem> {
+  const extension = blob.type.includes('mp4') ? 'mp4' : 'webm'
+  const path = `${userId}/${sessionId}/${crypto.randomUUID()}.${extension}`
+
+  const { error: uploadError } = await supabase.storage
+    .from(VIDEOS_BUCKET)
+    .upload(path, blob, { contentType: blob.type, upsert: false })
+  if (uploadError) throw uploadError
+
+  const now = new Date().toISOString()
+  const { data, error } = await supabase
+    .from('cc_timeline_items')
+    .insert({
+      session_id: sessionId,
+      owner_id: userId,
+      type: 'video',
+      video_path: path,
+      duration_ms: durationMs,
+      item_timestamp: now,
+    })
+    .select('id, item_timestamp')
+    .single()
+
+  if (error) throw error
+  return {
+    id: data.id,
+    type: 'video',
+    videoPath: path,
+    durationMs,
+    timestamp: new Date(data.item_timestamp).getTime(),
+    dataUrl: URL.createObjectURL(blob),
+  }
+}
+
+const videoUrlCache = new Map<string, string>()
+
+export async function resolveVideoUrl(path: string): Promise<string> {
+  const cached = videoUrlCache.get(path)
+  if (cached) return cached
+
+  const { data, error } = await supabase.storage.from(VIDEOS_BUCKET).download(path)
+  if (error) throw error
+  const url = URL.createObjectURL(data)
+  videoUrlCache.set(path, url)
   return url
 }
 

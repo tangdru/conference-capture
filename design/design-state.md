@@ -41,6 +41,8 @@ _Last updated: 2026-05-22 by design-lead_
 | 2026-10-09 | user override | No custom battery-usage UI (dialog or monitoring) | The OS status bar's native battery indicator already covers it; the Battery Status API isn't available on iOS Safari anyway |
 | 2026-10-09 | user override | Enrichment scope defined across 8 categories (see design/components/transcript-enrichment-scope.md) | Settles what Claude surfaces from transcript + notes + photos before any of it gets built |
 | 2026-10-09 | user override | Speaker attribution needs no retained audio | The user was in the room and knows who said what from memory; Claude only ever reasons over text, never audio — fidelity depends on labeling soon after the session, not on a recording |
+| 2026-10-10 | user override | generate-deck now includes the ambient transcript, not just notes and photos | The transcript existed but was invisible to the actual deck output — the one thing that makes capture worth it |
+| 2026-10-10 | user override | Fake "simulate enrichment" timeout replaced with a real enrich-session call (starter set: summary, action items, references, speaker bio, acronyms) | Enrichment status was theater; this is the first real pass of the 8-category scope. Remaining categories (named entities, stats, open threads, comparisons, CTAs, cross-session themes, section detection, speaker emphasis, in-context definitions, note-linking, speaker attribution) stay scoped-but-not-built |
 | 2026-05-08 | design-discovery | Timeline stream as core interaction model | Most honest to how conferences work — chronological, chaotic, time-bound |
 | 2026-05-08 | design-discovery | Audio is ambient capture, not dictation | User intent: record the speaker, not themselves; transcript is a post-session reference layer |
 | 2026-05-08 | design-discovery | Review phase is editable, not read-only | Users need to correct, expand, and annotate after the session |
@@ -97,7 +99,7 @@ _Last updated: 2026-05-22 by design-lead_
 | Capture screen mockups | design/screens/mockups/ | Complete — Task 3 ✅ (v1 programmatic, v2 from Figma) |
 | Camera capture interaction | design/interactions/camera-capture.md | Complete — Task 6 ✅ |
 | Audio recording indicator | design/interactions/audio-recording-indicator.md | Complete — Task 7 ✅ |
-| Transcript/notes/photos enrichment scope | design/components/transcript-enrichment-scope.md | Scoped — feeds Tasks 9, 11, 12, 13 |
+| Transcript/notes/photos enrichment scope | design/components/transcript-enrichment-scope.md | Starter set (5 of 8 categories) implemented 2026-10-10 — no review UI yet |
 
 ## Design Debt Register
 

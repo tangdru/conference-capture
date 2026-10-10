@@ -76,10 +76,11 @@ async function generateDeck(
   if (itemsError) throw itemsError
 
   const notes = (itemRows ?? []).filter((r) => r.type === 'note' && r.text)
+  const transcriptSegments = (itemRows ?? []).filter((r) => r.type === 'transcript' && r.text)
   const photoRows = (itemRows ?? []).filter((r) => r.type === 'photo' && r.photo_path)
 
-  if (notes.length === 0 && photoRows.length === 0) {
-    throw new Error('This session has no notes or photos to build a presentation from')
+  if (notes.length === 0 && transcriptSegments.length === 0 && photoRows.length === 0) {
+    throw new Error('This session has no notes, transcript, or photos to build a presentation from')
   }
 
   await supabase.from('cc_sessions').update({ deck_status: 'generating', deck_error: null }).eq('id', sessionId)
@@ -99,7 +100,7 @@ async function generateDeck(
     })
   }
 
-  const html = await callClaude(session.title, notes, photos)
+  const html = await callClaude(session.title, notes, transcriptSegments, photos)
   const finalHtml = substitutePhotos(html, photos)
 
   const deckPath = `${session.owner_id}/${sessionId}/deck.html`
@@ -138,11 +139,16 @@ async function blobToBase64(blob: Blob): Promise<string> {
 async function callClaude(
   title: string,
   notes: { text: string | null; item_timestamp: string }[],
+  transcriptSegments: { text: string | null; item_timestamp: string }[],
   photos: { placeholder: string; dataUrl: string; caption: string }[],
 ): Promise<string> {
   const notesText = notes.length > 0
     ? notes.map((n) => `- ${n.text}`).join('\n')
-    : '(No written notes were captured -- build the presentation from the photos alone.)'
+    : '(No written notes were captured -- build the presentation from the transcript and photos alone.)'
+
+  const transcriptText = transcriptSegments.length > 0
+    ? transcriptSegments.map((t) => `- ${t.text}`).join('\n')
+    : '(No ambient transcript was captured for this talk.)'
 
   const photosText = photos.length > 0
     ? photos.map((p) => `- ${p.placeholder}${p.caption ? ` -- caption: "${p.caption}"` : ''}`).join('\n')
@@ -150,10 +156,13 @@ async function callClaude(
 
   const instructions = `You are building a presentation someone can keep as a personal resource, or share with friends and colleagues, as a record of a conference talk they attended titled "${title}".
 
-You are given the attendee's raw notes (taken live, so they may be fragmentary or out of order) and photos they took during the talk (mostly slides). Turn this into a polished, self-contained HTML presentation.
+You are given the attendee's raw notes (taken live, so they may be fragmentary or out of order), an ambient audio transcript of the speaker (auto-transcribed on-device, so it may contain mistranscribed words or awkward phrasing -- use it for content and quotes, but don't assume every word is verbatim), and photos they took during the talk (mostly slides). Turn this into a polished, self-contained HTML presentation.
 
 Raw notes:
 ${notesText}
+
+Ambient transcript (chronological):
+${transcriptText}
 
 Photos available (shown to you below, in this order):
 ${photosText}
@@ -161,7 +170,7 @@ ${photosText}
 Requirements:
 - Return ONLY a single complete HTML document -- no markdown fences, no commentary before or after.
 - The document must be fully self-contained: all CSS and JavaScript inline in the file, no external resources except Google Fonts if you want them.
-- Structure it as a slide deck the viewer can step through (arrow keys / click / swipe), one topic or idea per slide, synthesizing and organizing the raw notes into a clear narrative -- don't just dump the notes verbatim.
+- Structure it as a slide deck the viewer can step through (arrow keys / click / swipe), one topic or idea per slide, synthesizing and organizing the notes and transcript into a clear narrative -- don't just dump either source verbatim. Use the transcript to fill gaps the notes left out and to surface direct quotes worth calling out, but let the notes drive what the attendee actually found important.
 - Weave the photos into the deck as first-class slide content (not an appendix), placed where they're most relevant to the narrative. Reference EACH photo using an <img> tag whose src is EXACTLY its placeholder token, e.g. <img src="PHOTO_1">. Do not invent placeholder names and do not attempt to embed real image data yourself.
 - Pick a visual theme (color palette, type, motion style) that fits the subject matter of the talk, and use CSS transitions/animations and simple data visualization (inline SVG charts, etc.) where they genuinely help communicate an idea -- not decoration for its own sake.
 - Include a title slide and a brief closing/summary slide.

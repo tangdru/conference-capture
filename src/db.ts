@@ -1,5 +1,5 @@
 import { supabase, PHOTOS_BUCKET, VIDEOS_BUCKET, DECKS_BUCKET } from './supabaseClient'
-import type { DeckStatus, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData, TranscriptItem, VideoItem } from './types'
+import type { DeckStatus, NoteItem, PhotoItem, Session, SessionEnrichment, SessionStatus, TimelineItemData, TranscriptItem, VideoItem } from './types'
 
 interface SessionRow {
   id: string
@@ -12,6 +12,8 @@ interface SessionRow {
   deck_path: string | null
   deck_error: string | null
   deck_generated_at: string | null
+  enrichment: SessionEnrichment | null
+  enrichment_error: string | null
   updated_at: string
 }
 
@@ -41,6 +43,8 @@ function sessionFromRow(row: SessionRow, items: TimelineItemData[]): Session {
     deckPath: row.deck_path,
     deckError: row.deck_error,
     deckGeneratedAt: row.deck_generated_at ? new Date(row.deck_generated_at).getTime() : null,
+    enrichment: row.enrichment,
+    enrichmentError: row.enrichment_error,
     updatedAt: new Date(row.updated_at).getTime(),
   }
 }
@@ -77,7 +81,7 @@ export async function fetchSessions(userId: string): Promise<Session[]> {
   const [{ data: sessionRows, error: sessionsError }, { data: itemRows, error: itemsError }] = await Promise.all([
     supabase
       .from('cc_sessions')
-      .select('id, title, status, started_at, accumulated_ms, live_span_started_at, deck_status, deck_path, deck_error, deck_generated_at, updated_at')
+      .select('id, title, status, started_at, accumulated_ms, live_span_started_at, deck_status, deck_path, deck_error, deck_generated_at, enrichment, enrichment_error, updated_at')
       .eq('owner_id', userId)
       .order('started_at', { ascending: false }),
     supabase
@@ -112,7 +116,7 @@ export async function createSession(userId: string): Promise<Session> {
       accumulated_ms: 0,
       live_span_started_at: now,
     })
-    .select('id, title, status, started_at, accumulated_ms, live_span_started_at, deck_status, deck_path, deck_error, deck_generated_at, updated_at')
+    .select('id, title, status, started_at, accumulated_ms, live_span_started_at, deck_status, deck_path, deck_error, deck_generated_at, enrichment, enrichment_error, updated_at')
     .single()
 
   if (error) throw error
@@ -315,6 +319,12 @@ export async function addTranscriptSegment(
 export async function generateDeck(sessionId: string): Promise<void> {
   const { error } = await supabase.functions.invoke('generate-deck', { body: { sessionId } })
   if (error) throw error
+}
+
+export async function enrichSession(sessionId: string): Promise<SessionEnrichment> {
+  const { data, error } = await supabase.functions.invoke('enrich-session', { body: { sessionId } })
+  if (error) throw error
+  return data.enrichment
 }
 
 export async function fetchSessionDeckState(

@@ -43,6 +43,14 @@ export interface TranscriptItem {
 
 export type TimelineItemData = NoteItem | PhotoItem | VideoItem | TranscriptItem
 
+export interface SessionEnrichment {
+  summary: string
+  actionItems: { text: string; context: string }[]
+  references: { title: string; source: string; description: string; url: string | null }[]
+  speakerBio: { name: string; role: string; org: string; description: string } | null
+  acronyms: { term: string; expansion: string }[]
+}
+
 export interface Session {
   id: string
   title: string
@@ -58,6 +66,9 @@ export interface Session {
   deckPath: string | null
   deckError: string | null
   deckGeneratedAt: number | null
+  /** Starter-set enrichment (summary, action items, references, speaker bio, acronyms), set once enrich-session completes. */
+  enrichment: SessionEnrichment | null
+  enrichmentError: string | null
   /** Last time any field on this session (or its items) was saved. */
   updatedAt: number
 }

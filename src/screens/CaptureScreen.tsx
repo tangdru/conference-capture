@@ -144,17 +144,23 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
     onEnded()
     try {
       await db.updateSession(session.id, { status: 'enriching' })
-      // Simulate background enrichment.
-      window.setTimeout(async () => {
-        onUpdateLocal((s) => ({ ...s, status: 'complete' }))
-        try {
-          await db.updateSession(session.id, { status: 'complete' })
-        } catch {
-          // Best-effort — the session still shows complete locally.
-        }
-      }, 3000)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save')
+      return
+    }
+
+    let enrichment: Session['enrichment'] = null
+    try {
+      enrichment = await db.enrichSession(session.id)
+    } catch {
+      // Best-effort -- the session still completes even if enrichment fails.
+    }
+
+    onUpdateLocal((s) => ({ ...s, status: 'complete', enrichment: enrichment ?? s.enrichment }))
+    try {
+      await db.updateSession(session.id, { status: 'complete' })
+    } catch {
+      // Best-effort — the session still shows complete locally.
     }
   }
 

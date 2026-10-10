@@ -10,7 +10,7 @@ import type {
 import { formatClock, formatClipDuration } from '../format'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
 import { useVideoUrl } from '../hooks/useVideoUrl'
-import { SwipeActions, DeleteIcon, ExcludeIcon, IncludeIcon, GripIcon } from './SwipeActions'
+import { SwipeActions, DeleteIcon, ExcludeIcon, IncludeIcon, type DragHandle } from './SwipeActions'
 import './Timeline.css'
 
 /** 'new' means composing a brand-new note at the end of the list; a string is an existing item's id being edited; null means nothing is active. */
@@ -109,6 +109,9 @@ export function Timeline({
       if (prev) onReorder(prev.order)
       return null
     })
+    // Close the swipe panel now that the reorder is committed -- it was
+    // only open because that's where the drag handle lives.
+    setRevealedId(null)
   }
 
   return (
@@ -131,11 +134,9 @@ export function Timeline({
 
       {displayItems.map((item, index) => {
         const reorderable = isReorderable(item)
-        const dragHandlers = reorderable
+        const dragHandle: DragHandle | null = reorderable
           ? {
               onDragPointerDown: (e: ReactPointerEvent) => {
-                e.stopPropagation()
-                e.preventDefault()
                 e.currentTarget.setPointerCapture(e.pointerId)
                 startDrag(item.id, e.clientY)
               },
@@ -171,6 +172,7 @@ export function Timeline({
                   : { icon: <ExcludeIcon />, label: 'Exclude from export', onClick: () => onToggleExcluded(item) },
                 { icon: <DeleteIcon />, label: 'Delete', onClick: () => onDeleteItem(item) },
               ]}
+              dragHandle={dragHandle}
               disabled={item.type === 'note' && activeId === item.id}
             >
               {item.type === 'note' ? (
@@ -181,10 +183,10 @@ export function Timeline({
                     onCancel={onCancelActive}
                   />
                 ) : (
-                  <NoteRow item={item} onTap={() => onStartEditNote(item.id)} dragHandlers={dragHandlers} />
+                  <NoteRow item={item} onTap={() => onStartEditNote(item.id)} />
                 )
               ) : item.type === 'photo' ? (
-                <PhotoRow item={item} onTap={() => onPhotoTap(item.id)} dragHandlers={dragHandlers} />
+                <PhotoRow item={item} onTap={() => onPhotoTap(item.id)} />
               ) : item.type === 'video' ? (
                 <VideoRow item={item} onTap={() => onVideoTap(item.id)} />
               ) : item.type === 'transcript' ? (
@@ -215,41 +217,11 @@ export function Timeline({
   )
 }
 
-interface DragHandlers {
-  onDragPointerDown: (e: ReactPointerEvent) => void
-  onDragPointerMove: (e: ReactPointerEvent) => void
-  onDragPointerUp: (e: ReactPointerEvent) => void
-  onDragPointerCancel: (e: ReactPointerEvent) => void
-}
-
-function DragHandle({ handlers }: { handlers: DragHandlers }) {
-  return (
-    <button
-      className="drag-handle"
-      aria-label="Reorder"
-      onPointerDown={handlers.onDragPointerDown}
-      onPointerMove={handlers.onDragPointerMove}
-      onPointerUp={handlers.onDragPointerUp}
-      onPointerCancel={handlers.onDragPointerCancel}
-    >
-      <GripIcon />
-    </button>
-  )
-}
-
 function ExcludedBadge() {
   return <span className="excluded-badge">Excluded</span>
 }
 
-function NoteRow({
-  item,
-  onTap,
-  dragHandlers,
-}: {
-  item: NoteItem
-  onTap: () => void
-  dragHandlers: DragHandlers | null
-}) {
+function NoteRow({ item, onTap }: { item: NoteItem; onTap: () => void }) {
   const label = item.addedLater
     ? `${item.text}, added later at ${formatClock(item.timestamp)}`
     : `${item.text}, captured at ${formatClock(item.timestamp)}`
@@ -266,7 +238,6 @@ function NoteRow({
           {item.excluded && <ExcludedBadge />}
         </div>
       </button>
-      {dragHandlers && <DragHandle handlers={dragHandlers} />}
     </div>
   )
 }
@@ -364,15 +335,7 @@ function NoteRowEditor({
   )
 }
 
-function PhotoRow({
-  item,
-  onTap,
-  dragHandlers,
-}: {
-  item: PhotoItem
-  onTap: () => void
-  dragHandlers: DragHandlers | null
-}) {
+function PhotoRow({ item, onTap }: { item: PhotoItem; onTap: () => void }) {
   const resolvedUrl = usePhotoUrl(item)
 
   return (
@@ -393,7 +356,6 @@ function PhotoRow({
         </div>
         <span className="mono-timestamp photo-row__timestamp">{formatClock(item.timestamp)}</span>
       </button>
-      {dragHandlers && <DragHandle handlers={dragHandlers} />}
     </div>
   )
 }

@@ -23,6 +23,13 @@
   cursor: pointer;
 }
 
+.swipe-actions__drag-handle {
+  cursor: grab;
+  /* Without this, a touch drag on the handle can get intercepted as a page
+     scroll instead of reaching our pointermove handler. */
+  touch-action: none;
+}
+
 .swipe-actions__content {
   position: relative;
   width: 100%;

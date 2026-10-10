@@ -20,18 +20,29 @@ export interface SwipeAction {
   onClick: () => void
 }
 
+export interface DragHandle {
+  onDragPointerDown: (e: ReactPointerEvent) => void
+  onDragPointerMove: (e: ReactPointerEvent) => void
+  onDragPointerUp: (e: ReactPointerEvent) => void
+  onDragPointerCancel: (e: ReactPointerEvent) => void
+}
+
 interface SwipeActionsProps {
   id: string
   revealedId: string | null
   onReveal: (id: string | null) => void
   actions: SwipeAction[]
+  /** An extra slot in the revealed row, behind the swipe like the other
+   * actions, but driven by press-and-drag instead of a tap. */
+  dragHandle?: DragHandle | null
   /** Suppresses the swipe gesture entirely, e.g. while this row is being edited inline. */
   disabled?: boolean
   children: ReactNode
 }
 
-export function SwipeActions({ id, revealedId, onReveal, actions, disabled, children }: SwipeActionsProps) {
-  const revealWidth = actions.length * ACTION_WIDTH
+export function SwipeActions({ id, revealedId, onReveal, actions, dragHandle, disabled, children }: SwipeActionsProps) {
+  const slotCount = actions.length + (dragHandle ? 1 : 0)
+  const revealWidth = slotCount * ACTION_WIDTH
   const isRevealed = !disabled && revealedId === id
   const contentRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<DragState | null>(null)
@@ -141,6 +152,18 @@ export function SwipeActions({ id, revealedId, onReveal, actions, disabled, chil
             {action.icon}
           </button>
         ))}
+        {dragHandle && (
+          <button
+            className="swipe-actions__action swipe-actions__drag-handle"
+            aria-label="Reorder"
+            onPointerDown={dragHandle.onDragPointerDown}
+            onPointerMove={dragHandle.onDragPointerMove}
+            onPointerUp={dragHandle.onDragPointerUp}
+            onPointerCancel={dragHandle.onDragPointerCancel}
+          >
+            <GripIcon />
+          </button>
+        )}
       </div>
       <div
         ref={contentRef}

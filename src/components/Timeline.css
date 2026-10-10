@@ -93,22 +93,6 @@
   color: var(--recording-dot);
 }
 
-.drag-handle {
-  flex-shrink: 0;
-  width: 32px;
-  height: 44px;
-  margin: -11px -8px -11px 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  cursor: grab;
-  /* Without this, a touch drag on the handle can get intercepted as a page
-     scroll instead of reaching our pointermove handler. */
-  touch-action: none;
-}
-
 .timeline-row--dragging {
   opacity: 0.5;
 }

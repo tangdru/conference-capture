@@ -206,6 +206,48 @@ export function DownloadIcon() {
   )
 }
 
+export function ExcludeIcon() {
+  return (
+    <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
+      <path
+        d="M2 13c3.2-5.3 7.4-8 11-8s7.8 2.7 11 8c-3.2 5.3-7.4 8-11 8S5.2 18.3 2 13z"
+        fill="none"
+        stroke="var(--text-secondary)"
+        strokeWidth="1.8"
+      />
+      <circle cx="13" cy="13" r="3.2" fill="var(--text-secondary)" />
+      <path d="M4 4L22 22" stroke="var(--recording-dot)" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function IncludeIcon() {
+  return (
+    <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
+      <path
+        d="M2 13c3.2-5.3 7.4-8 11-8s7.8 2.7 11 8c-3.2 5.3-7.4 8-11 8S5.2 18.3 2 13z"
+        fill="none"
+        stroke="var(--accent)"
+        strokeWidth="1.8"
+      />
+      <circle cx="13" cy="13" r="3.2" fill="var(--accent)" />
+    </svg>
+  )
+}
+
+export function GripIcon() {
+  return (
+    <svg viewBox="0 0 26 26" width="16" height="16" aria-hidden="true">
+      <circle cx="9" cy="6" r="1.6" fill="var(--text-muted)" />
+      <circle cx="17" cy="6" r="1.6" fill="var(--text-muted)" />
+      <circle cx="9" cy="13" r="1.6" fill="var(--text-muted)" />
+      <circle cx="17" cy="13" r="1.6" fill="var(--text-muted)" />
+      <circle cx="9" cy="20" r="1.6" fill="var(--text-muted)" />
+      <circle cx="17" cy="20" r="1.6" fill="var(--text-muted)" />
+    </svg>
+  )
+}
+
 export function RegenerateIcon() {
   return (
     <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">

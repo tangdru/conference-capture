@@ -1,9 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
-import type { NoteItem, PhotoItem, TimelineItemData, TranscriptItem, VideoItem } from '../types'
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import type {
+  EnrichmentItemData,
+  NoteItem,
+  PhotoItem,
+  TimelineItemData,
+  TranscriptItem,
+  VideoItem,
+} from '../types'
 import { formatClock, formatClipDuration } from '../format'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
 import { useVideoUrl } from '../hooks/useVideoUrl'
-import { SwipeActions, DeleteIcon } from './SwipeActions'
+import { SwipeActions, DeleteIcon, ExcludeIcon, IncludeIcon, GripIcon } from './SwipeActions'
 import './Timeline.css'
 
 /** 'new' means composing a brand-new note at the end of the list; a string is an existing item's id being edited; null means nothing is active. */
@@ -20,6 +27,21 @@ interface TimelineProps {
   onCommitNoteEdit: (id: string, text: string) => void
   onCancelActive: () => void
   onDeleteItem: (item: TimelineItemData) => void
+  onToggleExcluded: (item: TimelineItemData) => void
+  onReorder: (orderedIds: string[]) => void
+}
+
+/** Only notes and photos have a drag handle -- a human typing a note may
+ * finish well after the thought occurred, so the timestamp it lands on
+ * doesn't always match where it belongs. Everything else (transcript,
+ * video, enrichment) always follows timestamp order. */
+function isReorderable(item: TimelineItemData): boolean {
+  return item.type === 'note' || item.type === 'photo'
+}
+
+interface DragState {
+  draggedId: string
+  order: string[]
 }
 
 export function Timeline({
@@ -33,10 +55,14 @@ export function Timeline({
   onCommitNoteEdit,
   onCancelActive,
   onDeleteItem,
+  onToggleExcluded,
+  onReorder,
 }: TimelineProps) {
   const endRef = useRef<HTMLDivElement>(null)
   const userScrolledUp = useRef(false)
   const [revealedId, setRevealedId] = useState<string | null>(null)
+  const [dragState, setDragState] = useState<DragState | null>(null)
+  const rowRefs = useRef(new Map<string, HTMLDivElement>())
 
   useEffect(() => {
     if (!userScrolledUp.current) {
@@ -44,7 +70,46 @@ export function Timeline({
     }
   }, [items.length, activeId])
 
+  const itemsById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items])
+  const displayItems = dragState
+    ? (dragState.order.map((id) => itemsById.get(id)).filter((i): i is TimelineItemData => !!i))
+    : items
+
   const isEmpty = items.length === 0
+
+  function startDrag(id: string, clientY: number) {
+    setDragState({ draggedId: id, order: items.map((i) => i.id) })
+    dragStartY.current = clientY
+  }
+
+  const dragStartY = useRef(0)
+
+  function moveDrag(clientY: number) {
+    setDragState((prev) => {
+      if (!prev) return prev
+      const others = prev.order.filter((id) => id !== prev.draggedId)
+      let targetIndex = others.length
+      for (let i = 0; i < others.length; i++) {
+        const el = rowRefs.current.get(others[i])
+        if (!el) continue
+        const rect = el.getBoundingClientRect()
+        if (clientY < rect.top + rect.height / 2) {
+          targetIndex = i
+          break
+        }
+      }
+      others.splice(targetIndex, 0, prev.draggedId)
+      if (others.join() === prev.order.join()) return prev
+      return { ...prev, order: others }
+    })
+  }
+
+  function endDrag() {
+    setDragState((prev) => {
+      if (prev) onReorder(prev.order)
+      return null
+    })
+  }
 
   return (
     <div
@@ -64,36 +129,73 @@ export function Timeline({
         </div>
       )}
 
-      {items.map((item, index) => (
-        <div key={item.id}>
-          {index > 0 && <div className="dot-divider" aria-hidden="true" />}
-          <SwipeActions
-            id={item.id}
-            revealedId={revealedId}
-            onReveal={setRevealedId}
-            actions={[{ icon: <DeleteIcon />, label: 'Delete', onClick: () => onDeleteItem(item) }]}
-            disabled={item.type === 'note' && activeId === item.id}
+      {displayItems.map((item, index) => {
+        const reorderable = isReorderable(item)
+        const dragHandlers = reorderable
+          ? {
+              onDragPointerDown: (e: ReactPointerEvent) => {
+                e.stopPropagation()
+                e.preventDefault()
+                e.currentTarget.setPointerCapture(e.pointerId)
+                startDrag(item.id, e.clientY)
+              },
+              onDragPointerMove: (e: ReactPointerEvent) => {
+                if (dragState?.draggedId === item.id) moveDrag(e.clientY)
+              },
+              onDragPointerUp: () => {
+                if (dragState?.draggedId === item.id) endDrag()
+              },
+              onDragPointerCancel: () => {
+                if (dragState?.draggedId === item.id) setDragState(null)
+              },
+            }
+          : null
+
+        return (
+          <div
+            key={item.id}
+            ref={(el) => {
+              if (el) rowRefs.current.set(item.id, el)
+              else rowRefs.current.delete(item.id)
+            }}
+            className={dragState?.draggedId === item.id ? 'timeline-row--dragging' : undefined}
           >
-            {item.type === 'note' ? (
-              activeId === item.id ? (
-                <NoteRowEditor
-                  initialText={item.text}
-                  onCommit={(text) => onCommitNoteEdit(item.id, text)}
-                  onCancel={onCancelActive}
-                />
+            {index > 0 && <div className="dot-divider" aria-hidden="true" />}
+            <SwipeActions
+              id={item.id}
+              revealedId={revealedId}
+              onReveal={setRevealedId}
+              actions={[
+                item.excluded
+                  ? { icon: <IncludeIcon />, label: 'Include in export', onClick: () => onToggleExcluded(item) }
+                  : { icon: <ExcludeIcon />, label: 'Exclude from export', onClick: () => onToggleExcluded(item) },
+                { icon: <DeleteIcon />, label: 'Delete', onClick: () => onDeleteItem(item) },
+              ]}
+              disabled={item.type === 'note' && activeId === item.id}
+            >
+              {item.type === 'note' ? (
+                activeId === item.id ? (
+                  <NoteRowEditor
+                    initialText={item.text}
+                    onCommit={(text) => onCommitNoteEdit(item.id, text)}
+                    onCancel={onCancelActive}
+                  />
+                ) : (
+                  <NoteRow item={item} onTap={() => onStartEditNote(item.id)} dragHandlers={dragHandlers} />
+                )
+              ) : item.type === 'photo' ? (
+                <PhotoRow item={item} onTap={() => onPhotoTap(item.id)} dragHandlers={dragHandlers} />
+              ) : item.type === 'video' ? (
+                <VideoRow item={item} onTap={() => onVideoTap(item.id)} />
+              ) : item.type === 'transcript' ? (
+                <TranscriptRow item={item} />
               ) : (
-                <NoteRow item={item} onTap={() => onStartEditNote(item.id)} />
-              )
-            ) : item.type === 'photo' ? (
-              <PhotoRow item={item} onTap={() => onPhotoTap(item.id)} />
-            ) : item.type === 'video' ? (
-              <VideoRow item={item} onTap={() => onVideoTap(item.id)} />
-            ) : (
-              <TranscriptRow item={item} />
-            )}
-          </SwipeActions>
-        </div>
-      ))}
+                <EnrichmentRow item={item} />
+              )}
+            </SwipeActions>
+          </div>
+        )
+      })}
 
       {!isEmpty && <div className="dot-divider" aria-hidden="true" />}
 
@@ -113,25 +215,59 @@ export function Timeline({
   )
 }
 
-function NoteRow({ item, onTap }: { item: NoteItem; onTap: () => void }) {
+interface DragHandlers {
+  onDragPointerDown: (e: ReactPointerEvent) => void
+  onDragPointerMove: (e: ReactPointerEvent) => void
+  onDragPointerUp: (e: ReactPointerEvent) => void
+  onDragPointerCancel: (e: ReactPointerEvent) => void
+}
+
+function DragHandle({ handlers }: { handlers: DragHandlers }) {
+  return (
+    <button
+      className="drag-handle"
+      aria-label="Reorder"
+      onPointerDown={handlers.onDragPointerDown}
+      onPointerMove={handlers.onDragPointerMove}
+      onPointerUp={handlers.onDragPointerUp}
+      onPointerCancel={handlers.onDragPointerCancel}
+    >
+      <GripIcon />
+    </button>
+  )
+}
+
+function ExcludedBadge() {
+  return <span className="excluded-badge">Excluded</span>
+}
+
+function NoteRow({
+  item,
+  onTap,
+  dragHandlers,
+}: {
+  item: NoteItem
+  onTap: () => void
+  dragHandlers: DragHandlers | null
+}) {
   const label = item.addedLater
     ? `${item.text}, added later at ${formatClock(item.timestamp)}`
     : `${item.text}, captured at ${formatClock(item.timestamp)}`
   return (
-    <button
-      className={`note-row${item.addedLater ? ' note-row--later' : ''}`}
-      onClick={onTap}
-      aria-label={`${label}. Tap to edit.`}
-    >
+    <div className={`note-row${item.addedLater ? ' note-row--later' : ''}${item.excluded ? ' is-excluded' : ''}`}>
       <div className="note-row__bar" aria-hidden="true" />
-      <div className="note-row__body">
-        <p className="note-row__text">{item.text}</p>
-      </div>
-      <div className="note-row__meta">
-        <span className="mono-timestamp">{formatClock(item.timestamp)}</span>
-        {item.addedLater && <span className="added-later">Added later</span>}
-      </div>
-    </button>
+      <button className="note-row__tap" onClick={onTap} aria-label={`${label}. Tap to edit.`}>
+        <div className="note-row__body">
+          <p className="note-row__text">{item.text}</p>
+        </div>
+        <div className="note-row__meta">
+          <span className="mono-timestamp">{formatClock(item.timestamp)}</span>
+          {item.addedLater && <span className="added-later">Added later</span>}
+          {item.excluded && <ExcludedBadge />}
+        </div>
+      </button>
+      {dragHandlers && <DragHandle handlers={dragHandlers} />}
+    </div>
   )
 }
 
@@ -228,38 +364,51 @@ function NoteRowEditor({
   )
 }
 
-function PhotoRow({ item, onTap }: { item: PhotoItem; onTap: () => void }) {
+function PhotoRow({
+  item,
+  onTap,
+  dragHandlers,
+}: {
+  item: PhotoItem
+  onTap: () => void
+  dragHandlers: DragHandlers | null
+}) {
   const resolvedUrl = usePhotoUrl(item)
 
   return (
-    <button
-      className="photo-row"
-      onClick={onTap}
-      aria-label={`${item.caption || 'Photo'}, photo captured at ${formatClock(item.timestamp)}`}
-    >
-      <div className="photo-row__thumb">
-        {resolvedUrl && <img className="photo-row__thumb-img" src={resolvedUrl} alt="" />}
-      </div>
-      <div className="photo-row__body">
-        <p className={`photo-row__caption${item.addedLater ? ' photo-row__caption--later' : ''}`}>
-          {item.caption}
-        </p>
-      </div>
-      <span className="mono-timestamp photo-row__timestamp">{formatClock(item.timestamp)}</span>
-    </button>
+    <div className={`photo-row${item.excluded ? ' is-excluded' : ''}`}>
+      <button
+        className="photo-row__tap"
+        onClick={onTap}
+        aria-label={`${item.caption || 'Photo'}, photo captured at ${formatClock(item.timestamp)}`}
+      >
+        <div className="photo-row__thumb">
+          {resolvedUrl && <img className="photo-row__thumb-img" src={resolvedUrl} alt="" />}
+        </div>
+        <div className="photo-row__body">
+          <p className={`photo-row__caption${item.addedLater ? ' photo-row__caption--later' : ''}`}>
+            {item.caption}
+          </p>
+          {item.excluded && <ExcludedBadge />}
+        </div>
+        <span className="mono-timestamp photo-row__timestamp">{formatClock(item.timestamp)}</span>
+      </button>
+      {dragHandlers && <DragHandle handlers={dragHandlers} />}
+    </div>
   )
 }
 
 function TranscriptRow({ item }: { item: TranscriptItem }) {
   return (
     <div
-      className="transcript-row"
+      className={`transcript-row${item.excluded ? ' is-excluded' : ''}`}
       role="group"
       aria-label={`Transcript, captured at ${formatClock(item.timestamp)}: ${item.text}`}
     >
       <div className="transcript-row__bar" aria-hidden="true" />
       <div className="transcript-row__body">
         <p className="transcript-row__text">{item.text}</p>
+        {item.excluded && <ExcludedBadge />}
       </div>
       <span className="mono-timestamp transcript-row__meta">{formatClock(item.timestamp)}</span>
     </div>
@@ -272,7 +421,7 @@ function VideoRow({ item, onTap }: { item: VideoItem; onTap: () => void }) {
 
   return (
     <button
-      className="photo-row"
+      className={`photo-row${item.excluded ? ' is-excluded' : ''}`}
       onClick={onTap}
       aria-label={`${clipLabel}, captured at ${formatClock(item.timestamp)}`}
     >
@@ -289,8 +438,49 @@ function VideoRow({ item, onTap }: { item: VideoItem; onTap: () => void }) {
       </div>
       <div className="photo-row__body">
         <p className={`photo-row__caption${item.addedLater ? ' photo-row__caption--later' : ''}`}>Video</p>
+        {item.excluded && <ExcludedBadge />}
       </div>
       <span className="mono-timestamp photo-row__timestamp">{formatClock(item.timestamp)}</span>
     </button>
+  )
+}
+
+function enrichmentLabel(item: EnrichmentItemData): { title: string; body: string } {
+  switch (item.subtype) {
+    case 'summary':
+      return { title: 'Summary', body: item.text }
+    case 'speaker_bio':
+      return { title: 'Speaker', body: `${item.name} — ${item.role} at ${item.org}. ${item.description}` }
+    case 'action_item':
+      return { title: 'Action item', body: item.text }
+    case 'reference':
+      return { title: 'Reference', body: `${item.title} — ${item.description}` }
+    case 'acronym':
+      return { title: 'Acronym', body: `${item.term} = ${item.expansion}` }
+  }
+}
+
+function EnrichmentRow({ item }: { item: EnrichmentItemData }) {
+  const { title, body } = enrichmentLabel(item)
+  const link = item.subtype === 'reference' ? item.url : null
+
+  return (
+    <div
+      className={`enrichment-row${item.excluded ? ' is-excluded' : ''}`}
+      role="group"
+      aria-label={`${title}, AI-generated: ${body}`}
+    >
+      <div className="enrichment-row__bar" aria-hidden="true" />
+      <div className="enrichment-row__body">
+        <p className="enrichment-row__label">{title}</p>
+        <p className="enrichment-row__text">{body}</p>
+        {link && (
+          <a className="enrichment-row__link" href={link} target="_blank" rel="noreferrer">
+            {link}
+          </a>
+        )}
+        {item.excluded && <ExcludedBadge />}
+      </div>
+    </div>
   )
 }

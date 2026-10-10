@@ -84,6 +84,32 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
     }
   }
 
+  async function toggleExcluded(item: TimelineItemData) {
+    const excluded = !item.excluded
+    onUpdateLocal((s) => ({
+      ...s,
+      items: s.items.map((i) => (i.id === item.id ? { ...i, excluded } : i)),
+    }))
+    try {
+      await db.setItemExcluded(item.id, excluded)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save')
+    }
+  }
+
+  async function reorderItems(orderedIds: string[]) {
+    const positionById = new Map(orderedIds.map((id, index) => [id, index]))
+    onUpdateLocal((s) => ({
+      ...s,
+      items: [...s.items].sort((a, b) => (positionById.get(a.id) ?? 0) - (positionById.get(b.id) ?? 0)),
+    }))
+    try {
+      await db.reorderItems(orderedIds)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save order')
+    }
+  }
+
   async function commitTitle(title: string) {
     onUpdateLocal((s) => ({ ...s, title }))
     try {
@@ -149,14 +175,15 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
       return
     }
 
-    let enrichment: Session['enrichment'] = null
     try {
-      enrichment = await db.enrichSession(session.id)
+      await db.enrichSession(session.id)
+      const items = await db.fetchSessionItems(session.id)
+      onUpdateLocal((s) => ({ ...s, items }))
     } catch {
       // Best-effort -- the session still completes even if enrichment fails.
     }
 
-    onUpdateLocal((s) => ({ ...s, status: 'complete', enrichment: enrichment ?? s.enrichment }))
+    onUpdateLocal((s) => ({ ...s, status: 'complete' }))
     try {
       await db.updateSession(session.id, { status: 'complete' })
     } catch {
@@ -254,6 +281,8 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
         onCommitNoteEdit={commitNoteEdit}
         onCancelActive={() => setActiveId(null)}
         onDeleteItem={deleteItem}
+        onToggleExcluded={toggleExcluded}
+        onReorder={reorderItems}
       />
 
       <div className="capture-actions">

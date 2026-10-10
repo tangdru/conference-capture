@@ -1,5 +1,8 @@
 import { supabase, PHOTOS_BUCKET, VIDEOS_BUCKET, DECKS_BUCKET } from './supabaseClient'
-import type { DeckStatus, NoteItem, PhotoItem, Session, SessionEnrichment, SessionStatus, TimelineItemData, TranscriptItem, VideoItem } from './types'
+import type { DeckStatus, EnrichmentItemData, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData, TranscriptItem, VideoItem } from './types'
+
+const ITEM_COLUMNS = 'id, session_id, type, subtype, payload, text, caption, photo_path, video_path, duration_ms, item_timestamp, added_later, excluded, position'
+const SESSION_COLUMNS = 'id, title, status, started_at, accumulated_ms, live_span_started_at, deck_status, deck_path, deck_error, deck_generated_at, enrichment_error, updated_at'
 
 interface SessionRow {
   id: string
@@ -12,7 +15,6 @@ interface SessionRow {
   deck_path: string | null
   deck_error: string | null
   deck_generated_at: string | null
-  enrichment: SessionEnrichment | null
   enrichment_error: string | null
   updated_at: string
 }
@@ -20,7 +22,9 @@ interface SessionRow {
 interface ItemRow {
   id: string
   session_id: string
-  type: 'note' | 'photo' | 'video' | 'transcript'
+  type: 'note' | 'photo' | 'video' | 'transcript' | 'enrichment'
+  subtype: string | null
+  payload: Record<string, unknown> | null
   text: string | null
   caption: string | null
   photo_path: string | null
@@ -28,6 +32,8 @@ interface ItemRow {
   duration_ms: number | null
   item_timestamp: string
   added_later: boolean
+  excluded: boolean
+  position: number | null
 }
 
 function sessionFromRow(row: SessionRow, items: TimelineItemData[]): Session {
@@ -43,16 +49,73 @@ function sessionFromRow(row: SessionRow, items: TimelineItemData[]): Session {
     deckPath: row.deck_path,
     deckError: row.deck_error,
     deckGeneratedAt: row.deck_generated_at ? new Date(row.deck_generated_at).getTime() : null,
-    enrichment: row.enrichment,
     enrichmentError: row.enrichment_error,
     updatedAt: new Date(row.updated_at).getTime(),
   }
 }
 
-function itemFromRow(row: ItemRow): TimelineItemData {
+function enrichmentItemFromRow(row: ItemRow): EnrichmentItemData | null {
   const timestamp = new Date(row.item_timestamp).getTime()
+  const excluded = row.excluded || undefined
+  const payload = row.payload ?? {}
+
+  switch (row.subtype) {
+    case 'summary':
+      return { id: row.id, type: 'enrichment', subtype: 'summary', timestamp, excluded, text: String(payload.text ?? '') }
+    case 'action_item':
+      return {
+        id: row.id,
+        type: 'enrichment',
+        subtype: 'action_item',
+        timestamp,
+        excluded,
+        text: String(payload.text ?? ''),
+        context: String(payload.context ?? ''),
+      }
+    case 'reference':
+      return {
+        id: row.id,
+        type: 'enrichment',
+        subtype: 'reference',
+        timestamp,
+        excluded,
+        title: String(payload.title ?? ''),
+        source: String(payload.source ?? ''),
+        description: String(payload.description ?? ''),
+        url: typeof payload.url === 'string' ? payload.url : null,
+      }
+    case 'speaker_bio':
+      return {
+        id: row.id,
+        type: 'enrichment',
+        subtype: 'speaker_bio',
+        timestamp,
+        excluded,
+        name: String(payload.name ?? ''),
+        role: String(payload.role ?? ''),
+        org: String(payload.org ?? ''),
+        description: String(payload.description ?? ''),
+      }
+    case 'acronym':
+      return {
+        id: row.id,
+        type: 'enrichment',
+        subtype: 'acronym',
+        timestamp,
+        excluded,
+        term: String(payload.term ?? ''),
+        expansion: String(payload.expansion ?? ''),
+      }
+    default:
+      return null
+  }
+}
+
+function itemFromRow(row: ItemRow): TimelineItemData | null {
+  const timestamp = new Date(row.item_timestamp).getTime()
+  const excluded = row.excluded || undefined
   if (row.type === 'note') {
-    return { id: row.id, type: 'note', text: row.text ?? '', timestamp, addedLater: row.added_later }
+    return { id: row.id, type: 'note', text: row.text ?? '', timestamp, addedLater: row.added_later, excluded, position: row.position ?? undefined }
   }
   if (row.type === 'video') {
     return {
@@ -62,10 +125,14 @@ function itemFromRow(row: ItemRow): TimelineItemData {
       durationMs: row.duration_ms ?? 0,
       timestamp,
       addedLater: row.added_later,
+      excluded,
     }
   }
   if (row.type === 'transcript') {
-    return { id: row.id, type: 'transcript', text: row.text ?? '', timestamp, durationMs: row.duration_ms ?? 0 }
+    return { id: row.id, type: 'transcript', text: row.text ?? '', timestamp, durationMs: row.duration_ms ?? 0, excluded }
+  }
+  if (row.type === 'enrichment') {
+    return enrichmentItemFromRow(row)
   }
   return {
     id: row.id,
@@ -74,6 +141,8 @@ function itemFromRow(row: ItemRow): TimelineItemData {
     caption: row.caption ?? '',
     timestamp,
     addedLater: row.added_later,
+    excluded,
+    position: row.position ?? undefined,
   }
 }
 
@@ -81,13 +150,14 @@ export async function fetchSessions(userId: string): Promise<Session[]> {
   const [{ data: sessionRows, error: sessionsError }, { data: itemRows, error: itemsError }] = await Promise.all([
     supabase
       .from('cc_sessions')
-      .select('id, title, status, started_at, accumulated_ms, live_span_started_at, deck_status, deck_path, deck_error, deck_generated_at, enrichment, enrichment_error, updated_at')
+      .select(SESSION_COLUMNS)
       .eq('owner_id', userId)
       .order('started_at', { ascending: false }),
     supabase
       .from('cc_timeline_items')
-      .select('id, session_id, type, text, caption, photo_path, video_path, duration_ms, item_timestamp, added_later')
+      .select(ITEM_COLUMNS)
       .eq('owner_id', userId)
+      .order('position', { ascending: true, nullsFirst: false })
       .order('item_timestamp', { ascending: true }),
   ])
 
@@ -96,8 +166,10 @@ export async function fetchSessions(userId: string): Promise<Session[]> {
 
   const itemsBySession = new Map<string, TimelineItemData[]>()
   for (const row of itemRows ?? []) {
+    const item = itemFromRow(row)
+    if (!item) continue
     const list = itemsBySession.get(row.session_id) ?? []
-    list.push(itemFromRow(row))
+    list.push(item)
     itemsBySession.set(row.session_id, list)
   }
 
@@ -116,7 +188,7 @@ export async function createSession(userId: string): Promise<Session> {
       accumulated_ms: 0,
       live_span_started_at: now,
     })
-    .select('id, title, status, started_at, accumulated_ms, live_span_started_at, deck_status, deck_path, deck_error, deck_generated_at, enrichment, enrichment_error, updated_at')
+    .select(SESSION_COLUMNS)
     .single()
 
   if (error) throw error
@@ -179,6 +251,23 @@ export async function addNote(sessionId: string, userId: string, text: string): 
 export async function updateNoteText(itemId: string, text: string): Promise<void> {
   const { error } = await supabase.from('cc_timeline_items').update({ text }).eq('id', itemId)
   if (error) throw error
+}
+
+export async function setItemExcluded(itemId: string, excluded: boolean): Promise<void> {
+  const { error } = await supabase.from('cc_timeline_items').update({ excluded }).eq('id', itemId)
+  if (error) throw error
+}
+
+/** Persists a full drag-reorder: every item in the session gets stamped with
+ * its index in `orderedIds` (not just the dragged ones), so items that were
+ * never touched keep their place relative to the ones that moved instead of
+ * all falling back to raw timestamp order, which would bunch them together. */
+export async function reorderItems(orderedIds: string[]): Promise<void> {
+  const results = await Promise.all(
+    orderedIds.map((id, index) => supabase.from('cc_timeline_items').update({ position: index }).eq('id', id)),
+  )
+  const firstError = results.find((r) => r.error)?.error
+  if (firstError) throw firstError
 }
 
 export async function deleteTimelineItem(item: TimelineItemData): Promise<void> {
@@ -321,10 +410,29 @@ export async function generateDeck(sessionId: string): Promise<void> {
   if (error) throw error
 }
 
-export async function enrichSession(sessionId: string): Promise<SessionEnrichment> {
+export async function enrichSession(sessionId: string): Promise<number> {
   const { data, error } = await supabase.functions.invoke('enrich-session', { body: { sessionId } })
   if (error) throw error
-  return data.enrichment
+  return data.count
+}
+
+/** Re-fetches a session's items -- used after enrich-session inserts new
+ * rows server-side, so the local timeline picks them up without a full reload. */
+export async function fetchSessionItems(sessionId: string): Promise<TimelineItemData[]> {
+  const { data, error } = await supabase
+    .from('cc_timeline_items')
+    .select(ITEM_COLUMNS)
+    .eq('session_id', sessionId)
+    .order('position', { ascending: true, nullsFirst: false })
+    .order('item_timestamp', { ascending: true })
+  if (error) throw error
+
+  const items: TimelineItemData[] = []
+  for (const row of data ?? []) {
+    const item = itemFromRow(row)
+    if (item) items.push(item)
+  }
+  return items
 }
 
 export async function fetchSessionDeckState(

@@ -7,6 +7,9 @@ export interface NoteItem {
   text: string
   timestamp: number
   addedLater?: boolean
+  excluded?: boolean
+  /** Explicit display/export order, set once the user drags this item -- absent means "sort by timestamp." */
+  position?: number
 }
 
 export interface PhotoItem {
@@ -19,6 +22,9 @@ export interface PhotoItem {
   caption: string
   timestamp: number
   addedLater?: boolean
+  excluded?: boolean
+  /** Explicit display/export order, set once the user drags this item -- absent means "sort by timestamp." */
+  position?: number
 }
 
 export interface VideoItem {
@@ -31,6 +37,7 @@ export interface VideoItem {
   durationMs: number
   timestamp: number
   addedLater?: boolean
+  excluded?: boolean
 }
 
 export interface TranscriptItem {
@@ -39,17 +46,57 @@ export interface TranscriptItem {
   text: string
   timestamp: number
   durationMs: number
+  excluded?: boolean
 }
 
-export type TimelineItemData = NoteItem | PhotoItem | VideoItem | TranscriptItem
-
-export interface SessionEnrichment {
-  summary: string
-  actionItems: { text: string; context: string }[]
-  references: { title: string; source: string; description: string; url: string | null }[]
-  speakerBio: { name: string; role: string; org: string; description: string } | null
-  acronyms: { term: string; expansion: string }[]
+interface BaseEnrichmentItem {
+  id: string
+  type: 'enrichment'
+  timestamp: number
+  excluded?: boolean
 }
+
+export interface EnrichmentSummaryItem extends BaseEnrichmentItem {
+  subtype: 'summary'
+  text: string
+}
+
+export interface EnrichmentActionItem extends BaseEnrichmentItem {
+  subtype: 'action_item'
+  text: string
+  context: string
+}
+
+export interface EnrichmentReferenceItem extends BaseEnrichmentItem {
+  subtype: 'reference'
+  title: string
+  source: string
+  description: string
+  url: string | null
+}
+
+export interface EnrichmentSpeakerBioItem extends BaseEnrichmentItem {
+  subtype: 'speaker_bio'
+  name: string
+  role: string
+  org: string
+  description: string
+}
+
+export interface EnrichmentAcronymItem extends BaseEnrichmentItem {
+  subtype: 'acronym'
+  term: string
+  expansion: string
+}
+
+export type EnrichmentItemData =
+  | EnrichmentSummaryItem
+  | EnrichmentActionItem
+  | EnrichmentReferenceItem
+  | EnrichmentSpeakerBioItem
+  | EnrichmentAcronymItem
+
+export type TimelineItemData = NoteItem | PhotoItem | VideoItem | TranscriptItem | EnrichmentItemData
 
 export interface Session {
   id: string
@@ -66,8 +113,6 @@ export interface Session {
   deckPath: string | null
   deckError: string | null
   deckGeneratedAt: number | null
-  /** Starter-set enrichment (summary, action items, references, speaker bio, acronyms), set once enrich-session completes. */
-  enrichment: SessionEnrichment | null
   enrichmentError: string | null
   /** Last time any field on this session (or its items) was saved. */
   updatedAt: number

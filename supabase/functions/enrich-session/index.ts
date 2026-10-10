@@ -4,8 +4,12 @@
 // photos (scoped by the caller's own JWT, so Postgres RLS enforces
 // ownership end-to-end -- this function never uses a service-role key),
 // asks Claude for a starter set of enrichment: a session summary, action
-// items, references, a speaker bio, and acronym expansions. Writes the
-// result to cc_sessions.enrichment (or enrichment_error on failure).
+// items, references, a speaker bio, and acronym expansions. Each result
+// is inserted as its own cc_timeline_items row (type='enrichment') so it
+// shows up in the timeline alongside notes/photos/transcript -- same
+// delete/exclude machinery, no separate review surface. Any previous
+// enrichment rows for the session are cleared first, so a re-run doesn't
+// duplicate them.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
@@ -23,14 +27,6 @@ interface SessionEnrichment {
   references: { title: string; source: string; description: string; url: string | null }[]
   speakerBio: { name: string; role: string; org: string; description: string } | null
   acronyms: { term: string; expansion: string }[]
-}
-
-const EMPTY_ENRICHMENT: SessionEnrichment = {
-  summary: '',
-  actionItems: [],
-  references: [],
-  speakerBio: null,
-  acronyms: [],
 }
 
 Deno.serve(async (req) => {
@@ -58,8 +54,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const enrichment = await enrichSession(supabase, sessionId)
-    return jsonResponse({ enrichment }, 200)
+    const count = await enrichSession(supabase, sessionId)
+    return jsonResponse({ count }, 200)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Enrichment failed'
     await supabase.from('cc_sessions').update({ enrichment_error: message }).eq('id', sessionId)
@@ -67,26 +63,39 @@ Deno.serve(async (req) => {
   }
 })
 
-async function enrichSession(
-  supabase: ReturnType<typeof createClient>,
-  sessionId: string,
-): Promise<SessionEnrichment> {
+async function enrichSession(supabase: ReturnType<typeof createClient>, sessionId: string): Promise<number> {
   if (!ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured')
 
-  const { data: itemRows, error: itemsError } = await supabase
+  const { data: session, error: sessionError } = await supabase
+    .from('cc_sessions')
+    .select('id, owner_id')
+    .eq('id', sessionId)
+    .single()
+  if (sessionError) throw sessionError
+
+  const { data: allItemRows, error: itemsError } = await supabase
     .from('cc_timeline_items')
-    .select('type, text, caption, photo_path, item_timestamp')
+    .select('type, text, caption, photo_path, item_timestamp, excluded')
     .eq('session_id', sessionId)
     .order('item_timestamp', { ascending: true })
   if (itemsError) throw itemsError
 
-  const notes = (itemRows ?? []).filter((r) => r.type === 'note' && r.text)
-  const transcriptSegments = (itemRows ?? []).filter((r) => r.type === 'transcript' && r.text)
-  const photoRows = (itemRows ?? []).filter((r) => r.type === 'photo' && r.photo_path)
+  const itemRows = (allItemRows ?? []).filter((r) => !r.excluded)
+  const notes = itemRows.filter((r) => r.type === 'note' && r.text)
+  const transcriptSegments = itemRows.filter((r) => r.type === 'transcript' && r.text)
+  const photoRows = itemRows.filter((r) => r.type === 'photo' && r.photo_path)
+
+  // Clear any previous enrichment rows so a re-run doesn't duplicate them.
+  const { error: clearError } = await supabase
+    .from('cc_timeline_items')
+    .delete()
+    .eq('session_id', sessionId)
+    .eq('type', 'enrichment')
+  if (clearError) throw clearError
 
   if (notes.length === 0 && transcriptSegments.length === 0 && photoRows.length === 0) {
-    await supabase.from('cc_sessions').update({ enrichment: EMPTY_ENRICHMENT, enrichment_error: null }).eq('id', sessionId)
-    return EMPTY_ENRICHMENT
+    await supabase.from('cc_sessions').update({ enrichment_error: null }).eq('id', sessionId)
+    return 0
   }
 
   const photos: { dataUrl: string; caption: string }[] = []
@@ -100,10 +109,58 @@ async function enrichSession(
   }
 
   const enrichment = await callClaude(notes, transcriptSegments, photos)
+  const rows = buildEnrichmentRows(sessionId, session.owner_id as string, enrichment)
 
-  await supabase.from('cc_sessions').update({ enrichment, enrichment_error: null }).eq('id', sessionId)
+  if (rows.length > 0) {
+    const { error: insertError } = await supabase.from('cc_timeline_items').insert(rows)
+    if (insertError) throw insertError
+  }
 
-  return enrichment
+  await supabase.from('cc_sessions').update({ enrichment_error: null }).eq('id', sessionId)
+
+  return rows.length
+}
+
+function buildEnrichmentRows(
+  sessionId: string,
+  ownerId: string,
+  enrichment: SessionEnrichment,
+): Record<string, unknown>[] {
+  const rows: Record<string, unknown>[] = []
+  const baseTime = Date.now()
+  let offset = 0
+  // Enrichment rows don't have a natural "when it happened" moment -- they're
+  // synthesized after the session ends. Stamping each one a beat apart keeps
+  // a stable, deterministic order (summary -> bio -> action items ->
+  // references -> acronyms) since display falls back to timestamp order for
+  // anything that hasn't been manually repositioned.
+  const nextTimestamp = () => new Date(baseTime + offset++ * 10).toISOString()
+  const base = (subtype: string, payload: Record<string, unknown>) => ({
+    session_id: sessionId,
+    owner_id: ownerId,
+    type: 'enrichment',
+    subtype,
+    payload,
+    item_timestamp: nextTimestamp(),
+  })
+
+  if (enrichment.summary) {
+    rows.push(base('summary', { text: enrichment.summary }))
+  }
+  if (enrichment.speakerBio) {
+    rows.push(base('speaker_bio', enrichment.speakerBio))
+  }
+  for (const item of enrichment.actionItems) {
+    rows.push(base('action_item', item))
+  }
+  for (const reference of enrichment.references) {
+    rows.push(base('reference', reference))
+  }
+  for (const acronym of enrichment.acronyms) {
+    rows.push(base('acronym', acronym))
+  }
+
+  return rows
 }
 
 async function blobToBase64(blob: Blob): Promise<string> {

@@ -68,16 +68,20 @@ async function generateDeck(
     .single()
   if (sessionError) throw sessionError
 
-  const { data: itemRows, error: itemsError } = await supabase
+  const { data: allItemRows, error: itemsError } = await supabase
     .from('cc_timeline_items')
-    .select('type, text, caption, photo_path, item_timestamp')
+    .select('type, subtype, payload, text, caption, photo_path, item_timestamp, excluded')
     .eq('session_id', sessionId)
+    .order('position', { ascending: true, nullsFirst: false })
     .order('item_timestamp', { ascending: true })
   if (itemsError) throw itemsError
 
-  const notes = (itemRows ?? []).filter((r) => r.type === 'note' && r.text)
-  const transcriptSegments = (itemRows ?? []).filter((r) => r.type === 'transcript' && r.text)
-  const photoRows = (itemRows ?? []).filter((r) => r.type === 'photo' && r.photo_path)
+  const itemRows = (allItemRows ?? []).filter((r) => !r.excluded)
+
+  const notes = itemRows.filter((r) => r.type === 'note' && r.text)
+  const transcriptSegments = itemRows.filter((r) => r.type === 'transcript' && r.text)
+  const photoRows = itemRows.filter((r) => r.type === 'photo' && r.photo_path)
+  const enrichmentRows = itemRows.filter((r) => r.type === 'enrichment' && r.payload)
 
   if (notes.length === 0 && transcriptSegments.length === 0 && photoRows.length === 0) {
     throw new Error('This session has no notes, transcript, or photos to build a presentation from')
@@ -100,7 +104,7 @@ async function generateDeck(
     })
   }
 
-  const html = await callClaude(session.title, notes, transcriptSegments, photos)
+  const html = await callClaude(session.title, notes, transcriptSegments, enrichmentRows, photos)
   const finalHtml = substitutePhotos(html, photos)
 
   const deckPath = `${session.owner_id}/${sessionId}/deck.html`
@@ -140,6 +144,7 @@ async function callClaude(
   title: string,
   notes: { text: string | null; item_timestamp: string }[],
   transcriptSegments: { text: string | null; item_timestamp: string }[],
+  enrichmentRows: { subtype: string | null; payload: Record<string, unknown> | null }[],
   photos: { placeholder: string; dataUrl: string; caption: string }[],
 ): Promise<string> {
   const notesText = notes.length > 0
@@ -154,15 +159,20 @@ async function callClaude(
     ? photos.map((p) => `- ${p.placeholder}${p.caption ? ` -- caption: "${p.caption}"` : ''}`).join('\n')
     : '(No photos were captured for this talk.)'
 
+  const enrichmentText = formatEnrichment(enrichmentRows)
+
   const instructions = `You are building a presentation someone can keep as a personal resource, or share with friends and colleagues, as a record of a conference talk they attended titled "${title}".
 
-You are given the attendee's raw notes (taken live, so they may be fragmentary or out of order), an ambient audio transcript of the speaker (auto-transcribed on-device, so it may contain mistranscribed words or awkward phrasing -- use it for content and quotes, but don't assume every word is verbatim), and photos they took during the talk (mostly slides). Turn this into a polished, self-contained HTML presentation.
+You are given the attendee's raw notes (taken live, so they may be fragmentary or out of order), an ambient audio transcript of the speaker (auto-transcribed on-device, so it may contain mistranscribed words or awkward phrasing -- use it for content and quotes, but don't assume every word is verbatim), photos they took during the talk (mostly slides), and enrichment already extracted from this session (summary, action items, references, speaker bio, acronyms -- already vetted, safe to use directly). Turn this into a polished, self-contained HTML presentation.
 
 Raw notes:
 ${notesText}
 
 Ambient transcript (chronological):
 ${transcriptText}
+
+Extracted enrichment:
+${enrichmentText}
 
 Photos available (shown to you below, in this order):
 ${photosText}
@@ -173,7 +183,7 @@ Requirements:
 - Structure it as a slide deck the viewer can step through (arrow keys / click / swipe), one topic or idea per slide, synthesizing and organizing the notes and transcript into a clear narrative -- don't just dump either source verbatim. Use the transcript to fill gaps the notes left out and to surface direct quotes worth calling out, but let the notes drive what the attendee actually found important.
 - Weave the photos into the deck as first-class slide content (not an appendix), placed where they're most relevant to the narrative. Reference EACH photo using an <img> tag whose src is EXACTLY its placeholder token, e.g. <img src="PHOTO_1">. Do not invent placeholder names and do not attempt to embed real image data yourself.
 - Pick a visual theme (color palette, type, motion style) that fits the subject matter of the talk, and use CSS transitions/animations and simple data visualization (inline SVG charts, etc.) where they genuinely help communicate an idea -- not decoration for its own sake.
-- Include a title slide and a brief closing/summary slide.
+- Include a title slide and a brief closing/summary slide. Use the extracted summary and speaker bio for these if present, rather than writing your own from scratch. Work action items, references, and acronym expansions into the deck wherever they're contextually relevant -- not as a dumped appendix list.
 - Keep it tasteful and readable: prioritize legibility over spectacle.`
 
   const content: Record<string, unknown>[] = [{ type: 'text', text: instructions }]
@@ -213,6 +223,33 @@ Requirements:
   if (!text) throw new Error('Claude returned no presentation content')
 
   return stripCodeFence(text.trim())
+}
+
+function formatEnrichment(rows: { subtype: string | null; payload: Record<string, unknown> | null }[]): string {
+  if (rows.length === 0) return '(No enrichment was extracted for this session.)'
+
+  const lines: string[] = []
+  for (const row of rows) {
+    const p = row.payload ?? {}
+    switch (row.subtype) {
+      case 'summary':
+        lines.push(`Summary: ${p.text}`)
+        break
+      case 'speaker_bio':
+        lines.push(`Speaker: ${p.name} -- ${p.role} at ${p.org}. ${p.description}`)
+        break
+      case 'action_item':
+        lines.push(`Action item: ${p.text} (context: ${p.context})`)
+        break
+      case 'reference':
+        lines.push(`Reference: ${p.title} -- ${p.source}. ${p.description}${p.url ? ` (${p.url})` : ''}`)
+        break
+      case 'acronym':
+        lines.push(`Acronym: ${p.term} = ${p.expansion}`)
+        break
+    }
+  }
+  return lines.map((l) => `- ${l}`).join('\n')
 }
 
 function stripCodeFence(text: string): string {

@@ -68,6 +68,51 @@
   cursor: pointer;
 }
 
+.note-row__tap {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+
+.is-excluded {
+  opacity: 0.4;
+}
+
+.excluded-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--recording-dot);
+}
+
+.drag-handle {
+  flex-shrink: 0;
+  width: 32px;
+  height: 44px;
+  margin: -11px -8px -11px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: grab;
+  /* Without this, a touch drag on the handle can get intercepted as a page
+     scroll instead of reaching our pointermove handler. */
+  touch-action: none;
+}
+
+.timeline-row--dragging {
+  opacity: 0.5;
+}
+
 .note-row__bar {
   width: 3px;
   align-self: stretch;
@@ -202,6 +247,55 @@
   padding-top: 2px;
 }
 
+/* Enrichment row */
+
+.enrichment-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 8px 0;
+  gap: 14px;
+  width: 100%;
+}
+
+.enrichment-row__bar {
+  width: 3px;
+  align-self: stretch;
+  background: var(--recording-dot);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.enrichment-row__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.enrichment-row__label {
+  margin: 0 0 2px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--recording-dot);
+}
+
+.enrichment-row__text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.enrichment-row__link {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--accent);
+  word-break: break-all;
+}
+
 /* Photo row */
 
 .photo-row {
@@ -214,6 +308,21 @@
   border: none;
   text-align: left;
   cursor: pointer;
+}
+
+.photo-row__tap {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  color: inherit;
 }
 
 .photo-row__thumb {

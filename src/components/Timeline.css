@@ -68,6 +68,35 @@
   cursor: pointer;
 }
 
+.note-row__tap {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+
+.is-excluded {
+  opacity: 0.4;
+}
+
+.excluded-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--recording-dot);
+}
+
+.timeline-row--dragging {
+  opacity: 0.5;
+}
+
 .note-row__bar {
   width: 3px;
   align-self: stretch;
@@ -165,6 +194,92 @@
   color: var(--text-muted);
 }
 
+/* Transcript row */
+
+.transcript-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 8px 0;
+  gap: 14px;
+  width: 100%;
+}
+
+.transcript-row__bar {
+  width: 3px;
+  align-self: stretch;
+  border-left: 3px dotted var(--text-muted);
+  flex-shrink: 0;
+}
+
+.transcript-row__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.transcript-row__text {
+  margin: 0;
+  font-size: 14px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.transcript-row__meta {
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+/* Enrichment row */
+
+.enrichment-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 8px 0;
+  gap: 14px;
+  width: 100%;
+}
+
+.enrichment-row__bar {
+  width: 3px;
+  align-self: stretch;
+  background: var(--recording-dot);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.enrichment-row__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.enrichment-row__label {
+  margin: 0 0 2px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--recording-dot);
+}
+
+.enrichment-row__text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.enrichment-row__link {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--accent);
+  word-break: break-all;
+}
+
 /* Photo row */
 
 .photo-row {
@@ -177,6 +292,21 @@
   border: none;
   text-align: left;
   cursor: pointer;
+}
+
+.photo-row__tap {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  color: inherit;
 }
 
 .photo-row__thumb {

@@ -3,9 +3,9 @@ import type { Session, TimelineItemData, VideoItem } from '../types'
 import { formatElapsed, formatSessionSubtitle, formatDurationCompact } from '../format'
 import { Timeline } from '../components/Timeline'
 import { CameraViewfinder } from '../components/CameraViewfinder'
-import { VideoRecorder } from '../components/VideoRecorder'
 import { PhotoViewer } from '../components/PhotoViewer'
 import { VideoViewer } from '../components/VideoViewer'
+import { useAmbientTranscription } from '../hooks/useAmbientTranscription'
 import * as db from '../db'
 import './CaptureScreen.css'
 
@@ -27,7 +27,6 @@ function elapsedFor(session: Session, now: number): number {
 export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack }: CaptureScreenProps) {
   const [now, setNow] = useState(Date.now())
   const [cameraOpen, setCameraOpen] = useState(false)
-  const [videoRecorderOpen, setVideoRecorderOpen] = useState(false)
   const [confirmingEnd, setConfirmingEnd] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [viewingPhotoId, setViewingPhotoId] = useState<string | null>(null)
@@ -85,6 +84,32 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
     }
   }
 
+  async function toggleExcluded(item: TimelineItemData) {
+    const excluded = !item.excluded
+    onUpdateLocal((s) => ({
+      ...s,
+      items: s.items.map((i) => (i.id === item.id ? { ...i, excluded } : i)),
+    }))
+    try {
+      await db.setItemExcluded(item.id, excluded)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save')
+    }
+  }
+
+  async function reorderItems(orderedIds: string[]) {
+    const positionById = new Map(orderedIds.map((id, index) => [id, index]))
+    onUpdateLocal((s) => ({
+      ...s,
+      items: [...s.items].sort((a, b) => (positionById.get(a.id) ?? 0) - (positionById.get(b.id) ?? 0)),
+    }))
+    try {
+      await db.reorderItems(orderedIds)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save order')
+    }
+  }
+
   async function commitTitle(title: string) {
     onUpdateLocal((s) => ({ ...s, title }))
     try {
@@ -103,14 +128,21 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
     }
   }
 
-  async function commitVideo(blob: Blob, durationMs: number) {
+  async function commitTranscriptSegment(text: string, startedAt: number, durationMs: number) {
     try {
-      const item = await db.addVideo(session.id, userId, blob, durationMs)
+      const item = await db.addTranscriptSegment(session.id, userId, text, startedAt, durationMs)
       onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save video')
+    } catch {
+      // Best-effort -- a dropped transcript segment isn't worth surfacing as
+      // an error; the next segment will still come through.
     }
   }
+
+  useAmbientTranscription({
+    active: session.status === 'recording',
+    onSegment: commitTranscriptSegment,
+    onError: setSaveError,
+  })
 
   async function stop() {
     const accumulatedMs = elapsedFor(session, Date.now())
@@ -138,17 +170,24 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
     onEnded()
     try {
       await db.updateSession(session.id, { status: 'enriching' })
-      // Simulate background enrichment.
-      window.setTimeout(async () => {
-        onUpdateLocal((s) => ({ ...s, status: 'complete' }))
-        try {
-          await db.updateSession(session.id, { status: 'complete' })
-        } catch {
-          // Best-effort — the session still shows complete locally.
-        }
-      }, 3000)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save')
+      return
+    }
+
+    try {
+      await db.enrichSession(session.id)
+      const items = await db.fetchSessionItems(session.id)
+      onUpdateLocal((s) => ({ ...s, items }))
+    } catch {
+      // Best-effort -- the session still completes even if enrichment fails.
+    }
+
+    onUpdateLocal((s) => ({ ...s, status: 'complete' }))
+    try {
+      await db.updateSession(session.id, { status: 'complete' })
+    } catch {
+      // Best-effort — the session still shows complete locally.
     }
   }
 
@@ -242,6 +281,8 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
         onCommitNoteEdit={commitNoteEdit}
         onCancelActive={() => setActiveId(null)}
         onDeleteItem={deleteItem}
+        onToggleExcluded={toggleExcluded}
+        onReorder={reorderItems}
       />
 
       <div className="capture-actions">
@@ -259,21 +300,6 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
             <circle cx="12" cy="13" r="3.2" stroke="var(--accent)" strokeWidth="1.6" />
           </svg>
         </button>
-        <button
-          className="video-trigger"
-          onClick={() => setVideoRecorderOpen(true)}
-          aria-label="Record video"
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <rect x="3" y="6" width="13" height="12" rx="1.5" stroke="var(--recording-dot)" strokeWidth="1.6" />
-            <path
-              d="M16 10.5l5-2.8v8.6l-5-2.8z"
-              stroke="var(--recording-dot)"
-              strokeWidth="1.6"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
       </div>
 
       {viewingPhoto && (
@@ -289,14 +315,6 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
           sessionTimer={formatElapsed(elapsedMs)}
           onCapture={commitPhoto}
           onClose={() => setCameraOpen(false)}
-        />
-      )}
-
-      {videoRecorderOpen && (
-        <VideoRecorder
-          sessionTimer={formatElapsed(elapsedMs)}
-          onCapture={commitVideo}
-          onClose={() => setVideoRecorderOpen(false)}
         />
       )}
 

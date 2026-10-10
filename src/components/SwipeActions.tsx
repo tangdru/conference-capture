@@ -20,18 +20,29 @@ export interface SwipeAction {
   onClick: () => void
 }
 
+export interface DragHandle {
+  onDragPointerDown: (e: ReactPointerEvent) => void
+  onDragPointerMove: (e: ReactPointerEvent) => void
+  onDragPointerUp: (e: ReactPointerEvent) => void
+  onDragPointerCancel: (e: ReactPointerEvent) => void
+}
+
 interface SwipeActionsProps {
   id: string
   revealedId: string | null
   onReveal: (id: string | null) => void
   actions: SwipeAction[]
+  /** An extra slot in the revealed row, behind the swipe like the other
+   * actions, but driven by press-and-drag instead of a tap. */
+  dragHandle?: DragHandle | null
   /** Suppresses the swipe gesture entirely, e.g. while this row is being edited inline. */
   disabled?: boolean
   children: ReactNode
 }
 
-export function SwipeActions({ id, revealedId, onReveal, actions, disabled, children }: SwipeActionsProps) {
-  const revealWidth = actions.length * ACTION_WIDTH
+export function SwipeActions({ id, revealedId, onReveal, actions, dragHandle, disabled, children }: SwipeActionsProps) {
+  const slotCount = actions.length + (dragHandle ? 1 : 0)
+  const revealWidth = slotCount * ACTION_WIDTH
   const isRevealed = !disabled && revealedId === id
   const contentRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<DragState | null>(null)
@@ -141,6 +152,18 @@ export function SwipeActions({ id, revealedId, onReveal, actions, disabled, chil
             {action.icon}
           </button>
         ))}
+        {dragHandle && (
+          <button
+            className="swipe-actions__action swipe-actions__drag-handle"
+            aria-label="Reorder"
+            onPointerDown={dragHandle.onDragPointerDown}
+            onPointerMove={dragHandle.onDragPointerMove}
+            onPointerUp={dragHandle.onDragPointerUp}
+            onPointerCancel={dragHandle.onDragPointerCancel}
+          >
+            <GripIcon />
+          </button>
+        )}
       </div>
       <div
         ref={contentRef}
@@ -202,6 +225,48 @@ export function DownloadIcon() {
     <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
       <path d="M10 3h6v10h5L13 22L3 13h5z" fill="var(--accent)" />
       <rect x="5" y="23.5" width="16" height="2.5" rx="1" fill="var(--accent)" />
+    </svg>
+  )
+}
+
+export function ExcludeIcon() {
+  return (
+    <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
+      <path
+        d="M2 13c3.2-5.3 7.4-8 11-8s7.8 2.7 11 8c-3.2 5.3-7.4 8-11 8S5.2 18.3 2 13z"
+        fill="none"
+        stroke="var(--text-secondary)"
+        strokeWidth="1.8"
+      />
+      <circle cx="13" cy="13" r="3.2" fill="var(--text-secondary)" />
+      <path d="M4 4L22 22" stroke="var(--recording-dot)" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function IncludeIcon() {
+  return (
+    <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
+      <path
+        d="M2 13c3.2-5.3 7.4-8 11-8s7.8 2.7 11 8c-3.2 5.3-7.4 8-11 8S5.2 18.3 2 13z"
+        fill="none"
+        stroke="var(--accent)"
+        strokeWidth="1.8"
+      />
+      <circle cx="13" cy="13" r="3.2" fill="var(--accent)" />
+    </svg>
+  )
+}
+
+export function GripIcon() {
+  return (
+    <svg viewBox="0 0 26 26" width="16" height="16" aria-hidden="true">
+      <circle cx="9" cy="6" r="1.6" fill="var(--text-muted)" />
+      <circle cx="17" cy="6" r="1.6" fill="var(--text-muted)" />
+      <circle cx="9" cy="13" r="1.6" fill="var(--text-muted)" />
+      <circle cx="17" cy="13" r="1.6" fill="var(--text-muted)" />
+      <circle cx="9" cy="20" r="1.6" fill="var(--text-muted)" />
+      <circle cx="17" cy="20" r="1.6" fill="var(--text-muted)" />
     </svg>
   )
 }

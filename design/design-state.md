@@ -41,6 +41,8 @@ _Last updated: 2026-05-22 by design-lead_
 | 2026-10-09 | user override | No custom battery-usage UI (dialog or monitoring) | The OS status bar's native battery indicator already covers it; the Battery Status API isn't available on iOS Safari anyway |
 | 2026-10-09 | user override | Enrichment scope defined across 8 categories (see design/components/transcript-enrichment-scope.md) | Settles what Claude surfaces from transcript + notes + photos before any of it gets built |
 | 2026-10-09 | user override | Speaker attribution needs no retained audio | The user was in the room and knows who said what from memory; Claude only ever reasons over text, never audio — fidelity depends on labeling soon after the session, not on a recording |
+| 2026-10-10 | user override | Native iOS build planned via Capacitor, one shared codebase (see design/native-app-migration.md) | Removes the biggest browser-era compromise (must keep tab foregrounded for transcription) via real background audio recording, plus native Speech framework, camera, and push |
+| 2026-10-10 | user override | Once native, default to Apple's built-in frameworks over our own reimplementations wherever iOS already has the capability | Don't carry browser-era workarounds (WASM Whisper, foreground-only capture) into the native build when the OS already does it better |
 | 2026-10-10 | user override | generate-deck now includes the ambient transcript, not just notes and photos | The transcript existed but was invisible to the actual deck output — the one thing that makes capture worth it |
 | 2026-10-10 | user override | Fake "simulate enrichment" timeout replaced with a real enrich-session call (starter set: summary, action items, references, speaker bio, acronyms) | Enrichment status was theater; this is the first real pass of the 8-category scope. Remaining categories (named entities, stats, open threads, comparisons, CTAs, cross-session themes, section detection, speaker emphasis, in-context definitions, note-linking, speaker attribution) stay scoped-but-not-built |
 | 2026-10-10 | user override | The timeline is the curation/export screen — no separate review UI | What the user sees during capture is also where they decide what ships; no new screen needed |
@@ -105,6 +107,7 @@ _Last updated: 2026-05-22 by design-lead_
 | Camera capture interaction | design/interactions/camera-capture.md | Complete — Task 6 ✅ |
 | Audio recording indicator | design/interactions/audio-recording-indicator.md | Complete — Task 7 ✅ |
 | Transcript/notes/photos enrichment scope | design/components/transcript-enrichment-scope.md | Starter set (5 of 8 categories) implemented 2026-10-10 — no review UI yet |
+| Native app migration (Capacitor/iOS) | design/native-app-migration.md | Planned — not started, no Capacitor project in repo yet |
 
 ## Design Debt Register
 

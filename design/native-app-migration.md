@@ -36,9 +36,15 @@ Open implementation questions for when this gets built: local storage tech on iO
 
 ## Claude API key strategy
 
-Decided 2026-10-11, user override. `generate-deck` and `enrich-session` currently use a single shared `ANTHROPIC_API_KEY` set as an Edge Function secret — safe today specifically because there's one user (the person building this) and no distributed binary exposing it.
+Decided 2026-10-11, user override (revised same day — originally deferred, now a build requirement, not an eventual nice-to-have). `generate-deck` and `enrich-session` currently use a single shared `ANTHROPIC_API_KEY` set as an Edge Function secret — safe today only because there's one user and no distributed binary exposing it. That's a fragile assumption to build on (breaks the moment a TestFlight build reaches even one other tester), so **this gets built in from the start of the native work, not retrofitted later.**
 
-**Target architecture once this has other users: bring-your-own-key.** Each user supplies their own Anthropic API key (entered and stored locally on their device, used directly for their own Claude calls) instead of sharing one centrally-held key — removes the key-extraction risk a multi-user distributed app would otherwise carry. Deferred: no other users yet, so the current shared-key setup stays as-is until this actually comes up.
+**Shape: bring-your-own-key, lightweight version.** The user's own Anthropic API key lives client-side only (`localStorage` on web, iOS Keychain on native) and is passed per-request to the existing Edge Functions, instead of the functions reading a fixed env secret. The Edge Functions' own logic doesn't change — they still do all the orchestration (read session items, download photos, build the prompt, call Claude, write results back) — only where the key comes from changes. The key itself is never persisted server-side. Scoped work: a settings field to enter/store the key, one line changed in each of `generate-deck` and `enrich-session` to read the key from the request instead of the env var, and plumbing the key through the two existing `db.ts` calls (`generateDeck`, `enrichSession`) that invoke them.
+
+(Rejected alternative: client calls Claude directly, bypassing the Edge Functions entirely for AI calls. Keeps the key fully on-device with nothing transiting to the backend at all, but means replicating the Edge Functions' orchestration logic client-side — meaningfully more code for a security benefit the lightweight version already delivers.)
+
+## Build requirements for the native work (not deferred, do these as part of it)
+
+- [ ] **Bring-your-own Claude API key** (lightweight version above) — settings field + Edge Function changes + `db.ts` plumbing
 
 ## Rollout plan (as discussed, not yet started)
 

@@ -49,7 +49,6 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
   const isLive = session.status === 'recording' || session.status === 'suspended'
   const noteCount = session.items.filter((i) => i.type === 'note').length
   const photoCount = session.items.filter((i) => i.type === 'photo').length
-  const videoCount = session.items.filter((i) => i.type === 'video').length
 
   async function commitNewNote(text: string) {
     setActiveId(null)
@@ -202,12 +201,12 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
         </div>
 
         <div className="capture-header__row2">
-          {isLive ? (
-            <>
-              <span
-                className={`rec-dot${session.status === 'recording' ? ' rec-dot--live' : ''}`}
-                aria-hidden="true"
-              />
+          <div className="capture-header__primary">
+            <span
+              className={`rec-dot${session.status === 'recording' ? ' rec-dot--live' : ''}${!isLive ? ' rec-dot--done' : ''}`}
+              aria-hidden="true"
+            />
+            {isLive ? (
               <span
                 className="capture-header__timer mono-timestamp"
                 role="status"
@@ -219,8 +218,26 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
               >
                 {formatElapsed(elapsedMs)}
               </span>
+            ) : (
+              <span className="capture-header__subtitle">
+                {formatSessionSubtitle(session.startedAt)}
+                {session.accumulatedMs > 0 && ` · ${formatDurationCompact(session.accumulatedMs)}`}
+              </span>
+            )}
+          </div>
 
-              <div className="capture-header__controls">
+          <div className="capture-header__stats">
+            <span className="capture-header__stat">
+              <NoteIcon /> {noteCount}
+            </span>
+            <span className="capture-header__stat">
+              <PhotoIcon /> {photoCount}
+            </span>
+          </div>
+
+          <div className="capture-header__controls">
+            {isLive ? (
+              <>
                 {session.status === 'recording' && (
                   <button className="header-btn" onClick={stop} aria-label="Stop recording">
                     <span className="header-btn__square" />
@@ -240,27 +257,21 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
                     </button>
                   </>
                 )}
-              </div>
-            </>
-          ) : (
-            <>
-              <span className="rec-dot rec-dot--done" aria-hidden="true" />
-              <span className="capture-header__subtitle">
-                {formatSessionSubtitle(session.startedAt)}
-                {session.accumulatedMs > 0 && ` · ${formatDurationCompact(session.accumulatedMs)}`}
-              </span>
-              <span className="capture-header__stats">
-                📝 {noteCount} &nbsp; 📷 {photoCount} &nbsp; 🎥 {videoCount}
-              </span>
-              {session.deckStatus === 'ready' && session.deckGeneratedAt && (
+              </>
+            ) : (
+              session.deckStatus === 'ready' && session.deckGeneratedAt && (
                 session.updatedAt > session.deckGeneratedAt ? (
-                  <span className="capture-header__deck-warn">⚠ Edited since deck</span>
+                  <span className="capture-header__deck-warn">
+                    <WarningIcon /> Edited since deck
+                  </span>
                 ) : (
-                  <span className="capture-header__deck-ok">Deck up to date</span>
+                  <span className="capture-header__deck-ok">
+                    <CheckIcon /> Deck up to date
+                  </span>
                 )
-              )}
-            </>
-          )}
+              )
+            )}
+          </div>
         </div>
       </header>
 
@@ -336,6 +347,59 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
         </div>
       )}
     </div>
+  )
+}
+
+function NoteIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <path
+        d="M12.5 2.5l3 3L6 15l-4 1 1-4L12.5 2.5z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M10.5 4.5l3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function PhotoIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M4 8.5A1.5 1.5 0 015.5 7H8l1-2h6l1 2h2.5A1.5 1.5 0 0120 8.5v9A1.5 1.5 0 0118.5 19h-13A1.5 1.5 0 014 17.5v-9z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <circle cx="12" cy="13" r="3.2" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  )
+}
+
+function WarningIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 3.5L21.5 20H2.5L12 3.5z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <line x1="12" y1="10" x2="12" y2="14.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="12" cy="17" r="0.75" fill="currentColor" />
+    </svg>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 26 26" width="12" height="12" aria-hidden="true">
+      <path
+        d="M5 13.5l5.5 5.5L21 7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   )
 }
 

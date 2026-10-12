@@ -91,7 +91,11 @@ Deno.serve(async (req) => {
   }
 })
 
-const LOCK_STALE_MS = 2 * 60 * 1000
+// Generous on purpose: a real run is sequential photo downloads plus an
+// Opus call with up to 8192 output tokens, which can plausibly run past a
+// couple of minutes. A stale window shorter than a real run just lets a
+// retry steal the lock mid-flight -- the exact race this lock prevents.
+const LOCK_STALE_MS = 10 * 60 * 1000
 
 async function enrichSession(supabase: ReturnType<typeof createClient>, sessionId: string): Promise<number> {
   if (!ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured')
@@ -110,7 +114,18 @@ async function enrichSession(supabase: ReturnType<typeof createClient>, sessionI
     .select('id, owner_id, started_at, last_enriched_at')
   if (claimError) throw claimError
   if (!claimedRows || claimedRows.length === 0) {
-    return 0 // Already running -- no-op rather than racing it.
+    // The claim's own WHERE clause can't tell "genuinely already running"
+    // apart from "doesn't exist / not visible to this caller" -- check
+    // separately so an invalid or unauthorized sessionId still surfaces as
+    // an error instead of a silent fake success.
+    const { data: existing, error: existError } = await supabase
+      .from('cc_sessions')
+      .select('id')
+      .eq('id', sessionId)
+      .maybeSingle()
+    if (existError) throw existError
+    if (!existing) throw new Error('Session not found')
+    return 0 // Genuinely already running -- no-op rather than racing it.
   }
   const session = claimedRows[0]
 

@@ -152,7 +152,11 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
 
   async function stop() {
     const accumulatedMs = elapsedFor(session, Date.now())
-    onUpdateLocal((s) => ({ ...s, status: 'suspended', accumulatedMs, liveSpanStartedAt: null }))
+    // Bump updatedAt locally too, matching what the server sets -- otherwise
+    // the in-memory session (reused across navigation until the next full
+    // fetchSessions) still looks stale to isSessionActive even though the
+    // user just interacted with it.
+    onUpdateLocal((s) => ({ ...s, status: 'suspended', accumulatedMs, liveSpanStartedAt: null, updatedAt: Date.now() }))
     try {
       await db.updateSession(session.id, { status: 'suspended', accumulatedMs, liveSpanStartedAt: null })
     } catch (err) {
@@ -162,7 +166,7 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
 
   async function resume() {
     const liveSpanStartedAt = Date.now()
-    onUpdateLocal((s) => ({ ...s, status: 'recording', liveSpanStartedAt }))
+    onUpdateLocal((s) => ({ ...s, status: 'recording', liveSpanStartedAt, updatedAt: Date.now() }))
     try {
       await db.updateSession(session.id, { status: 'recording', liveSpanStartedAt })
     } catch (err) {

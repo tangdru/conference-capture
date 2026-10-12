@@ -118,7 +118,6 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         session={session}
         userId={userId}
         onUpdateLocal={(updater) => updateSessionLocally(session.id, updater)}
-        onEnded={() => setRoute({ screen: 'home' })}
         onBack={() => setRoute({ screen: 'home' })}
       />
     )

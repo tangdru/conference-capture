@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Session } from '../types'
+import { isSessionActive } from '../sessionActivity'
 import { SessionCard } from '../components/SessionCard'
 import {
   SwipeActions,
@@ -45,7 +46,7 @@ export function HomeScreen({
     return () => window.clearInterval(id)
   }, [])
 
-  const active = sessions.find((s) => s.status === 'recording' || s.status === 'suspended')
+  const active = sessions.find((s) => isSessionActive(s, now))
   const others = sessions
     .filter((s) => s.id !== active?.id)
     .sort((a, b) => b.startedAt - a.startedAt)

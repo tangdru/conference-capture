@@ -205,15 +205,6 @@
   background: var(--accent);
 }
 
-.end-btn {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 11px;
-  cursor: pointer;
-  height: 28px;
-}
-
 .save-error {
   flex-shrink: 0;
   background: rgba(255, 107, 107, 0.12);
@@ -269,55 +260,3 @@
   cursor: pointer;
 }
 
-.end-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  z-index: 30;
-}
-
-.end-modal {
-  background: var(--bg-elevated);
-  border-radius: 8px;
-  padding: 24px;
-  max-width: 320px;
-  width: 100%;
-}
-
-.end-modal__text {
-  margin: 0 0 20px;
-  font-size: 15px;
-  line-height: 1.5;
-  color: var(--text-primary);
-}
-
-.end-modal__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.end-modal__keep,
-.end-modal__end {
-  border: none;
-  border-radius: 6px;
-  padding: 10px 16px;
-  font-size: 14px;
-  cursor: pointer;
-  min-height: 44px;
-}
-
-.end-modal__keep {
-  background: none;
-  color: var(--text-secondary);
-}
-
-.end-modal__end {
-  background: var(--accent);
-  color: var(--bg-base);
-  font-weight: 600;
-}

@@ -1,5 +1,6 @@
 import type { Session } from '../types'
 import { formatElapsed, formatSessionSubtitle } from '../format'
+import { isSessionActive } from '../sessionActivity'
 import './SessionCard.css'
 
 interface SessionCardProps {
@@ -19,7 +20,7 @@ export function SessionCard({ session, now, onTap }: SessionCardProps) {
   const notes = session.items.filter((i) => i.type === 'note').length
   const photos = session.items.filter((i) => i.type === 'photo').length
 
-  if (session.status === 'recording' || session.status === 'suspended') {
+  if (isSessionActive(session, now)) {
     const elapsed = formatElapsed(elapsedFor(session, now))
     return (
       <button className="session-card session-card--active" onClick={onTap}>
@@ -39,9 +40,7 @@ export function SessionCard({ session, now, onTap }: SessionCardProps) {
         </div>
         <p className="session-card__title">{session.title}</p>
         <p className="session-card__hint">
-          {session.status === 'recording'
-            ? 'Tap to return to capture'
-            : 'Tap to add more, or end the session'}
+          {session.status === 'recording' ? 'Tap to return to capture' : 'Tap to add more'}
         </p>
       </button>
     )

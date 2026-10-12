@@ -13,7 +13,6 @@ interface CaptureScreenProps {
   session: Session
   userId: string
   onUpdateLocal: (updater: (session: Session) => Session) => void
-  onEnded: () => void
   onBack: () => void
 }
 
@@ -24,10 +23,9 @@ function elapsedFor(session: Session, now: number): number {
   return session.accumulatedMs + live
 }
 
-export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack }: CaptureScreenProps) {
+export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: CaptureScreenProps) {
   const [now, setNow] = useState(Date.now())
   const [cameraOpen, setCameraOpen] = useState(false)
-  const [confirmingEnd, setConfirmingEnd] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [viewingPhotoId, setViewingPhotoId] = useState<string | null>(null)
   const [viewingVideoId, setViewingVideoId] = useState<string | null>(null)
@@ -55,7 +53,6 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
   const isLive = session.status === 'recording' || session.status === 'suspended'
   const noteCount = session.items.filter((i) => i.type === 'note').length
   const photoCount = session.items.filter((i) => i.type === 'photo').length
-  const hasTranscript = session.items.some((i) => i.type === 'transcript')
   const canEnhance = !enhancing && session.items.some(
     (i) => i.type === 'transcript' && i.timestamp > (session.lastEnrichedAt ?? -Infinity),
   )
@@ -173,17 +170,6 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
     }
   }
 
-  async function confirmEnd() {
-    onUpdateLocal((s) => ({ ...s, status: 'complete' }))
-    setConfirmingEnd(false)
-    onEnded()
-    try {
-      await db.updateSession(session.id, { status: 'complete' })
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save')
-    }
-  }
-
   /** Enhancement is its own action, independent of ending the session --
    * callable any time there's new transcript since the last run (live,
    * paused, or already complete), and repeatable as more audio comes in. */
@@ -253,15 +239,6 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
                     <span className="header-btn__circle" />
                   )}
                 </button>
-                {session.status === 'suspended' && (
-                  <button
-                    className="end-btn"
-                    onClick={() => setConfirmingEnd(true)}
-                    aria-label="End session"
-                  >
-                    End
-                  </button>
-                )}
               </div>
             )}
           </div>
@@ -276,11 +253,11 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
           </div>
 
           <div className="capture-header__controls">
-            {hasTranscript && (
+            {(canEnhance || enhancing) && (
               <button
                 className="header-btn"
                 onClick={handleEnhance}
-                disabled={!canEnhance}
+                disabled={enhancing}
                 aria-label={enhancing ? 'Enhancing…' : 'Enhance with new transcript'}
               >
                 <SparkleIcon />
@@ -355,24 +332,6 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
           onCapture={commitPhoto}
           onClose={() => setCameraOpen(false)}
         />
-      )}
-
-      {confirmingEnd && (
-        <div className="end-modal-backdrop">
-          <div className="end-modal" role="dialog" aria-modal="true">
-            <p className="end-modal__text">
-              End this session? You won't be able to add more captures.
-            </p>
-            <div className="end-modal__actions">
-              <button className="end-modal__keep" onClick={() => setConfirmingEnd(false)}>
-                Keep open
-              </button>
-              <button className="end-modal__end" onClick={confirmEnd}>
-                End session
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   )

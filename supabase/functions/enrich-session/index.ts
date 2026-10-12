@@ -339,17 +339,19 @@ function buildCategoryRows(
     item_timestamp: nextTimestamp(),
   })
 
-  for (const item of result.actionItems) {
-    rows.push(base('action_item', item))
+  // Each of these is ONE row holding the whole list -- grouped into a
+  // single timeline entry per category, not one row per item.
+  if (result.actionItems.length > 0) {
+    rows.push(base('action_items', { items: result.actionItems }))
   }
   if (result.speakerBio) {
     rows.push(base('speaker_bio', result.speakerBio))
   }
-  for (const acronym of result.acronyms) {
-    rows.push(base('acronym', acronym))
+  if (result.acronyms.length > 0) {
+    rows.push(base('acronyms', { items: result.acronyms }))
   }
-  for (const reference of result.references) {
-    rows.push(base('reference', reference))
+  if (result.references.length > 0) {
+    rows.push(base('references', { items: result.references }))
   }
 
   return rows

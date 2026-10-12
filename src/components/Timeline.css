@@ -263,6 +263,10 @@
   color: var(--recording-dot);
 }
 
+.enrichment-row__entry + .enrichment-row__entry {
+  margin-top: 8px;
+}
+
 .enrichment-row__text {
   margin: 0;
   font-size: 14px;

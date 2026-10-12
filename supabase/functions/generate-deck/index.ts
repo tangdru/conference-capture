@@ -238,14 +238,25 @@ function formatEnrichment(rows: { subtype: string | null; payload: Record<string
       case 'speaker_bio':
         lines.push(`Speaker: ${p.name} -- ${p.role} at ${p.org}. ${p.description}`)
         break
-      case 'action_item':
-        lines.push(`Action item: ${p.text} (context: ${p.context})`)
+      case 'action_items':
+        for (const item of (Array.isArray(p.items) ? p.items : []) as { text: string; context: string }[]) {
+          lines.push(`Action item: ${item.text} (context: ${item.context})`)
+        }
         break
-      case 'reference':
-        lines.push(`Reference: ${p.title} -- ${p.source}. ${p.description}${p.url ? ` (${p.url})` : ''}`)
+      case 'references':
+        for (const item of (Array.isArray(p.items) ? p.items : []) as {
+          title: string
+          source: string
+          description: string
+          url: string | null
+        }[]) {
+          lines.push(`Reference: ${item.title} -- ${item.source}. ${item.description}${item.url ? ` (${item.url})` : ''}`)
+        }
         break
-      case 'acronym':
-        lines.push(`Acronym: ${p.term} = ${p.expansion}`)
+      case 'acronyms':
+        for (const item of (Array.isArray(p.items) ? p.items : []) as { term: string; expansion: string }[]) {
+          lines.push(`Acronym: ${item.term} = ${item.expansion}`)
+        }
         break
     }
   }

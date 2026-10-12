@@ -64,27 +64,25 @@ function enrichmentItemFromRow(row: ItemRow): EnrichmentItemData | null {
   switch (row.subtype) {
     case 'summary':
       return { id: row.id, type: 'enrichment', subtype: 'summary', timestamp, excluded, text: String(payload.text ?? '') }
-    case 'action_item':
+    case 'action_items':
       return {
         id: row.id,
         type: 'enrichment',
-        subtype: 'action_item',
+        subtype: 'action_items',
         timestamp,
         excluded,
-        text: String(payload.text ?? ''),
-        context: String(payload.context ?? ''),
+        items: Array.isArray(payload.items) ? (payload.items as { text: string; context: string }[]) : [],
       }
-    case 'reference':
+    case 'references':
       return {
         id: row.id,
         type: 'enrichment',
-        subtype: 'reference',
+        subtype: 'references',
         timestamp,
         excluded,
-        title: String(payload.title ?? ''),
-        source: String(payload.source ?? ''),
-        description: String(payload.description ?? ''),
-        url: typeof payload.url === 'string' ? payload.url : null,
+        items: Array.isArray(payload.items)
+          ? (payload.items as { title: string; source: string; description: string; url: string | null }[])
+          : [],
       }
     case 'speaker_bio':
       return {
@@ -98,15 +96,14 @@ function enrichmentItemFromRow(row: ItemRow): EnrichmentItemData | null {
         org: String(payload.org ?? ''),
         description: String(payload.description ?? ''),
       }
-    case 'acronym':
+    case 'acronyms':
       return {
         id: row.id,
         type: 'enrichment',
-        subtype: 'acronym',
+        subtype: 'acronyms',
         timestamp,
         excluded,
-        term: String(payload.term ?? ''),
-        expansion: String(payload.expansion ?? ''),
+        items: Array.isArray(payload.items) ? (payload.items as { term: string; expansion: string }[]) : [],
       }
     default:
       return null

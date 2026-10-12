@@ -407,40 +407,63 @@ function VideoRow({ item, onTap }: { item: VideoItem; onTap: () => void }) {
   )
 }
 
-function enrichmentLabel(item: EnrichmentItemData): { title: string; body: string } {
+function enrichmentTitle(item: EnrichmentItemData): string {
   switch (item.subtype) {
     case 'summary':
-      return { title: 'Summary', body: item.text }
+      return 'Summary'
     case 'speaker_bio':
-      return { title: 'Speaker', body: `${item.name} — ${item.role} at ${item.org}. ${item.description}` }
-    case 'action_item':
-      return { title: 'Action item', body: item.text }
-    case 'reference':
-      return { title: 'Reference', body: `${item.title} — ${item.description}` }
-    case 'acronym':
-      return { title: 'Acronym', body: `${item.term} = ${item.expansion}` }
+      return 'Speaker'
+    case 'action_items':
+      return 'Action items'
+    case 'references':
+      return 'References'
+    case 'acronyms':
+      return 'Acronyms'
+  }
+}
+
+/** One or more lines to render in the card -- a single line for the
+ * one-per-session categories (summary, speaker bio), one line per entry for
+ * the list categories (action items, references, acronyms), all grouped
+ * under one shared title rather than a separate card each. */
+function enrichmentLines(item: EnrichmentItemData): { text: string; link?: string | null }[] {
+  switch (item.subtype) {
+    case 'summary':
+      return [{ text: item.text }]
+    case 'speaker_bio':
+      return [{ text: `${item.name} — ${item.role} at ${item.org}. ${item.description}` }]
+    case 'action_items':
+      return item.items.map((i) => ({ text: i.text }))
+    case 'references':
+      return item.items.map((i) => ({ text: `${i.title} — ${i.description}`, link: i.url }))
+    case 'acronyms':
+      return item.items.map((i) => ({ text: `${i.term} = ${i.expansion}` }))
   }
 }
 
 function EnrichmentRow({ item }: { item: EnrichmentItemData }) {
-  const { title, body } = enrichmentLabel(item)
-  const link = item.subtype === 'reference' ? item.url : null
+  const title = enrichmentTitle(item)
+  const lines = enrichmentLines(item)
 
   return (
     <div
       className={`enrichment-row${item.excluded ? ' is-excluded' : ''}`}
       role="group"
-      aria-label={`${title}, AI-generated: ${body}`}
+      aria-label={`${title}, AI-generated: ${lines.map((l) => l.text).join('; ')}`}
     >
       <div className="enrichment-row__bar" aria-hidden="true" />
       <div className="enrichment-row__body">
         <p className="enrichment-row__label">{title}</p>
-        <p className="enrichment-row__text">{body}</p>
-        {link && (
-          <a className="enrichment-row__link" href={link} target="_blank" rel="noreferrer">
-            {link}
-          </a>
-        )}
+        {lines.map((line, i) => (
+          <div className="enrichment-row__entry" key={i}>
+            <p className="enrichment-row__text">{line.text}</p>
+            {line.link && (
+              <a className="enrichment-row__link" href={line.link} target="_blank" rel="noreferrer">
+                {line.link}
+              </a>
+            )}
+          </div>
+        ))}
         {item.excluded && <ExcludedBadge />}
       </div>
     </div>

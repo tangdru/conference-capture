@@ -61,18 +61,17 @@ export interface EnrichmentSummaryItem extends BaseEnrichmentItem {
   text: string
 }
 
-export interface EnrichmentActionItem extends BaseEnrichmentItem {
-  subtype: 'action_item'
-  text: string
-  context: string
+/** All of a session's action items in one entry, not one row per item --
+ * read together like a short list, not scattered through the timeline. */
+export interface EnrichmentActionItemsItem extends BaseEnrichmentItem {
+  subtype: 'action_items'
+  items: { text: string; context: string }[]
 }
 
-export interface EnrichmentReferenceItem extends BaseEnrichmentItem {
-  subtype: 'reference'
-  title: string
-  source: string
-  description: string
-  url: string | null
+/** All of a session's references in one entry -- see EnrichmentActionItemsItem. */
+export interface EnrichmentReferencesItem extends BaseEnrichmentItem {
+  subtype: 'references'
+  items: { title: string; source: string; description: string; url: string | null }[]
 }
 
 export interface EnrichmentSpeakerBioItem extends BaseEnrichmentItem {
@@ -83,18 +82,18 @@ export interface EnrichmentSpeakerBioItem extends BaseEnrichmentItem {
   description: string
 }
 
-export interface EnrichmentAcronymItem extends BaseEnrichmentItem {
-  subtype: 'acronym'
-  term: string
-  expansion: string
+/** All of a session's acronyms in one entry -- see EnrichmentActionItemsItem. */
+export interface EnrichmentAcronymsItem extends BaseEnrichmentItem {
+  subtype: 'acronyms'
+  items: { term: string; expansion: string }[]
 }
 
 export type EnrichmentItemData =
   | EnrichmentSummaryItem
-  | EnrichmentActionItem
-  | EnrichmentReferenceItem
+  | EnrichmentActionItemsItem
+  | EnrichmentReferencesItem
   | EnrichmentSpeakerBioItem
-  | EnrichmentAcronymItem
+  | EnrichmentAcronymsItem
 
 export type TimelineItemData = NoteItem | PhotoItem | VideoItem | TranscriptItem | EnrichmentItemData
 

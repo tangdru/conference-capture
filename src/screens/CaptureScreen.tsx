@@ -32,6 +32,7 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
   const [viewingPhotoId, setViewingPhotoId] = useState<string | null>(null)
   const [viewingVideoId, setViewingVideoId] = useState<string | null>(null)
   const [activeId, setActiveId] = useState<string | 'new' | null>(null)
+  const [enhancing, setEnhancing] = useState(false)
 
   useEffect(() => {
     if (session.status !== 'recording') return
@@ -49,6 +50,10 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
   const isLive = session.status === 'recording' || session.status === 'suspended'
   const noteCount = session.items.filter((i) => i.type === 'note').length
   const photoCount = session.items.filter((i) => i.type === 'photo').length
+  const hasTranscript = session.items.some((i) => i.type === 'transcript')
+  const canEnhance = !enhancing && session.items.some(
+    (i) => i.type === 'transcript' && i.timestamp > (session.lastEnrichedAt ?? -Infinity),
+  )
 
   async function commitNewNote(text: string) {
     setActiveId(null)
@@ -164,29 +169,33 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
   }
 
   async function confirmEnd() {
-    onUpdateLocal((s) => ({ ...s, status: 'enriching' }))
+    onUpdateLocal((s) => ({ ...s, status: 'complete' }))
     setConfirmingEnd(false)
     onEnded()
     try {
-      await db.updateSession(session.id, { status: 'enriching' })
+      await db.updateSession(session.id, { status: 'complete' })
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save')
-      return
     }
+  }
 
+  /** Enhancement is its own action, independent of ending the session --
+   * callable any time there's new transcript since the last run (live,
+   * paused, or already complete), and repeatable as more audio comes in. */
+  async function handleEnhance() {
+    if (!canEnhance) return
+    setEnhancing(true)
     try {
       await db.enrichSession(session.id)
-      const items = await db.fetchSessionItems(session.id)
-      onUpdateLocal((s) => ({ ...s, items }))
-    } catch {
-      // Best-effort -- the session still completes even if enrichment fails.
-    }
-
-    onUpdateLocal((s) => ({ ...s, status: 'complete' }))
-    try {
-      await db.updateSession(session.id, { status: 'complete' })
-    } catch {
-      // Best-effort — the session still shows complete locally.
+      const [items, { lastEnrichedAt }] = await Promise.all([
+        db.fetchSessionItems(session.id),
+        db.fetchSessionEnrichmentState(session.id),
+      ])
+      onUpdateLocal((s) => ({ ...s, items, lastEnrichedAt }))
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to enhance')
+    } finally {
+      setEnhancing(false)
     }
   }
 
@@ -236,6 +245,16 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
           </div>
 
           <div className="capture-header__controls">
+            {hasTranscript && (
+              <button
+                className="header-btn"
+                onClick={handleEnhance}
+                disabled={!canEnhance}
+                aria-label={enhancing ? 'Enhancing…' : 'Enhance with new transcript'}
+              >
+                <SparkleIcon />
+              </button>
+            )}
             {isLive ? (
               <>
                 {session.status === 'recording' && (
@@ -374,6 +393,14 @@ function PhotoIcon() {
         strokeWidth="1.5"
       />
       <circle cx="12" cy="13" r="3.2" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  )
+}
+
+function SparkleIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2 2-6z" fill="currentColor" />
     </svg>
   )
 }

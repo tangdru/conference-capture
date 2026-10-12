@@ -171,6 +171,12 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.header-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .header-btn__square {

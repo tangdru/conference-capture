@@ -2,7 +2,7 @@ import { supabase, PHOTOS_BUCKET, VIDEOS_BUCKET, DECKS_BUCKET } from './supabase
 import type { DeckStatus, EnrichmentItemData, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData, TranscriptItem, VideoItem } from './types'
 
 const ITEM_COLUMNS = 'id, session_id, type, subtype, payload, text, caption, photo_path, video_path, duration_ms, item_timestamp, added_later, excluded, position'
-const SESSION_COLUMNS = 'id, title, status, started_at, accumulated_ms, live_span_started_at, deck_status, deck_path, deck_error, deck_generated_at, enrichment_error, updated_at'
+const SESSION_COLUMNS = 'id, title, status, started_at, accumulated_ms, live_span_started_at, deck_status, deck_path, deck_error, deck_generated_at, enrichment_error, last_enriched_at, updated_at'
 
 interface SessionRow {
   id: string
@@ -16,6 +16,7 @@ interface SessionRow {
   deck_error: string | null
   deck_generated_at: string | null
   enrichment_error: string | null
+  last_enriched_at: string | null
   updated_at: string
 }
 
@@ -50,6 +51,7 @@ function sessionFromRow(row: SessionRow, items: TimelineItemData[]): Session {
     deckError: row.deck_error,
     deckGeneratedAt: row.deck_generated_at ? new Date(row.deck_generated_at).getTime() : null,
     enrichmentError: row.enrichment_error,
+    lastEnrichedAt: row.last_enriched_at ? new Date(row.last_enriched_at).getTime() : null,
     updatedAt: new Date(row.updated_at).getTime(),
   }
 }
@@ -433,6 +435,19 @@ export async function fetchSessionItems(sessionId: string): Promise<TimelineItem
     if (item) items.push(item)
   }
   return items
+}
+
+/** Re-reads just the enrichment staleness marker after a run -- the edge
+ * function sets it server-side, so the client re-fetches it rather than
+ * approximating "now" locally. */
+export async function fetchSessionEnrichmentState(sessionId: string): Promise<{ lastEnrichedAt: number | null }> {
+  const { data, error } = await supabase
+    .from('cc_sessions')
+    .select('last_enriched_at')
+    .eq('id', sessionId)
+    .single()
+  if (error) throw error
+  return { lastEnrichedAt: data.last_enriched_at ? new Date(data.last_enriched_at).getTime() : null }
 }
 
 export async function fetchSessionDeckState(

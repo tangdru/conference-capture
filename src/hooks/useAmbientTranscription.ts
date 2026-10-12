@@ -4,6 +4,10 @@ const CHUNK_MS = 30_000
 // Below this RMS, treat the chunk as silence and skip it -- Whisper tends to
 // hallucinate text on near-silent audio rather than returning nothing.
 const SILENCE_RMS_THRESHOLD = 0.01
+// Safety cap on how long teardown waits for the trailing chunk's
+// transcription before releasing the mic/worker anyway -- stops a hung
+// decode or worker from holding the microphone open indefinitely.
+const FLUSH_TIMEOUT_MS = 15_000
 const CANDIDATE_MIME_TYPES = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm']
 
 function pickMimeType(): string | null {
@@ -38,7 +42,12 @@ interface UseAmbientTranscriptionOptions {
 /** Headless ambient audio capture: continuously records in ~30s cycles while
  * active, transcribes each cycle on-device via a Whisper worker, and reports
  * completed segments with their absolute start time. No raw audio is kept —
- * each cycle's blob is discarded once transcribed. */
+ * each cycle's blob is discarded once transcribed. The trailing partial
+ * cycle (whatever was recorded since the last 30s boundary) is flushed
+ * through transcription on stop too, not dropped -- the mic stream and
+ * worker are kept alive until that final chunk's result actually comes
+ * back (or a bounded safety timeout elapses), so the last few seconds of
+ * a session are never silently lost. */
 export function useAmbientTranscription({ active, onSegment, onError }: UseAmbientTranscriptionOptions): void {
   const onSegmentRef = useRef(onSegment)
   const onErrorRef = useRef(onError)
@@ -61,10 +70,31 @@ export function useAmbientTranscription({ active, onSegment, onError }: UseAmbie
     let stream: MediaStream | null = null
     let recorder: MediaRecorder | null = null
     let cycleTimeout: number | null = null
+    let flushTimeout: number | null = null
     const pending = new Map<number, { startedAt: number }>()
     let nextId = 0
+    // Counts transcribeChunk() calls whose full round trip (decode -> worker
+    // response) hasn't resolved yet. Teardown waits for this to hit zero so
+    // the final partial chunk isn't cut off mid-transcription.
+    let pendingFlushes = 0
+    let teardownRequested = false
+    let tornDown = false
 
     const worker = new Worker(new URL('../workers/transcribeWorker.ts', import.meta.url), { type: 'module' })
+
+    function teardown() {
+      if (tornDown) return
+      tornDown = true
+      if (flushTimeout) window.clearTimeout(flushTimeout)
+      stream?.getTracks().forEach((t) => t.stop())
+      worker.terminate()
+      pending.clear()
+    }
+
+    function maybeTeardown() {
+      if (teardownRequested && pendingFlushes === 0) teardown()
+    }
+
     worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
       const message = event.data
       const entry = pending.get(message.id)
@@ -75,17 +105,31 @@ export function useAmbientTranscription({ active, onSegment, onError }: UseAmbie
       }
       // Errors are dropped silently -- ambient transcription is best-effort
       // background enrichment, not something worth interrupting capture for.
+      pendingFlushes--
+      maybeTeardown()
     }
 
     async function transcribeChunk(blob: Blob, startedAt: number) {
+      pendingFlushes++
+      let posted = false
       try {
         const samples = await decodeToMono16k(blob)
         if (rms(samples) < SILENCE_RMS_THRESHOLD) return
         const id = nextId++
         pending.set(id, { startedAt })
         worker.postMessage({ id, samples }, [samples.buffer])
+        posted = true
       } catch {
         // Best-effort -- a chunk that fails to decode just gets skipped.
+      } finally {
+        // Silent or failed-to-decode chunks never reach the worker, so
+        // nothing will ever resolve them in worker.onmessage -- settle the
+        // flush here instead. A successfully posted chunk stays pending
+        // until its actual response comes back.
+        if (!posted) {
+          pendingFlushes--
+          maybeTeardown()
+        }
       }
     }
 
@@ -123,16 +167,21 @@ export function useAmbientTranscription({ active, onSegment, onError }: UseAmbie
 
     return () => {
       cancelled = true
+      teardownRequested = true
       if (cycleTimeout) window.clearTimeout(cycleTimeout)
+      flushTimeout = window.setTimeout(teardown, FLUSH_TIMEOUT_MS)
+
       if (recorder && recorder.state !== 'inactive') {
-        // Drop the trailing partial chunk rather than let onstop fire a
-        // transcription + restart after teardown.
-        recorder.onstop = null
+        // Let the recorder's own onstop handler fire naturally: it
+        // transcribes this trailing partial chunk instead of dropping it,
+        // and skips starting a new cycle since `cancelled` is now true. The
+        // mic stream and worker stay alive until that chunk's result
+        // actually comes back (maybeTeardown), bounded by the safety
+        // timeout above in case the worker never responds.
         recorder.stop()
+      } else {
+        maybeTeardown()
       }
-      stream?.getTracks().forEach((t) => t.stop())
-      worker.terminate()
-      pending.clear()
     }
   }, [active])
 }

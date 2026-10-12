@@ -33,6 +33,11 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
   const [viewingVideoId, setViewingVideoId] = useState<string | null>(null)
   const [activeId, setActiveId] = useState<string | 'new' | null>(null)
   const [enhancing, setEnhancing] = useState(false)
+  // A ref, not just the `enhancing` state, guards re-entrancy -- a rapid
+  // double-tap can fire two clicks before React re-renders with the button
+  // disabled, which raced the edge function into running twice and
+  // doubling up enrichment content.
+  const enhancingRef = useRef(false)
 
   useEffect(() => {
     if (session.status !== 'recording') return
@@ -183,7 +188,8 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
    * callable any time there's new transcript since the last run (live,
    * paused, or already complete), and repeatable as more audio comes in. */
   async function handleEnhance() {
-    if (!canEnhance) return
+    if (!canEnhance || enhancingRef.current) return
+    enhancingRef.current = true
     setEnhancing(true)
     try {
       await db.enrichSession(session.id)
@@ -195,6 +201,7 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to enhance')
     } finally {
+      enhancingRef.current = false
       setEnhancing(false)
     }
   }
@@ -233,6 +240,30 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
                 {session.accumulatedMs > 0 && ` · ${formatDurationCompact(session.accumulatedMs)}`}
               </span>
             )}
+            {isLive && (
+              <div className="capture-header__record-controls">
+                <button
+                  className="header-btn header-btn--compact"
+                  onClick={session.status === 'recording' ? stop : resume}
+                  aria-label={session.status === 'recording' ? 'Pause recording' : 'Resume recording'}
+                >
+                  {session.status === 'recording' ? (
+                    <span className="header-btn__square" />
+                  ) : (
+                    <span className="header-btn__circle" />
+                  )}
+                </button>
+                {session.status === 'suspended' && (
+                  <button
+                    className="end-btn"
+                    onClick={() => setConfirmingEnd(true)}
+                    aria-label="End session"
+                  >
+                    End
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="capture-header__stats">
@@ -255,29 +286,7 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onEnded, onBack 
                 <SparkleIcon />
               </button>
             )}
-            {isLive ? (
-              <>
-                {session.status === 'recording' && (
-                  <button className="header-btn" onClick={stop} aria-label="Stop recording">
-                    <span className="header-btn__square" />
-                  </button>
-                )}
-                {session.status === 'suspended' && (
-                  <>
-                    <button className="header-btn" onClick={resume} aria-label="Resume recording">
-                      <span className="header-btn__circle" />
-                    </button>
-                    <button
-                      className="end-btn"
-                      onClick={() => setConfirmingEnd(true)}
-                      aria-label="End session"
-                    >
-                      End
-                    </button>
-                  </>
-                )}
-              </>
-            ) : (
+            {!isLive && (
               session.deckStatus === 'ready' && session.deckGeneratedAt && (
                 session.updatedAt > session.deckGeneratedAt ? (
                   <span className="capture-header__deck-warn">
@@ -399,8 +408,9 @@ function PhotoIcon() {
 
 function SparkleIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2 2-6z" fill="currentColor" />
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M11 2l1.8 5.8a3 3 0 002 2L20.5 11.6l-5.7 1.8a3 3 0 00-2 2L11 21.2l-1.8-5.8a3 3 0 00-2-2L1.5 11.6l5.7-1.8a3 3 0 002-2L11 2z" fill="currentColor" />
+      <path d="M19 15l.7 2.3a1.2 1.2 0 00.8.8l2.3.7-2.3.7a1.2 1.2 0 00-.8.8L19 22.3l-.7-2.3a1.2 1.2 0 00-.8-.8l-2.3-.7 2.3-.7a1.2 1.2 0 00.8-.8L19 15z" fill="currentColor" />
     </svg>
   )
 }

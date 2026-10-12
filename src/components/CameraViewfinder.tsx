@@ -20,8 +20,20 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
     let stream: MediaStream | null = null
     let cancelled = false
 
+    // Request an aspect ratio matching the viewfinder's own shape (portrait
+    // on a phone held normally) -- without this, getUserMedia commonly
+    // hands back the camera's native landscape sensor ratio regardless of
+    // how the device is held, and object-fit: cover then crops it down to
+    // a thin vertical sliver inside this portrait-shaped stage.
+    const portrait = window.innerHeight >= window.innerWidth
     navigator.mediaDevices
-      ?.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+      ?.getUserMedia({
+        video: {
+          facingMode: 'environment',
+          aspectRatio: { ideal: portrait ? 9 / 16 : 16 / 9 },
+        },
+        audio: false,
+      })
       .then((s) => {
         if (cancelled) {
           s.getTracks().forEach((t) => t.stop())

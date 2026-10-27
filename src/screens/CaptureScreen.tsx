@@ -6,6 +6,7 @@ import { CameraViewfinder } from '../components/CameraViewfinder'
 import { PhotoViewer } from '../components/PhotoViewer'
 import { VideoViewer } from '../components/VideoViewer'
 import { useAmbientTranscription } from '../hooks/useAmbientTranscription'
+import { useWakeLock } from '../hooks/useWakeLock'
 import * as db from '../db'
 import './CaptureScreen.css'
 
@@ -31,6 +32,10 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
   const [viewingVideoId, setViewingVideoId] = useState<string | null>(null)
   const [activeId, setActiveId] = useState<string | 'new' | null>(null)
   const [enhancing, setEnhancing] = useState(false)
+  // Photos that failed to save -- kept in memory (not just dropped) so a bad
+  // connection doesn't lose the actual capture. Retried on demand and
+  // automatically once the browser reports it's back online.
+  const [pendingPhotos, setPendingPhotos] = useState<{ id: string; blob: Blob }[]>([])
   // A ref, not just the `enhancing` state, guards re-entrancy -- a rapid
   // double-tap can fire two clicks before React re-renders with the button
   // disabled, which raced the edge function into running twice and
@@ -42,6 +47,8 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
     const id = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(id)
   }, [session.status])
+
+  useWakeLock(session.status === 'recording')
 
   const elapsedMs = elapsedFor(session, now)
   const viewingPhoto = session.items.find(
@@ -58,12 +65,15 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
   )
 
   async function commitNewNote(text: string) {
-    setActiveId(null)
+    // Stay open on failure instead of clearing immediately -- losing the
+    // save on bad wifi shouldn't also lose what was typed. The editor
+    // keeps its text and the user can tap away again to retry.
     try {
       const item = await db.addNote(session.id, userId, text)
       onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
+      setActiveId(null)
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save note')
+      setSaveError(err instanceof Error ? err.message : 'Failed to save note -- tap away again to retry')
     }
   }
 
@@ -125,14 +135,44 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
     }
   }
 
-  async function commitPhoto(blob: Blob) {
+  async function savePhoto(pendingId: string, blob: Blob) {
     try {
       const item = await db.addPhoto(session.id, userId, blob)
       onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
+      setPendingPhotos((p) => p.filter((x) => x.id !== pendingId))
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save photo')
+      setSaveError(err instanceof Error ? err.message : 'Failed to save photo -- will retry automatically')
     }
   }
+
+  function commitPhoto(blob: Blob) {
+    const pendingId = `${Date.now()}-${Math.random()}`
+    setPendingPhotos((p) => [...p, { id: pendingId, blob }])
+    void savePhoto(pendingId, blob)
+  }
+
+  function retryPendingPhotos() {
+    setPendingPhotos((current) => {
+      current.forEach((p) => void savePhoto(p.id, p.blob))
+      return current
+    })
+  }
+  const retryPendingPhotosRef = useRef(retryPendingPhotos)
+  useEffect(() => {
+    retryPendingPhotosRef.current = retryPendingPhotos
+  })
+
+  // A photo that failed to save stays queued, not lost -- retry it the
+  // moment the browser reports a connection again, since conference wifi
+  // dropouts are usually brief. (Also retriable by hand, see the save-error
+  // banner below.)
+  useEffect(() => {
+    function handleOnline() {
+      retryPendingPhotosRef.current()
+    }
+    window.addEventListener('online', handleOnline)
+    return () => window.removeEventListener('online', handleOnline)
+  }, [])
 
   async function commitTranscriptSegment(text: string, startedAt: number, durationMs: number) {
     try {
@@ -286,7 +326,13 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
 
       {saveError && (
         <div className="save-error" role="alert">
-          {saveError} <button onClick={() => setSaveError(null)}>Dismiss</button>
+          {saveError}{' '}
+          {pendingPhotos.length > 0 && (
+            <button onClick={retryPendingPhotos}>
+              Retry {pendingPhotos.length > 1 ? `${pendingPhotos.length} photos` : 'photo'}
+            </button>
+          )}{' '}
+          <button onClick={() => setSaveError(null)}>Dismiss</button>
         </div>
       )}
 

@@ -54,6 +54,15 @@ Decided 2026-10-11, user override (revised same day — originally deferred, now
 4. Personal-team builds expire every 7 days and need a rebuild from Xcode to refresh. No data loss from this as long as the app isn't manually deleted and the bundle ID stays the same across rebuilds — true today because content lives in Supabase, not local storage, and will stay true once local-first storage ships too, since a synced local copy isn't the only copy.
 5. Once enrollment clears: configure signing in Xcode, archive, upload to TestFlight (internal testers: instant, up to 100; external: up to 10,000, needs Beta App Review for the first build of each version).
 
-## Next step, when ready
+## Scaffolding status
 
-Scaffold the Capacitor project (`npx cap init`, `npx cap add ios`, `npx cap sync`) — explicitly deferred to a session running on the user's Mac.
+Done 2026-10-28, in a cloud session (not the Mac this doc originally deferred it to) — turns out `cap init`/`cap add ios`/`cap sync` are plain Node scripts that copy and patch template files; none of them shell out to Xcode or CocoaPods, so none of it actually needed macOS. What exists now:
+
+- `capacitor.config.ts` at the repo root — `appId: com.tangdru.conferencecapture`, `appName: Conference Capture`, `webDir: dist`. The bundle id is a placeholder (easy to change in Xcode later, but harder once a build has shipped to a device/TestFlight under it) — confirm it before the first real device build.
+- `ios/` — the native Xcode project (`ios/App/App.xcodeproj`), using **Swift Package Manager** (`ios/App/CapApp-SPM/`), not CocoaPods, matching this doc's own recommendation above. No Podfile, no Rosetta friction.
+- `ios/App/App/Info.plist` — added `NSCameraUsageDescription` and `NSMicrophoneUsageDescription`, required for the app's two permission prompts; without these iOS kills the app outright on first camera/mic access instead of showing a prompt.
+- `npm run ios:sync` (rebuilds the web app and runs `cap sync ios`) and `npm run ios:open` (same, then `cap open ios`) added to `package.json` — the latter needs macOS/Xcode since `cap open` shells out to `open`.
+
+What still genuinely needs the Mac (unchanged from the prerequisites/rollout plan above): opening `ios/App/App.xcodeproj` in Xcode at all, first-launch Swift Package resolution, configuring a signing team, running on a physical device or simulator, and everything in the rollout plan (Apple Developer enrollment, TestFlight).
+
+Not yet done, deliberately out of scope for scaffolding alone: the native Swift plugin layer (Speech framework, background audio, `Capacitor.isNativePlatform()` branches), the bring-your-own-key work, and local-first storage — all still as scoped above.

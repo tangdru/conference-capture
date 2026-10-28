@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
 import type { Session as AuthSession } from '@supabase/supabase-js'
 import { supabase } from '../supabaseClient'
 import './AuthGate.css'
@@ -9,9 +10,23 @@ interface AuthGateProps {
 
 export function AuthGate({ children }: AuthGateProps) {
   const [session, setSession] = useState<AuthSession | null | undefined>(undefined)
+  const [quickSignInError, setQuickSignInError] = useState('')
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session))
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (data.session || !Capacitor.isNativePlatform()) {
+        setSession(data.session)
+        return
+      }
+      // iOS testing shortcut: the emailed magic link can't route back into
+      // the native app yet, so sign in anonymously instead. This creates a
+      // separate Supabase user per install -- its sessions don't appear on
+      // the web, and they're unreachable once the app is deleted. Replace
+      // with real native sign-in before handing builds to other testers.
+      const { data: anon, error } = await supabase.auth.signInAnonymously()
+      if (error) setQuickSignInError(error.message)
+      setSession(anon.session)
+    })
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession)
     })
@@ -23,13 +38,13 @@ export function AuthGate({ children }: AuthGateProps) {
   }
 
   if (!session) {
-    return <SignInScreen />
+    return <SignInScreen notice={quickSignInError && `Quick sign-in failed: ${quickSignInError}`} />
   }
 
   return <>{children(session)}</>
 }
 
-function SignInScreen() {
+function SignInScreen({ notice }: { notice?: string }) {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
   const [error, setError] = useState('')
@@ -58,6 +73,7 @@ function SignInScreen() {
       ) : (
         <form className="sign-in-screen__form" onSubmit={sendLink}>
           <p className="sign-in-screen__hint">Sign in to sync your sessions across devices.</p>
+          {notice && <p className="sign-in-screen__error">{notice}</p>}
           <input
             type="email"
             required

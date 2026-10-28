@@ -1,4 +1,6 @@
 import { useEffect, useRef } from 'react'
+import { Capacitor } from '@capacitor/core'
+import { AmbientTranscription } from '../native/ambientTranscription'
 
 const CHUNK_MS = 30_000
 // Below this RMS, treat the chunk as silence and skip it -- Whisper tends to
@@ -58,6 +60,16 @@ export function useAmbientTranscription({ active, onSegment, onError }: UseAmbie
 
   useEffect(() => {
     if (!active) return
+
+    // Native build: Apple's Speech framework does the whole pipeline
+    // (capture, segmenting, transcription), and keeps going while the phone
+    // is locked. Everything below is the web fallback.
+    if (Capacitor.isNativePlatform()) {
+      return startNativeTranscription(
+        (segment) => onSegmentRef.current(segment.text, segment.startedAt, segment.durationMs),
+        (message) => onErrorRef.current(message),
+      )
+    }
 
     const pickedMimeType = pickMimeType()
     if (!pickedMimeType) {
@@ -184,6 +196,30 @@ export function useAmbientTranscription({ active, onSegment, onError }: UseAmbie
       }
     }
   }, [active])
+}
+
+/** Starts the native plugin and returns the effect cleanup. stop() flushes the
+ * trailing segment natively, so listeners stay attached until it resolves. */
+function startNativeTranscription(
+  onSegment: (segment: { text: string; startedAt: number; durationMs: number }) => void,
+  onError: (message: string) => void,
+): () => void {
+  let stopped = false
+  const listeners = Promise.all([
+    AmbientTranscription.addListener('segment', onSegment),
+    AmbientTranscription.addListener('error', ({ message }) => onError(message)),
+  ])
+  const started = listeners
+    .then(() => (stopped ? undefined : AmbientTranscription.start()))
+    .catch((err: unknown) => onError(err instanceof Error ? err.message : 'Microphone unavailable.'))
+
+  return () => {
+    stopped = true
+    void started
+      .then(() => AmbientTranscription.stop())
+      .catch(() => {})
+      .finally(() => listeners.then((handles) => handles.forEach((h) => h.remove())))
+  }
 }
 
 function rms(samples: Float32Array): number {

@@ -66,3 +66,17 @@ Done 2026-10-28, in a cloud session (not the Mac this doc originally deferred it
 What still genuinely needs the Mac (unchanged from the prerequisites/rollout plan above): opening `ios/App/App.xcodeproj` in Xcode at all, first-launch Swift Package resolution, configuring a signing team, running on a physical device or simulator, and everything in the rollout plan (Apple Developer enrollment, TestFlight).
 
 Not yet done, deliberately out of scope for scaffolding alone: the native Swift plugin layer (Speech framework, background audio, `Capacitor.isNativePlatform()` branches), the bring-your-own-key work, and local-first storage — all still as scoped above.
+
+**Gotcha found on first Mac run (2026-10-28):** the scaffolded iOS app launched to a blank white screen. `vite.config.ts` sets `base: '/conference-capture/'` for GitHub Pages, but Capacitor serves from `capacitor://localhost/`, so the JS bundle 404'd. Fixed by having `ios:sync` build with `--base=/`; the Pages build is unchanged.
+
+## Native transcription + background audio — built 2026-10-28
+
+First native unlock, done on the Mac and run in the iOS Simulator.
+
+- `ios/App/App/AmbientTranscriptionPlugin.swift` — app-local Capacitor plugin (`AmbientTranscription`). `AVAudioEngine` mic tap → `SFSpeechRecognizer`, on-device (`requiresOnDeviceRecognition`) whenever the device supports it. Cuts a new recognition request every 30s to match the web hook's chunks, flushes the trailing partial segment on `stop()` (15s safety cap, same as web), drops silent segments, surfaces a real recognizer failure once per run, and handles audio-session interruptions (phone calls).
+- `UIBackgroundModes: audio` + `.record` audio session — capture continues with the phone locked. `NSSpeechRecognitionUsageDescription` added to Info.plist.
+- `ios/App/App/MainViewController.swift` registers app-local plugins; `SceneDelegate` must create it as the root VC (the scaffold's `SceneDelegate` instantiates `CAPBridgeViewController()` directly and bypasses the storyboard — registering there alone silently does nothing: JS gets "plugin is not implemented on ios").
+- `src/native/ambientTranscription.ts` + a `Capacitor.isNativePlatform()` branch at the top of `useAmbientTranscription`'s effect. Same `onSegment(text, startedAt, durationMs)` contract, so `CaptureScreen` is untouched. Web keeps WASM Whisper.
+- Uses `SFSpeechRecognizer`, not iOS 26 `SpeechAnalyzer`: the Mac has Xcode 16.4 (iOS 18 SDK). Revisit when Xcode moves to the iOS 26 SDK.
+
+Verified in the Simulator via a test harness (bypassing the sign-in gate): plugin registers, permission prompts work, 30s segment rotation, on-device recognition returns segments to JS with correct timing, `stop()` flush returns the trailing segment in ~250ms. **Not yet verified:** transcription accuracy on real speech, and locked-phone background capture — both need a physical iPhone. Open question for the device test: whether segments recognized while the screen is locked reach JS (and Supabase) immediately or only when the WebView resumes.

@@ -2,6 +2,14 @@
 
 This is the Conference Capture product — a mobile-first app for capturing notes, photos, and audio at conferences, with AI enrichment and one-tap deck export.
 
+## Keeping sessions in sync
+
+More than one Claude session works on this repo at once (e.g. a cloud session for web/Supabase work and a local Mac session for the iOS build). Git is the only thing that keeps them in agreement, so:
+
+- **Always run `git pull origin main` before starting any chunk of work** — every time, not just at session start. If on a feature branch, merge or rebase `origin/main` into it.
+- When a change is done, commit and push it promptly so the other session doesn't build on a stale copy.
+- Files both tracks touch (e.g. `Capacitor.isNativePlatform()` branches in `src/hooks/useAmbientTranscription.ts`) are where conflicts happen — pull immediately before editing them.
+
 ## Designpowers
 
 This project uses the Designpowers design workflow system, vendored in this repo at `.designpowers/` (from https://github.com/Owl-Listener/designpowers) so it loads in any session — local, cloud, or mobile.

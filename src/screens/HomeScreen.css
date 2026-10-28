@@ -11,6 +11,9 @@
   max-width: 480px;
   margin: 0 auto;
   width: 100%;
+  /* Clears the status bar / Dynamic Island in the native iOS app, where
+     the page draws edge to edge (viewport-fit=cover). 0 in a browser tab. */
+  padding-top: env(safe-area-inset-top);
 }
 
 .home-header {

@@ -7,6 +7,8 @@
   background: var(--bg-base);
   display: flex;
   flex-direction: column;
+  /* Clears the status bar / Dynamic Island in the native iOS app. */
+  padding-top: env(safe-area-inset-top);
 }
 
 .capture-header {

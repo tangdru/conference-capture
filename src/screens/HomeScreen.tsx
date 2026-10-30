@@ -86,7 +86,12 @@ export function HomeScreen({
           },
         }))}
       >
-        <SessionCard session={session} now={now} onTap={() => onOpenSession(session.id)} />
+        <SessionCard
+          session={session}
+          now={now}
+          onTap={() => onOpenSession(session.id)}
+          onViewDeck={() => onViewDeck(session.id)}
+        />
       </SwipeActions>
     )
   }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
 import type { Session as AuthSession } from '@supabase/supabase-js'
 import type { Session } from './types'
 import * as db from './db'
@@ -6,6 +7,7 @@ import { supabase } from './supabaseClient'
 import { AuthGate } from './auth/AuthGate'
 import { HomeScreen } from './screens/HomeScreen'
 import { CaptureScreen } from './screens/CaptureScreen'
+import { DeckViewer } from './components/DeckViewer'
 
 type Route = { screen: 'home' } | { screen: 'capture'; sessionId: string }
 
@@ -19,6 +21,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   const [route, setRoute] = useState<Route>({ screen: 'home' })
   const [loadError, setLoadError] = useState<string | null>(null)
   const [homeError, setHomeError] = useState<string | null>(null)
+  const [openDeck, setOpenDeck] = useState<{ title: string; html: string } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -112,6 +115,12 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     const session = sessions?.find((s) => s.id === id)
     if (!session?.deckPath) return
     try {
+      // A new tab works in a browser, but the native app can't pass a blob:
+      // URL to Safari -- show the page full-screen in-app there instead.
+      if (Capacitor.isNativePlatform()) {
+        setOpenDeck({ title: session.title, html: await db.fetchDeckHtml(session.deckPath) })
+        return
+      }
       const url = await db.resolveDeckUrl(session.deckPath)
       window.open(url, '_blank', 'noopener')
     } catch (err) {
@@ -169,6 +178,10 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         onBack={() => setRoute({ screen: 'home' })}
       />
     )
+  }
+
+  if (openDeck) {
+    return <DeckViewer title={openDeck.title} html={openDeck.html} onClose={() => setOpenDeck(null)} />
   }
 
   return (

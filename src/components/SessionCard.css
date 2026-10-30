@@ -87,3 +87,14 @@
   flex-shrink: 0;
   animation: pulse 2s ease-in-out infinite;
 }
+
+.session-card__deck-link {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  /* A comfortable tap target without changing the line's layout. */
+  padding: 8px 0;
+  cursor: pointer;
+}

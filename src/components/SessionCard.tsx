@@ -7,6 +7,7 @@ interface SessionCardProps {
   session: Session
   now: number
   onTap: () => void
+  onViewDeck: () => void
 }
 
 function elapsedFor(session: Session, now: number): number {
@@ -16,7 +17,7 @@ function elapsedFor(session: Session, now: number): number {
   return session.accumulatedMs + live
 }
 
-export function SessionCard({ session, now, onTap }: SessionCardProps) {
+export function SessionCard({ session, now, onTap, onViewDeck }: SessionCardProps) {
   const notes = session.items.filter((i) => i.type === 'note').length
   const photos = session.items.filter((i) => i.type === 'photo').length
 
@@ -42,7 +43,7 @@ export function SessionCard({ session, now, onTap }: SessionCardProps) {
         <p className="session-card__hint">
           {session.status === 'recording' ? 'Tap to return to capture' : 'Tap to add more'}
         </p>
-        <DeckStatus session={session} />
+        <DeckStatus session={session} onView={onViewDeck} />
       </button>
     )
   }
@@ -64,14 +65,14 @@ export function SessionCard({ session, now, onTap }: SessionCardProps) {
       <p className="session-card__stats">
         📝 {notes} &nbsp; 📷 {photos}
       </p>
-      <DeckStatus session={session} />
+      <DeckStatus session={session} onView={onViewDeck} />
     </button>
   )
 }
 
 /** The presentation's state, so a tap on the swipe-row sparkle visibly does
  * something -- generation takes a few minutes and otherwise happens silently. */
-function DeckStatus({ session }: { session: Session }) {
+function DeckStatus({ session, onView }: { session: Session; onView: () => void }) {
   switch (session.deckStatus) {
     case 'generating':
       return (
@@ -80,7 +81,29 @@ function DeckStatus({ session }: { session: Session }) {
         </p>
       )
     case 'ready':
-      return <p className="session-card__deck">Presentation ready · swipe left to view</p>
+      // A link-styled span, not a nested <button> (the card itself is one);
+      // it stops the tap from also opening the session.
+      return (
+        <p className="session-card__deck">
+          <span
+            className="session-card__deck-link"
+            role="link"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation()
+              onView()
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.stopPropagation()
+                onView()
+              }
+            }}
+          >
+            View presentation →
+          </span>
+        </p>
+      )
     case 'error':
       return (
         <p className="session-card__deck session-card__deck--error" role="status">

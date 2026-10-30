@@ -464,6 +464,13 @@ export async function fetchSessionDeckState(
   }
 }
 
+/** The generated page's HTML itself -- for showing it in-app (DeckViewer). */
+export async function fetchDeckHtml(path: string): Promise<string> {
+  const { data, error } = await supabase.storage.from(DECKS_BUCKET).download(path)
+  if (error) throw error
+  return data.text()
+}
+
 // A Blob URL (rather than a signed URL) so the browser treats it as same-origin
 // -- the only way an <a download> actually saves the file instead of just
 // navigating to it, since the real file lives in a private, cross-origin bucket.

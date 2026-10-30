@@ -21,9 +21,28 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   const [homeError, setHomeError] = useState<string | null>(null)
 
   useEffect(() => {
-    db.fetchSessions(userId)
-      .then(setSessions)
-      .catch((err) => setLoadError(err.message ?? 'Failed to load sessions'))
+    let cancelled = false
+    async function load(attempt: number) {
+      try {
+        const loaded = await db.fetchSessions(userId)
+        if (!cancelled) setSessions(loaded)
+      } catch (err) {
+        if (cancelled) return
+        const message: string = (err as { message?: string })?.message ?? 'Failed to load sessions'
+        // A token minted moments ago (e.g. the native anonymous sign-in) can
+        // be rejected as "issued at future" when Supabase's auth and database
+        // clocks disagree by a second or two -- it's valid once that passes.
+        if (/issued at future/i.test(message) && attempt < 5) {
+          window.setTimeout(() => void load(attempt + 1), 1500)
+          return
+        }
+        setLoadError(message)
+      }
+    }
+    void load(1)
+    return () => {
+      cancelled = true
+    }
   }, [userId])
 
   function updateSessionLocally(id: string, updater: (session: Session) => Session) {

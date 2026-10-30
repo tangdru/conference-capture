@@ -163,6 +163,31 @@
   color: var(--accent);
 }
 
+.viewfinder__controls {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  width: 100%;
+  column-gap: 28px;
+}
+
+.viewfinder__controls .viewfinder__shutter {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+/* Right of the shutter held upright, left of it held sideways. */
+.viewfinder__controls .viewfinder__dismiss {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: start;
+}
+
+.viewfinder__controls--sideways .viewfinder__dismiss {
+  grid-column: 1;
+  justify-self: end;
+}
+
 .viewfinder__shutter {
   width: 64px;
   height: 64px;

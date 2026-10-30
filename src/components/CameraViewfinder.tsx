@@ -16,6 +16,9 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [shots, setShots] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
+  // Held sideways (native only) -- moves the close button to the shutter's
+  // left, where a thumb on that side of a landscape phone can reach it.
+  const [sideways, setSideways] = useState(false)
   const touchStartY = useRef<number | null>(null)
 
   useEffect(() => {
@@ -50,11 +53,20 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
     // rotates -- watch the accelerometer instead, to save a landscape photo
     // when the phone is turned sideways.
     const native = Capacitor.isNativePlatform()
-    if (native) void DeviceTilt.startWatching().catch(() => {})
+    let tiltPoll: number | null = null
+    if (native) {
+      void DeviceTilt.startWatching().catch(() => {})
+      tiltPoll = window.setInterval(() => {
+        DeviceTilt.getRotation()
+          .then(({ degrees }) => setSideways(degrees === 90 || degrees === 270))
+          .catch(() => {})
+      }, 300)
+    }
 
     return () => {
       cancelled = true
       stream?.getTracks().forEach((t) => t.stop())
+      if (tiltPoll) window.clearInterval(tiltPoll)
       if (native) void DeviceTilt.stopWatching().catch(() => {})
     }
   }, [])
@@ -116,9 +128,6 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
     >
       <div className="viewfinder__top-bar">
         <span className="mono-timestamp">Session · {sessionTimer}</span>
-        <button className="viewfinder__dismiss" onClick={onClose} aria-label="Stop camera, return to notes">
-          ✕
-        </button>
       </div>
 
       <div className="viewfinder__stage">
@@ -153,7 +162,12 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
           Swipe down to return to notes
           {shots.length > 0 && <span className="viewfinder__chevron"> ↓</span>}
         </span>
-        <button className="viewfinder__shutter" onClick={capture} aria-label="Capture photo" />
+        <div className={`viewfinder__controls${sideways ? ' viewfinder__controls--sideways' : ''}`}>
+          <button className="viewfinder__shutter" onClick={capture} aria-label="Capture photo" />
+          <button className="viewfinder__dismiss" onClick={onClose} aria-label="Stop camera, return to notes">
+            ✕
+          </button>
+        </div>
       </div>
 
       <canvas ref={canvasRef} style={{ display: 'none' }} />

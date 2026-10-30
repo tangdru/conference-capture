@@ -176,7 +176,9 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
 
   async function commitTranscriptSegment(text: string, startedAt: number, durationMs: number) {
     try {
-      const item = await db.addTranscriptSegment(session.id, userId, text, startedAt, durationMs)
+      // duration_ms is an integer column -- round in case a capture source
+      // reports fractional milliseconds.
+      const item = await db.addTranscriptSegment(session.id, userId, text, startedAt, Math.round(durationMs))
       onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
     } catch {
       // Best-effort -- a dropped transcript segment isn't worth surfacing as

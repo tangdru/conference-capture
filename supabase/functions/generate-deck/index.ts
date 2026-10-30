@@ -208,6 +208,9 @@ Requirements:
     })
   }
 
+  // Streamed, not one blocking request: writing a whole page takes minutes,
+  // and a connection that sits silent that long gets dropped upstream (seen
+  // as a Cloudflare 520 from api.anthropic.com). Streaming keeps bytes moving.
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -218,23 +221,52 @@ Requirements:
     body: JSON.stringify({
       model: ANTHROPIC_MODEL,
       max_tokens: 48000,
+      stream: true,
       messages: [{ role: 'user', content }],
     }),
   })
 
-  if (!response.ok) {
+  if (!response.ok || !response.body) {
     const errText = await response.text()
-    throw new Error(`Claude API error (${response.status}): ${errText}`)
+    throw new Error(`Claude API error (${response.status}): ${errText.slice(0, 500)}`)
   }
 
-  const data: { stop_reason?: string; content?: { type: string; text?: string }[] } = await response.json()
-  if (data.stop_reason === 'refusal') {
+  const { text, stopReason } = await readMessageStream(response.body)
+  if (stopReason === 'refusal') {
     throw new Error('Claude declined to generate this presentation')
   }
-  const text = data.content?.find((block) => block.type === 'text')?.text
   if (!text) throw new Error('Claude returned no presentation content')
 
   return stripCodeFence(text.trim())
+}
+
+/** Collects the text and stop reason from a streamed Messages API response
+ * (server-sent events). */
+async function readMessageStream(body: ReadableStream<Uint8Array>): Promise<{ text: string; stopReason: string | null }> {
+  const reader = body.pipeThrough(new TextDecoderStream()).getReader()
+  let buffer = ''
+  let text = ''
+  let stopReason: string | null = null
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += value
+    let newline: number
+    while ((newline = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, newline).trim()
+      buffer = buffer.slice(newline + 1)
+      if (!line.startsWith('data:')) continue
+      const event = JSON.parse(line.slice(5))
+      if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+        text += event.delta.text
+      } else if (event.type === 'message_delta' && event.delta?.stop_reason) {
+        stopReason = event.delta.stop_reason
+      } else if (event.type === 'error') {
+        throw new Error(`Claude API error: ${event.error?.message ?? 'stream failed'}`)
+      }
+    }
+  }
+  return { text, stopReason }
 }
 
 function formatEnrichment(rows: { subtype: string | null; payload: Record<string, unknown> | null }[]): string {

@@ -73,10 +73,18 @@ export function HomeScreen({
         id={session.id}
         revealedId={revealedId}
         onReveal={setRevealedId}
+        // Close the row on any action so the card slides back into view and
+        // its status line (e.g. "Building presentation…") is visible.
         actions={[
           ...deckActions(session),
           { icon: <DeleteIcon />, label: 'Delete', onClick: () => onDeleteSession(session.id) },
-        ]}
+        ].map((action) => ({
+          ...action,
+          onClick: () => {
+            setRevealedId(null)
+            action.onClick()
+          },
+        }))}
       >
         <SessionCard session={session} now={now} onTap={() => onOpenSession(session.id)} />
       </SwipeActions>

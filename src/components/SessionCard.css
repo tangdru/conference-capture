@@ -65,3 +65,25 @@
   font-size: 13px;
   color: var(--text-secondary);
 }
+
+.session-card__deck {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.session-card__deck--error {
+  color: var(--semantic-error);
+}
+
+.session-card__deck-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  animation: pulse 2s ease-in-out infinite;
+}

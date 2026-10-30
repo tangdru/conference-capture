@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
+import { DeviceTilt } from '../native/deviceTilt'
 import './CameraViewfinder.css'
 
 interface CameraViewfinderProps {
@@ -44,24 +46,41 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
       })
       .catch(() => setError('Camera unavailable — check browser permissions.'))
 
+    // The native app's UI is locked to portrait, so the viewfinder never
+    // rotates -- watch the accelerometer instead, to save a landscape photo
+    // when the phone is turned sideways.
+    const native = Capacitor.isNativePlatform()
+    if (native) void DeviceTilt.startWatching().catch(() => {})
+
     return () => {
       cancelled = true
       stream?.getTracks().forEach((t) => t.stop())
+      if (native) void DeviceTilt.stopWatching().catch(() => {})
     }
   }, [])
 
-  function capture() {
+  async function capture() {
     const video = videoRef.current
     const canvas = canvasRef.current
     if (!video || !canvas || video.videoWidth === 0) return
 
+    const degrees = Capacitor.isNativePlatform()
+      ? await DeviceTilt.getRotation().then((r) => r.degrees).catch(() => 0)
+      : 0
+    const sideways = degrees === 90 || degrees === 270
+
     const maxWidth = 640
     const scale = Math.min(1, maxWidth / video.videoWidth)
-    canvas.width = video.videoWidth * scale
-    canvas.height = video.videoHeight * scale
+    const width = video.videoWidth * scale
+    const height = video.videoHeight * scale
+    canvas.width = sideways ? height : width
+    canvas.height = sideways ? width : height
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    ctx.translate(canvas.width / 2, canvas.height / 2)
+    ctx.rotate((degrees * Math.PI) / 180)
+    ctx.drawImage(video, -width / 2, -height / 2, width, height)
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
 
     canvas.toBlob(
       (blob) => {

@@ -42,6 +42,7 @@ export function SessionCard({ session, now, onTap }: SessionCardProps) {
         <p className="session-card__hint">
           {session.status === 'recording' ? 'Tap to return to capture' : 'Tap to add more'}
         </p>
+        <DeckStatus session={session} />
       </button>
     )
   }
@@ -63,6 +64,30 @@ export function SessionCard({ session, now, onTap }: SessionCardProps) {
       <p className="session-card__stats">
         📝 {notes} &nbsp; 📷 {photos}
       </p>
+      <DeckStatus session={session} />
     </button>
   )
+}
+
+/** The presentation's state, so a tap on the swipe-row sparkle visibly does
+ * something -- generation takes a few minutes and otherwise happens silently. */
+function DeckStatus({ session }: { session: Session }) {
+  switch (session.deckStatus) {
+    case 'generating':
+      return (
+        <p className="session-card__deck session-card__deck--generating" role="status">
+          <span className="session-card__deck-dot" aria-hidden="true" /> Building presentation… this takes a few minutes
+        </p>
+      )
+    case 'ready':
+      return <p className="session-card__deck">Presentation ready · swipe left to view</p>
+    case 'error':
+      return (
+        <p className="session-card__deck session-card__deck--error" role="status">
+          Presentation failed · swipe left to try again
+        </p>
+      )
+    default:
+      return null
+  }
 }

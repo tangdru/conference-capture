@@ -8,5 +8,6 @@ import UIKit
 class MainViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(AmbientTranscriptionPlugin())
+        bridge?.registerPluginInstance(DeviceTiltPlugin())
     }
 }

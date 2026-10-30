@@ -176,10 +176,12 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
                 }
             }
             if !text.isEmpty {
+                // Whole milliseconds -- duration_ms is an integer column, and a
+                // fractional value makes the insert fail.
                 self.notifyListeners("segment", data: [
                     "text": text,
-                    "startedAt": startedAt.timeIntervalSince1970 * 1000,
-                    "durationMs": Date().timeIntervalSince(startedAt) * 1000,
+                    "startedAt": Int((startedAt.timeIntervalSince1970 * 1000).rounded()),
+                    "durationMs": Int((Date().timeIntervalSince(startedAt) * 1000).rounded()),
                 ])
             }
             DispatchQueue.main.async { self.segmentSettled() }

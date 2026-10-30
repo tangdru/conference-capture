@@ -32,6 +32,8 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
   const [viewingVideoId, setViewingVideoId] = useState<string | null>(null)
   const [activeId, setActiveId] = useState<string | 'new' | null>(null)
   const [enhancing, setEnhancing] = useState(false)
+  // Words heard so far in the transcript segment that's still in progress.
+  const [liveText, setLiveText] = useState('')
   // Photos that failed to save -- kept in memory (not just dropped) so a bad
   // connection doesn't lose the actual capture. Retried on demand and
   // automatically once the browser reports it's back online.
@@ -49,6 +51,10 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
   }, [session.status])
 
   useWakeLock(session.status === 'recording')
+
+  useEffect(() => {
+    if (session.status !== 'recording') setLiveText('')
+  }, [session.status])
 
   const elapsedMs = elapsedFor(session, now)
   const viewingPhoto = session.items.find(
@@ -180,6 +186,7 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
       // reports fractional milliseconds.
       const item = await db.addTranscriptSegment(session.id, userId, text, startedAt, Math.round(durationMs))
       onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
+      setLiveText('')
     } catch {
       // Best-effort -- a dropped transcript segment isn't worth surfacing as
       // an error; the next segment will still come through.
@@ -189,6 +196,7 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
   useAmbientTranscription({
     active: session.status === 'recording',
     onSegment: commitTranscriptSegment,
+    onPartial: setLiveText,
     onError: setSaveError,
   })
 
@@ -351,6 +359,7 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
         onDeleteItem={deleteItem}
         onToggleExcluded={toggleExcluded}
         onReorder={reorderItems}
+        liveTranscript={session.status === 'recording' ? liveText : null}
       />
 
       <div className="capture-actions">

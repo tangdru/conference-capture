@@ -38,6 +38,8 @@ interface UseAmbientTranscriptionOptions {
   /** Capture only runs while this is true -- pause it alongside the session's own recording state. */
   active: boolean
   onSegment: (text: string, startedAt: number, durationMs: number) => void
+  /** Words heard so far in the segment in progress -- native build only. */
+  onPartial?: (text: string) => void
   onError: (message: string) => void
 }
 
@@ -50,13 +52,15 @@ interface UseAmbientTranscriptionOptions {
  * worker are kept alive until that final chunk's result actually comes
  * back (or a bounded safety timeout elapses), so the last few seconds of
  * a session are never silently lost. */
-export function useAmbientTranscription({ active, onSegment, onError }: UseAmbientTranscriptionOptions): void {
+export function useAmbientTranscription({ active, onSegment, onPartial, onError }: UseAmbientTranscriptionOptions): void {
   const onSegmentRef = useRef(onSegment)
+  const onPartialRef = useRef(onPartial)
   const onErrorRef = useRef(onError)
   useEffect(() => {
     onSegmentRef.current = onSegment
+    onPartialRef.current = onPartial
     onErrorRef.current = onError
-  }, [onSegment, onError])
+  }, [onSegment, onPartial, onError])
 
   useEffect(() => {
     if (!active) return
@@ -67,6 +71,7 @@ export function useAmbientTranscription({ active, onSegment, onError }: UseAmbie
     if (Capacitor.isNativePlatform()) {
       return startNativeTranscription(
         (segment) => onSegmentRef.current(segment.text, segment.startedAt, segment.durationMs),
+        (text) => onPartialRef.current?.(text),
         (message) => onErrorRef.current(message),
       )
     }
@@ -202,11 +207,13 @@ export function useAmbientTranscription({ active, onSegment, onError }: UseAmbie
  * trailing segment natively, so listeners stay attached until it resolves. */
 function startNativeTranscription(
   onSegment: (segment: { text: string; startedAt: number; durationMs: number }) => void,
+  onPartial: (text: string) => void,
   onError: (message: string) => void,
 ): () => void {
   let stopped = false
   const listeners = Promise.all([
     AmbientTranscription.addListener('segment', onSegment),
+    AmbientTranscription.addListener('partial', ({ text }) => onPartial(text)),
     AmbientTranscription.addListener('error', ({ message }) => onError(message)),
   ])
   const started = listeners

@@ -4,9 +4,11 @@ import Speech
 
 /// Native counterpart of src/hooks/useAmbientTranscription.ts: records the
 /// room continuously and transcribes it with Apple's Speech framework instead
-/// of the web build's WASM Whisper worker. Segments are cut every ~30s to
-/// match the web hook, and emitted to JS as `segment` events with the same
-/// shape (text, absolute start time, duration). The `audio` background mode
+/// of the web build's WASM Whisper worker. Segments are cut at natural pauses
+/// in speech (or after a minute without one), and emitted to JS as `segment`
+/// events with the same shape as the web hook's (text, absolute start time,
+/// duration). While a segment is still being heard, its words so far are sent
+/// as `partial` events so the app can show transcription as it happens. The `audio` background mode
 /// in Info.plist keeps capture running while the phone is locked.
 @objc(AmbientTranscriptionPlugin)
 public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
@@ -17,7 +19,13 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
     ]
 
-    private static let segmentSeconds: TimeInterval = 30
+    // A segment ends once the speaker pauses this long, as long as it's at
+    // least minSegmentSeconds old (so a quick "yes." doesn't become its own
+    // entry), and always by maxSegmentSeconds so nothing long goes unsaved.
+    private static let pauseSeconds: TimeInterval = 1.8
+    private static let minSegmentSeconds: TimeInterval = 8
+    private static let maxSegmentSeconds: TimeInterval = 60
+    private static let boundaryCheckSeconds: TimeInterval = 0.5
     // Safety cap on how long stop() waits for the trailing segment's result
     // before releasing the mic anyway -- mirrors FLUSH_TIMEOUT_MS on web.
     private static let flushTimeoutSeconds: TimeInterval = 15
@@ -31,6 +39,10 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
     // request is current, so swaps of `currentRequest` go through this lock.
     private let requestLock = NSLock()
     private var currentRequest: SFSpeechAudioBufferRecognitionRequest?
+    // Main-thread state for the current segment's pause detection.
+    private var segmentStartedAt = Date()
+    private var lastTextChangeAt: Date?
+    private var currentText = ""
     // Segments whose audio has ended but whose final result hasn't arrived.
     private var inFlight = 0
     private var stopWaiters: [() -> Void] = []
@@ -136,15 +148,41 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
             name: AVAudioSession.interruptionNotification, object: session)
 
         startSegment()
-        segmentTimer = Timer.scheduledTimer(withTimeInterval: Self.segmentSeconds, repeats: true) { [weak self] _ in
-            self?.finishCurrentSegment(startNext: true)
+        segmentTimer = Timer.scheduledTimer(withTimeInterval: Self.boundaryCheckSeconds, repeats: true) { [weak self] _ in
+            self?.checkSegmentBoundary()
         }
+    }
+
+    /// Cuts the segment at a pause in speech, or once it hits the max length.
+    private func checkSegmentBoundary() {
+        requestLock.lock()
+        let hasRequest = currentRequest != nil
+        requestLock.unlock()
+        guard running, hasRequest else { return }
+
+        let now = Date()
+        let age = now.timeIntervalSince(segmentStartedAt)
+        let paused = lastTextChangeAt.map { now.timeIntervalSince($0) >= Self.pauseSeconds } ?? false
+        if age >= Self.maxSegmentSeconds || (paused && age >= Self.minSegmentSeconds) {
+            finishCurrentSegment(startNext: true)
+        }
+    }
+
+    private func handlePartial(_ text: String, for request: SFSpeechAudioBufferRecognitionRequest) {
+        requestLock.lock()
+        let isCurrent = currentRequest === request
+        requestLock.unlock()
+        // A finished segment can still report words after the next one began.
+        guard isCurrent, !text.isEmpty, text != currentText else { return }
+        currentText = text
+        lastTextChangeAt = Date()
+        notifyListeners("partial", data: ["text": text])
     }
 
     private func startSegment() {
         guard let recognizer else { return }
         let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = false
+        request.shouldReportPartialResults = true
         if recognizer.supportsOnDeviceRecognition {
             request.requiresOnDeviceRecognition = true
         }
@@ -152,6 +190,9 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
             request.addsPunctuation = true
         }
         let startedAt = Date()
+        segmentStartedAt = startedAt
+        lastTextChangeAt = nil
+        currentText = ""
 
         requestLock.lock()
         currentRequest = request
@@ -160,6 +201,11 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
         var reported = false
         recognizer.recognitionTask(with: request) { [weak self] result, error in
             guard let self, !reported else { return }
+            if let result, !result.isFinal, error == nil {
+                let text = result.bestTranscription.formattedString.trimmingCharacters(in: .whitespacesAndNewlines)
+                DispatchQueue.main.async { self.handlePartial(text, for: request) }
+                return
+            }
             guard error != nil || result?.isFinal == true else { return }
             reported = true
             let text = result?.bestTranscription.formattedString.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""

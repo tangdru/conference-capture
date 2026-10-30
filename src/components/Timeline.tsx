@@ -29,6 +29,8 @@ interface TimelineProps {
   onDeleteItem: (item: TimelineItemData) => void
   onToggleExcluded: (item: TimelineItemData) => void
   onReorder: (orderedIds: string[]) => void
+  /** While listening: the words heard so far ('' before any). null when not listening. */
+  liveTranscript: string | null
 }
 
 /** Only notes and photos have a drag handle -- a human typing a note may
@@ -57,6 +59,7 @@ export function Timeline({
   onDeleteItem,
   onToggleExcluded,
   onReorder,
+  liveTranscript,
 }: TimelineProps) {
   const endRef = useRef<HTMLDivElement>(null)
   const userScrolledUp = useRef(false)
@@ -199,7 +202,14 @@ export function Timeline({
         )
       })}
 
-      {!isEmpty && <div className="dot-divider" aria-hidden="true" />}
+      {liveTranscript !== null && (
+        <>
+          {!isEmpty && <div className="dot-divider" aria-hidden="true" />}
+          <LiveTranscriptRow text={liveTranscript} />
+        </>
+      )}
+
+      {(!isEmpty || liveTranscript !== null) && <div className="dot-divider" aria-hidden="true" />}
 
       {activeId === 'new' ? (
         <NoteRowEditor initialText="" onCommit={onCommitNewNote} onCancel={onCancelActive} />
@@ -213,6 +223,26 @@ export function Timeline({
       )}
 
       <div ref={endRef} />
+    </div>
+  )
+}
+
+/** The transcript entry still being heard -- its words so far, with a
+ * blinking ellipsis so it's clear listening is happening. */
+function LiveTranscriptRow({ text }: { text: string }) {
+  return (
+    <div className="transcript-row transcript-row--live" aria-label={text ? `Transcribing: ${text}` : 'Listening'}>
+      <div className="transcript-row__bar" aria-hidden="true" />
+      <div className="transcript-row__body">
+        <p className="transcript-row__text" aria-hidden="true">
+          {text || 'Listening'}
+          <span className="live-ellipsis">
+            <span>.</span>
+            <span>.</span>
+            <span>.</span>
+          </span>
+        </p>
+      </div>
     </div>
   )
 }

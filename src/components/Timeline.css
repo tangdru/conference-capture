@@ -231,6 +231,35 @@
   padding-top: 2px;
 }
 
+/* Live transcript row -- the segment still being heard */
+
+.transcript-row--live .transcript-row__bar {
+  border-left-color: var(--accent);
+}
+
+.live-ellipsis span {
+  animation: live-ellipsis-blink 1.4s infinite both;
+}
+
+.live-ellipsis span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.live-ellipsis span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes live-ellipsis-blink {
+  0%, 80%, 100% { opacity: 0.15; }
+  40% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-ellipsis span {
+    animation: none;
+  }
+}
+
 /* Enrichment row */
 
 .enrichment-row {

@@ -147,6 +147,9 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   async function deleteSession(id: string) {
     const session = sessions?.find((s) => s.id === id)
     if (!session) return
+    // Deleting removes the notes, photos and transcript for good -- confirm
+    // first. (The native app shows this as a standard iOS alert.)
+    if (!window.confirm(`Delete "${session.title}"? Its notes, photos and transcript will be permanently removed.`)) return
     setSessions((prev) => prev?.filter((s) => s.id !== id) ?? prev)
     try {
       await db.deleteSession(session)

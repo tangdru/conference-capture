@@ -182,11 +182,16 @@ export function SwipeActions({ id, revealedId, onReveal, actions, dragHandle, di
 
 export function DeleteIcon() {
   return (
-    <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
+    <svg viewBox="0 0 26 26" width="18" height="18" fill="none" aria-hidden="true">
+      <path d="M4.5 7h17" stroke="var(--recording-dot)" strokeWidth="2" strokeLinecap="round" />
+      <path d="M10 7V5a1 1 0 011-1h4a1 1 0 011 1v2" stroke="var(--recording-dot)" strokeWidth="2" strokeLinejoin="round" />
       <path
-        d="M19 6.4L13 12.4L7 6.4L5.6 7.8L11.6 13.8L5.6 19.8L7 21.2L13 15.2L19 21.2L20.4 19.8L14.4 13.8L20.4 7.8Z"
-        fill="var(--recording-dot)"
+        d="M6.5 7l1 13.2A2 2 0 009.5 22h7a2 2 0 002-1.8L19.5 7"
+        stroke="var(--recording-dot)"
+        strokeWidth="2"
+        strokeLinejoin="round"
       />
+      <path d="M11 11v7M15 11v7" stroke="var(--recording-dot)" strokeWidth="2" strokeLinecap="round" />
     </svg>
   )
 }
@@ -206,16 +211,14 @@ export function GenerateIcon() {
   )
 }
 
+/** A presentation board on a stand -- opens the generated presentation. */
 export function ViewIcon() {
   return (
-    <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
-      <path
-        d="M2 13c3.2-5.3 7.4-8 11-8s7.8 2.7 11 8c-3.2 5.3-7.4 8-11 8S5.2 18.3 2 13z"
-        fill="var(--accent)"
-      />
-      <circle cx="13" cy="13" r="5" fill="var(--bg-base)" />
-      <circle cx="13" cy="13" r="3.2" fill="var(--accent)" />
-      <circle cx="11.8" cy="11.8" r="1" fill="var(--bg-base)" />
+    <svg viewBox="0 0 26 26" width="18" height="18" fill="none" aria-hidden="true">
+      <path d="M2.5 4h21" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
+      <rect x="4" y="4" width="18" height="12.5" rx="1" stroke="var(--accent)" strokeWidth="2" />
+      <path d="M13 16.5V20M13 20l-4 3.5M13 20l4 3.5" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9 13v-2.5M13 13V8.5M17 13v-3.5" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
     </svg>
   )
 }

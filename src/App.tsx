@@ -45,6 +45,35 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     }
   }, [userId])
 
+  // Generation runs server-side for minutes, and the request that started it
+  // doesn't survive the phone switching apps -- so while any deck is
+  // building, read its state from the database instead of waiting on that
+  // request: every few seconds, and right away when the app comes back.
+  const generatingIds = sessions?.filter((s) => s.deckStatus === 'generating').map((s) => s.id).join(',') ?? ''
+  useEffect(() => {
+    if (!generatingIds) return
+    const ids = generatingIds.split(',')
+    function refresh() {
+      ids.forEach((id) => {
+        db.fetchSessionDeckState(id)
+          .then((state) => updateSessionLocally(id, (s) => ({ ...s, ...state })))
+          .catch(() => {})
+      })
+    }
+    function onVisible() {
+      if (document.visibilityState === 'visible') refresh()
+    }
+    // No immediate read: right after a tap the server may not have recorded
+    // 'generating' yet, and the previous run's 'ready'/'error' would flip the
+    // card back. It writes that within a second, well before the first poll.
+    const interval = window.setInterval(refresh, 5000)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [generatingIds])
+
   function updateSessionLocally(id: string, updater: (session: Session) => Session) {
     setSessions((prev) => (prev ? prev.map((s) => (s.id === id ? updater(s) : s)) : prev))
   }

@@ -449,14 +449,19 @@ export async function fetchSessionEnrichmentState(sessionId: string): Promise<{ 
 
 export async function fetchSessionDeckState(
   sessionId: string,
-): Promise<{ deckStatus: DeckStatus; deckPath: string | null; deckError: string | null }> {
+): Promise<{ deckStatus: DeckStatus; deckPath: string | null; deckError: string | null; deckGeneratedAt: number | null }> {
   const { data, error } = await supabase
     .from('cc_sessions')
-    .select('deck_status, deck_path, deck_error')
+    .select('deck_status, deck_path, deck_error, deck_generated_at')
     .eq('id', sessionId)
     .single()
   if (error) throw error
-  return { deckStatus: data.deck_status, deckPath: data.deck_path, deckError: data.deck_error }
+  return {
+    deckStatus: data.deck_status,
+    deckPath: data.deck_path,
+    deckError: data.deck_error,
+    deckGeneratedAt: data.deck_generated_at ? new Date(data.deck_generated_at).getTime() : null,
+  }
 }
 
 // A Blob URL (rather than a signed URL) so the browser treats it as same-origin

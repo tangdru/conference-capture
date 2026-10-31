@@ -131,7 +131,8 @@ export function Timeline({
         <div className="timeline-empty">
           <p className="timeline-empty__line1">Tap below to add your first note.</p>
           <p className="timeline-empty__line2">Tap 📷 to photograph a slide.</p>
-          <p className="timeline-empty__line2">Audio is recording.</p>
+          {/* liveTranscript is only non-null while recording. */}
+          {liveTranscript !== null && <p className="timeline-empty__line2">Audio is recording.</p>}
         </div>
       )}
 

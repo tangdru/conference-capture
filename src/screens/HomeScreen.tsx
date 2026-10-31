@@ -46,10 +46,10 @@ export function HomeScreen({
     return () => window.clearInterval(id)
   }, [])
 
-  const active = sessions.find((s) => isSessionActive(s, now))
-  const others = sessions
-    .filter((s) => s.id !== active?.id)
-    .sort((a, b) => b.startedAt - a.startedAt)
+  // Every live session on top, then the past ones -- each group newest first.
+  const newestFirst = [...sessions].sort((a, b) => b.startedAt - a.startedAt)
+  const live = newestFirst.filter((s) => isSessionActive(s, now))
+  const past = newestFirst.filter((s) => !isSessionActive(s, now))
 
   function deckActions(session: Session): SwipeAction[] {
     switch (session.deckStatus) {
@@ -119,15 +119,15 @@ export function HomeScreen({
 
       <div className="home-scroll">
         <div className="home-list">
-          {active && renderCard(active)}
+          {live.map(renderCard)}
 
-          {others.length === 0 && !active && (
+          {sessions.length === 0 && (
             <p className="home-empty">
               No sessions yet. Tap "New Session" to start capturing your first talk.
             </p>
           )}
 
-          {others.map(renderCard)}
+          {past.map(renderCard)}
         </div>
       </div>
 

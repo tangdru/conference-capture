@@ -5,7 +5,6 @@ import { NativeCamera, type FlashMode } from '../native/nativeCamera'
 import './CameraViewfinder.css'
 
 interface CameraViewfinderProps {
-  sessionTimer: string
   onCapture: (blob: Blob) => void
   onClose: () => void
 }
@@ -17,7 +16,7 @@ const MAX_THUMBS = 3
 // a getUserMedia <video> fills the stage instead.
 const NATIVE = Capacitor.isNativePlatform()
 
-export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraViewfinderProps) {
+export function CameraViewfinder({ onCapture, onClose }: CameraViewfinderProps) {
   const stageRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -46,9 +45,14 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
       revealFallback.current = window.setTimeout(() => setReady(true), 1500)
     }
   }
-  // Held sideways (native only) -- moves the close button to the shutter's
-  // left, where a thumb on that side of a landscape phone can reach it.
-  const [sideways, setSideways] = useState(false)
+  // How the phone is held (native only), as DeviceTilt's turn for a photo.
+  // Sideways moves the close button to the shutter's left, where a thumb on
+  // that side of a landscape phone can reach it, and turns the icons upright.
+  const [tilt, setTilt] = useState(0)
+  const sideways = tilt === 90 || tilt === 270
+  // The icons turn opposite to the phone; the short way round, so going from
+  // portrait to "270" doesn't spin them three quarters of a turn.
+  const iconTurn = tilt === 90 ? -90 : tilt === 270 ? 90 : tilt
   const touchStartY = useRef<number | null>(null)
 
   // Zoom in the Camera app's units (1 = main lens). `lenses` are the buttons
@@ -179,7 +183,7 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
     void DeviceTilt.startWatching().catch(() => {})
     const tiltPoll = window.setInterval(() => {
       DeviceTilt.getRotation()
-        .then(({ degrees }) => setSideways(degrees === 90 || degrees === 270))
+        .then(({ degrees }) => setTilt(degrees))
         .catch(() => {})
     }, 300)
     return () => {
@@ -276,9 +280,9 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      style={{ '--vf-icon-turn': `${iconTurn}deg` } as React.CSSProperties}
     >
       <div className="viewfinder__top-bar">
-        <span className="mono-timestamp">Session · {sessionTimer}</span>
         {flashModes.length > 0 && (
           <button
             className={`viewfinder__flash viewfinder__flash--${flash}`}

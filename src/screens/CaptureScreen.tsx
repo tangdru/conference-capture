@@ -433,7 +433,6 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
 
       {cameraOpen && (
         <CameraViewfinder
-          sessionTimer={formatElapsed(elapsedMs)}
           onCapture={commitPhoto}
           onClose={() => setCameraOpen(false)}
         />

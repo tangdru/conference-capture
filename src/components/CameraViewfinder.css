@@ -18,7 +18,7 @@
   height: var(--vf-top);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: 0 20px;
   padding-top: env(safe-area-inset-top);
 }
@@ -59,7 +59,9 @@ html.native-camera .capture-screen > :not(.viewfinder) {
   background: transparent;
 }
 
-.viewfinder__stage--native {
+/* Doubled class so it beats the base .viewfinder__stage background, which
+   comes later in this file -- otherwise it paints over the native preview. */
+.viewfinder__stage.viewfinder__stage--native {
   background: transparent;
   box-shadow: 0 0 0 100vmax var(--bg-base);
 }
@@ -79,9 +81,9 @@ html.native-camera .capture-screen > :not(.viewfinder) {
   top: var(--vf-top);
   left: 0;
   width: 100%;
-  aspect-ratio: 3 / 4;
-  /* Short or landscape screens: leave room for the shutter below. */
-  max-height: calc(100dvh - var(--vf-top) - 216px);
+  /* 3:4 at full width; on short or landscape screens, shorter (never
+     narrower) to leave room for the shutter below. */
+  height: min(calc(100vw * 4 / 3), calc(100dvh - var(--vf-top) - 216px));
   background: #000;
   overflow: hidden;
   display: flex;
@@ -339,4 +341,14 @@ html.native-camera .capture-screen > :not(.viewfinder) {
 
 .viewfinder__shutter:active {
   transform: scale(0.94);
+}
+
+/* Held sideways, the controls turn to face the viewer like the Camera
+   app's (the screen itself stays portrait). */
+.viewfinder__flash svg,
+.viewfinder__lens,
+.viewfinder__thumb,
+.viewfinder__dismiss {
+  transform: rotate(var(--vf-icon-turn, 0deg));
+  transition: transform var(--duration-slow) var(--easing-base);
 }

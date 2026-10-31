@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Session } from '../types'
 import { isSessionActive } from '../sessionActivity'
 import { hasContentSinceDeck } from '../deck'
+import { usePullToRefresh } from '../hooks/usePullToRefresh'
 import { SessionCard } from '../components/SessionCard'
 import {
   SwipeActions,
@@ -22,6 +23,8 @@ interface HomeScreenProps {
   onViewDeck: (id: string) => void
   onShareDeck: (id: string) => void
   onDeleteSession: (id: string) => void
+  /** Reloads the list -- run by pulling it down past the top. */
+  onRefresh: () => Promise<void>
   error: string | null
   onDismissError: () => void
 }
@@ -35,11 +38,15 @@ export function HomeScreen({
   onViewDeck,
   onShareDeck,
   onDeleteSession,
+  onRefresh,
   error,
   onDismissError,
 }: HomeScreenProps) {
   const [now, setNow] = useState(Date.now())
   const [revealedId, setRevealedId] = useState<string | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const { progress, refreshing } = usePullToRefresh(scrollRef, listRef, onRefresh)
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000)
@@ -117,8 +124,32 @@ export function HomeScreen({
         </div>
       )}
 
-      <div className="home-scroll">
-        <div className="home-list">
+      <div className="home-scroll" ref={scrollRef}>
+        <div className="home-list" ref={listRef}>
+          {/* Sits just above the list and is revealed as it's pulled down. */}
+          <div
+            className={`home-refresh${progress >= 1 ? ' home-refresh--armed' : ''}${refreshing ? ' home-refresh--spinning' : ''}`}
+            style={{ opacity: refreshing ? 1 : Math.min(progress, 1) }}
+            role={refreshing ? 'status' : undefined}
+            aria-label={refreshing ? 'Refreshing' : undefined}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="22"
+              height="22"
+              fill="none"
+              aria-hidden="true"
+              style={refreshing ? undefined : { transform: `rotate(${Math.min(progress, 1.2) * 300}deg)` }}
+            >
+              <path
+                d="M20 12a8 8 0 1 1-2.34-5.66"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <path d="M20 4v4.5h-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
           {live.map(renderCard)}
 
           {sessions.length === 0 && (

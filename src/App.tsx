@@ -79,6 +79,14 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     }
   }, [generatingIds])
 
+  async function refreshSessions() {
+    try {
+      setSessions(await db.fetchSessions(userId))
+    } catch (err) {
+      setHomeError(err instanceof Error ? err.message : 'Failed to refresh')
+    }
+  }
+
   function updateSessionLocally(id: string, updater: (session: Session) => Session) {
     setSessions((prev) => (prev ? prev.map((s) => (s.id === id ? updater(s) : s)) : prev))
   }
@@ -223,6 +231,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       onViewDeck={viewDeck}
       onShareDeck={shareDeck}
       onDeleteSession={deleteSession}
+      onRefresh={refreshSessions}
       error={homeError}
       onDismissError={() => setHomeError(null)}
     />

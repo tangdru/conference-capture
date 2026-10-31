@@ -77,13 +77,13 @@
 
 .session-card__stat {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 4px;
 }
 
-/* Bottom on the baseline, as tall as the capitals (9px at 13px text). */
+/* Same icons and size as the live session's header stats. */
 .session-card__stat svg {
-  align-self: baseline;
+  align-self: center;
   flex-shrink: 0;
 }
 

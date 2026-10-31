@@ -114,7 +114,7 @@ function DeckStatus({ session, onView }: { session: Session; onView: () => void 
               }
             }}
           >
-            View <ViewIcon size={16} /> →
+            View <ViewIcon size={16} />
           </span>
         </p>
       )

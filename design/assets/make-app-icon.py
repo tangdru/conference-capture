@@ -15,8 +15,8 @@ K = 4  # supersampling for smooth edges
 PAD_X = 158  # gap left and right of the rings; top/bottom follows from their shape
 # Ring thickness at 1024px, drawn inward from each ring's outer edge so the
 # padding doesn't change with it.
-TEAL_STROKE = 12
-MAGENTA_STROKE = 23
+TEAL_STROKE = 10
+MAGENTA_STROKE = 26
 
 BG = (15, 15, 13)
 TEAL = (0, 240, 224)

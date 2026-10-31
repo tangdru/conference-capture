@@ -9,7 +9,6 @@ import {
   GenerateIcon,
   ViewIcon,
   ShareIcon,
-  RegenerateIcon,
 } from '../components/SwipeActions'
 import './HomeScreen.css'
 
@@ -67,7 +66,7 @@ export function HomeScreen({
           { icon: <ShareIcon />, label: 'Share presentation', onClick: () => onShareDeck(session.id) },
           // Regenerating only makes sense once there's something new to add.
           ...(hasContentSinceDeck(session)
-            ? [{ icon: <RegenerateIcon />, label: 'Regenerate presentation', onClick: () => onGenerateDeck(session.id) }]
+            ? [{ icon: <GenerateIcon />, label: 'Regenerate presentation', onClick: () => onGenerateDeck(session.id) }]
             : []),
         ]
       case 'generating':

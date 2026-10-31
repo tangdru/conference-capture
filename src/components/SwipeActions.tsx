@@ -284,14 +284,3 @@ export function GripIcon() {
     </svg>
   )
 }
-
-export function RegenerateIcon() {
-  return (
-    <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
-      <path d="M5.21,17.5 A9,9 0 0,1 17.5,5.21" fill="none" stroke="var(--accent)" strokeWidth="3" />
-      <path d="M21,7.2 L16.3,7.4 L18.8,3 Z" fill="var(--accent)" />
-      <path d="M20.79,8.5 A9,9 0 0,1 8.5,20.79" fill="none" stroke="var(--accent)" strokeWidth="3" />
-      <path d="M5,18.8 L9.7,18.6 L7.2,23 Z" fill="var(--accent)" />
-    </svg>
-  )
-}

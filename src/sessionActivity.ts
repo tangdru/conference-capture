@@ -4,7 +4,7 @@ import type { Session } from './types'
  * its last real activity (a capture, or a status change) before it drops
  * back into the regular list. There's no explicit "end" action -- a session
  * just fades out of the spotlight once nothing's happening. */
-const INACTIVITY_MS = 30 * 60 * 1000
+const INACTIVITY_MS = 20 * 60 * 1000
 
 function lastActivityAt(session: Session): number {
   const itemTimes = session.items.map((i) => i.timestamp)

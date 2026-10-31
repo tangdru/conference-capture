@@ -22,40 +22,9 @@ function elapsedFor(session: Session, now: number): number {
 }
 
 export function SessionCard({ session, now, onTap, onViewDeck, onGenerateDeck }: SessionCardProps) {
-  const notes = session.items.filter((i) => i.type === 'note').length
-  const photos = session.items.filter((i) => i.type === 'photo').length
+  const live = isSessionActive(session, now)
 
-  if (isSessionActive(session, now)) {
-    const elapsed = formatElapsed(elapsedFor(session, now))
-    return (
-      <button className="session-card session-card--active" onClick={onTap}>
-        <p className="session-card__title">{session.title}</p>
-        <div className="session-card__meta">
-          <span className="session-card__stats">
-            <Stats notes={notes} photos={photos} />
-          </span>
-          {/* Where a past session shows when it happened, a live one shows
-              how long it has been recording. */}
-          <span className="session-card__subtitle session-card__elapsed">
-            {session.status === 'recording' ? (
-              <>
-                <span className="rec-dot rec-dot--live session-card__rec-dot" aria-hidden="true" /> REC {elapsed}
-              </>
-            ) : (
-              <>
-                <span className="rec-dot session-card__rec-dot" aria-hidden="true" /> {elapsed} recorded
-              </>
-            )}
-            {/* On a live card the presentation icon trails the recording time. */}
-            <DeckIcon session={session} onView={onViewDeck} onGenerate={onGenerateDeck} live />
-          </span>
-        </div>
-        <BuildingStatus session={session} />
-      </button>
-    )
-  }
-
-  if (session.status === 'enriching') {
+  if (!live && session.status === 'enriching') {
     return (
       <button className="session-card" onClick={onTap} disabled>
         <p className="session-card__title">Processing…</p>
@@ -66,35 +35,59 @@ export function SessionCard({ session, now, onTap, onViewDeck, onGenerateDeck }:
   }
 
   return (
-    <button className="session-card" onClick={onTap}>
+    <button className={`session-card${live ? ' session-card--active' : ''}`} onClick={onTap}>
       <p className="session-card__title">{session.title}</p>
-      <div className="session-card__meta">
-        <span className="session-card__stats">
-          <DeckIcon session={session} onView={onViewDeck} onGenerate={onGenerateDeck} />
-          <Stats notes={notes} photos={photos} />
-        </span>
-        <span className="session-card__subtitle">{formatSessionSubtitle(session.startedAt)}</span>
-      </div>
+      <StatusLine session={session} now={now} live={live} onView={onViewDeck} onGenerate={onGenerateDeck} />
       <BuildingStatus session={session} />
     </button>
   )
 }
 
-function Stats({ notes, photos }: { notes: number; photos: number }) {
+/** The same line on live and past cards, left to right: recorded time, the
+ * presentation's action icon, note/photo counts, and the start date and
+ * time aligned right (wrapping under the rest on a narrow screen). */
+function StatusLine({
+  session,
+  now,
+  live,
+  onView,
+  onGenerate,
+}: {
+  session: Session
+  now: number
+  live: boolean
+  onView: () => void
+  onGenerate: () => void
+}) {
+  const notes = session.items.filter((i) => i.type === 'note').length
+  const photos = session.items.filter((i) => i.type === 'photo').length
+  const elapsed = formatElapsed(elapsedFor(session, now))
+  const recording = session.status === 'recording'
+
   return (
-    <>
-      <span className="session-card__stat" aria-label={`${notes} notes`}>
-        <NoteIcon /> {notes}
+    <div className="session-card__meta">
+      <span className="session-card__stats">
+        <span className="session-card__elapsed" aria-label={recording ? `Recording, ${elapsed}` : `${elapsed} recorded`}>
+          <span
+            className={`rec-dot session-card__rec-dot${recording ? ' rec-dot--live' : ''}`}
+            aria-hidden="true"
+          />{' '}
+          {recording ? `REC ${elapsed}` : elapsed}
+        </span>
+        <DeckIcon session={session} onView={onView} onGenerate={onGenerate} live={live} />
+        <span className="session-card__stat" aria-label={`${notes} notes`}>
+          <NoteIcon /> {notes}
+        </span>
+        <span className="session-card__stat" aria-label={`${photos} photos`}>
+          <PhotoIcon /> {photos}
+        </span>
       </span>
-      <span className="session-card__stat" aria-label={`${photos} photos`}>
-        <PhotoIcon /> {photos}
-      </span>
-    </>
+      <span className="session-card__subtitle">{formatSessionSubtitle(session.startedAt)}</span>
+    </div>
   )
 }
 
-/** The presentation's state as one tappable icon on the card's status line
- * (leading it on past cards, trailing the recording time on live ones): a
+/** The presentation's state as one tappable icon on the card's status line: a
  * sparkle when one could be made (past sessions only -- a live one is still
  * being captured), the board when it's ready, magenta when it failed.
  * A span, not a nested <button> (the card itself is one); it stops the tap

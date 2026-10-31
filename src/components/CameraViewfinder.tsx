@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { DeviceTilt } from '../native/deviceTilt'
+import { NativeCamera, type FlashMode } from '../native/nativeCamera'
 import './CameraViewfinder.css'
 
 interface CameraViewfinderProps {
@@ -11,15 +12,22 @@ interface CameraViewfinderProps {
 
 const MAX_THUMBS = 3
 
+// In the app, the iPhone's own camera (NativeCameraPlugin.swift) draws the
+// preview behind this page, seen through a transparent stage; in a browser,
+// a getUserMedia <video> fills the stage instead.
+const NATIVE = Capacitor.isNativePlatform()
+
 export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraViewfinderProps) {
+  const stageRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [shots, setShots] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
-  // iOS starts the stream with a few landscape frames, shown letterboxed,
-  // before it settles into the portrait shape that fills the stage -- even
-  // after "playing" fires. Keep the video hidden until its frames match the
-  // stage's orientation, with a fallback so the camera always appears.
+  // Browser only: iOS starts the stream with a few landscape frames, shown
+  // letterboxed, before it settles into the portrait shape that fills the
+  // stage -- even after "playing" fires. Keep the video hidden until its
+  // frames match the stage's orientation, with a fallback so the camera
+  // always appears.
   const [ready, setReady] = useState(false)
   const revealFallback = useRef<number | null>(null)
   useEffect(() => () => {
@@ -43,36 +51,84 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
   const [sideways, setSideways] = useState(false)
   const touchStartY = useRef<number | null>(null)
 
-  // Zoom and the light come from the camera track itself, where the browser
-  // exposes them (WebKit does on recent iOS); the controls only show if so.
+  // Zoom in the Camera app's units (1 = main lens). `lenses` are the buttons
+  // under the preview: the phone's lenses natively; in a browser just one,
+  // which shows the zoom and resets it. Flash natively is the real flash
+  // (off/auto/on); in a browser it's the torch, where the track offers one.
   const trackRef = useRef<MediaStreamTrack | null>(null)
   const [zoomRange, setZoomRange] = useState<{ min: number; max: number } | null>(null)
+  const [lenses, setLenses] = useState<number[]>([])
   const [zoom, setZoom] = useState(1)
-  const [torchAvailable, setTorchAvailable] = useState(false)
-  const [torchOn, setTorchOn] = useState(false)
+  const [flashModes, setFlashModes] = useState<FlashMode[]>([])
+  // Off by default: a flash on a projected slide only adds glare.
+  const [flash, setFlash] = useState<FlashMode>('off')
+  const [focusRing, setFocusRing] = useState<{ x: number; y: number; key: number } | null>(null)
+  const [blink, setBlink] = useState(false)
+  // Starts native in the app; drops to the browser camera if the native one
+  // can't open (other than a denied permission), e.g. in the Simulator.
+  const [useNative, setUseNative] = useState(NATIVE)
   // A pinch in progress: finger spread and zoom when it started. `pinched`
   // stops the gesture's end from also counting as a swipe down to close.
   const pinch = useRef<{ distance: number; zoom: number } | null>(null)
   const pinched = useRef(false)
 
-  function applyZoom(value: number) {
+  function setZoomTo(value: number, animated: boolean) {
     if (!zoomRange) return
     const next = Math.min(zoomRange.max, Math.max(zoomRange.min, value))
     setZoom(next)
-    void trackRef.current
-      ?.applyConstraints({ advanced: [{ zoom: next } as MediaTrackConstraintSet] })
-      .catch(() => {})
+    if (useNative) {
+      void NativeCamera.setZoom({ zoom: next, animated }).catch(() => {})
+    } else {
+      void trackRef.current
+        ?.applyConstraints({ advanced: [{ zoom: next } as MediaTrackConstraintSet] })
+        .catch(() => {})
+    }
   }
 
-  function toggleTorch() {
-    const next = !torchOn
-    setTorchOn(next)
-    void trackRef.current
-      ?.applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] })
-      .catch(() => setTorchOn(!next))
+  function cycleFlash() {
+    const next = flashModes[(flashModes.indexOf(flash) + 1) % flashModes.length]
+    setFlash(next)
+    if (!useNative) {
+      void trackRef.current
+        ?.applyConstraints({ advanced: [{ torch: next === 'on' } as MediaTrackConstraintSet] })
+        .catch(() => setFlash(flash))
+    }
   }
 
+  // Native camera: open it with its preview lined up under the stage, and
+  // make the page see-through there while it runs.
   useEffect(() => {
+    if (!useNative) return
+    let cancelled = false
+    document.documentElement.classList.add('native-camera')
+    const frame = requestAnimationFrame(() => {
+      const rect = stageRef.current?.getBoundingClientRect()
+      if (!rect) return
+      NativeCamera.start({ x: rect.left, y: rect.top, width: rect.width, height: rect.height })
+        .then((info) => {
+          if (cancelled) return void NativeCamera.stop().catch(() => {})
+          setZoomRange({ min: info.minZoom, max: info.maxZoom })
+          setLenses(info.lenses)
+          setZoom(info.zoom)
+          if (info.flash) setFlashModes(['off', 'auto', 'on'])
+        })
+        .catch((err: { code?: string; message?: string }) => {
+          if (cancelled) return
+          if (err.code === 'DENIED') setError(err.message ?? 'Camera access is off')
+          else setUseNative(false)
+        })
+    })
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(frame)
+      document.documentElement.classList.remove('native-camera')
+      void NativeCamera.stop().catch(() => {})
+    }
+  }, [useNative])
+
+  // Browser camera.
+  useEffect(() => {
+    if (useNative) return
     let stream: MediaStream | null = null
     let cancelled = false
 
@@ -102,44 +158,61 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
         const caps = (track?.getCapabilities?.() ?? {}) as { zoom?: { min: number; max: number }; torch?: boolean }
         if (caps.zoom && caps.zoom.max > caps.zoom.min) {
           setZoomRange({ min: caps.zoom.min, max: Math.min(caps.zoom.max, 10) })
+          setLenses([1])
           setZoom(Math.max(1, caps.zoom.min))
         }
-        if (caps.torch) setTorchAvailable(true)
+        if (caps.torch) setFlashModes(['off', 'on'])
       })
       .catch(() => setError('Camera unavailable — check browser permissions.'))
-
-    // The native app's UI is locked to portrait, so the viewfinder never
-    // rotates -- watch the accelerometer instead, to save a landscape photo
-    // when the phone is turned sideways.
-    const native = Capacitor.isNativePlatform()
-    let tiltPoll: number | null = null
-    if (native) {
-      void DeviceTilt.startWatching().catch(() => {})
-      tiltPoll = window.setInterval(() => {
-        DeviceTilt.getRotation()
-          .then(({ degrees }) => setSideways(degrees === 90 || degrees === 270))
-          .catch(() => {})
-      }, 300)
-    }
 
     return () => {
       cancelled = true
       stream?.getTracks().forEach((t) => t.stop())
-      if (tiltPoll) window.clearInterval(tiltPoll)
-      if (native) void DeviceTilt.stopWatching().catch(() => {})
+    }
+  }, [useNative])
+
+  // The native app's UI is locked to portrait, so the viewfinder never
+  // rotates -- watch the accelerometer instead, to save a landscape photo
+  // when the phone is turned sideways.
+  useEffect(() => {
+    if (!NATIVE) return
+    void DeviceTilt.startWatching().catch(() => {})
+    const tiltPoll = window.setInterval(() => {
+      DeviceTilt.getRotation()
+        .then(({ degrees }) => setSideways(degrees === 90 || degrees === 270))
+        .catch(() => {})
+    }, 300)
+    return () => {
+      window.clearInterval(tiltPoll)
+      void DeviceTilt.stopWatching().catch(() => {})
     }
   }, [])
 
+  function addShot(blob: Blob) {
+    if (navigator.vibrate) navigator.vibrate(30)
+    setShots((prev) => [...prev, URL.createObjectURL(blob)])
+    onCapture(blob)
+  }
+
   async function capture() {
+    const degrees = NATIVE ? await DeviceTilt.getRotation().then((r) => r.degrees).catch(() => 0) : 0
+    if (useNative) {
+      setBlink(true)
+      window.setTimeout(() => setBlink(false), 120)
+      try {
+        const { data } = await NativeCamera.capture({ flash, degrees })
+        addShot(await fetch(`data:image/jpeg;base64,${data}`).then((r) => r.blob()))
+      } catch {
+        // A failed shot just doesn't appear in the strip; the camera stays open.
+      }
+      return
+    }
+
     const video = videoRef.current
     const canvas = canvasRef.current
     if (!video || !canvas || video.videoWidth === 0) return
 
-    const degrees = Capacitor.isNativePlatform()
-      ? await DeviceTilt.getRotation().then((r) => r.degrees).catch(() => 0)
-      : 0
     const sideways = degrees === 90 || degrees === 270
-
     const maxWidth = 640
     const scale = Math.min(1, maxWidth / video.videoWidth)
     const width = video.videoWidth * scale
@@ -151,18 +224,17 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
     ctx.translate(canvas.width / 2, canvas.height / 2)
     ctx.rotate((degrees * Math.PI) / 180)
     ctx.drawImage(video, -width / 2, -height / 2, width, height)
-    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    canvas.toBlob((blob) => blob && addShot(blob), 'image/jpeg', 0.82)
+  }
 
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) return
-        if (navigator.vibrate) navigator.vibrate(30)
-        setShots((prev) => [...prev, URL.createObjectURL(blob)])
-        onCapture(blob)
-      },
-      'image/jpeg',
-      0.82,
-    )
+  /** Tap on the preview itself (not a control on it): focus there. */
+  function handleStageClick(e: React.MouseEvent<HTMLDivElement>) {
+    if (!useNative || e.target !== e.currentTarget) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    void NativeCamera.focus({ x: x / rect.width, y: y / rect.height }).catch(() => {})
+    setFocusRing({ x, y, key: Date.now() })
   }
 
   function fingerSpread(touches: React.TouchList) {
@@ -181,7 +253,7 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
 
   function handleTouchMove(e: React.TouchEvent) {
     if (!pinch.current || e.touches.length !== 2) return
-    applyZoom(pinch.current.zoom * (fingerSpread(e.touches) / pinch.current.distance))
+    setZoomTo(pinch.current.zoom * (fingerSpread(e.touches) / pinch.current.distance), false)
   }
 
   function handleTouchEnd(e: React.TouchEvent) {
@@ -194,50 +266,49 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
 
   const visibleThumbs = shots.slice(-MAX_THUMBS)
   const overflow = shots.length - visibleThumbs.length
+  // The lens in use is the longest one at or below the current zoom; its
+  // button shows the exact zoom, like the Camera app.
+  const activeLens = lenses.filter((l) => l <= zoom + 0.05).pop() ?? lenses[0]
 
   return (
     <div
-      className="viewfinder"
+      className={`viewfinder${useNative ? ' viewfinder--native' : ''}`}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
       <div className="viewfinder__top-bar">
         <span className="mono-timestamp">Session · {sessionTimer}</span>
-        {torchAvailable && (
+        {flashModes.length > 0 && (
           <button
-            className={`viewfinder__torch${torchOn ? ' viewfinder__torch--on' : ''}`}
-            onClick={toggleTorch}
-            aria-label={torchOn ? 'Turn light off' : 'Turn light on'}
-            aria-pressed={torchOn}
+            className={`viewfinder__flash viewfinder__flash--${flash}`}
+            onClick={cycleFlash}
+            aria-label={`Flash ${flash}`}
           >
-            <svg viewBox="0 0 16 22" width="14" height="19" aria-hidden="true">
-              <path
-                d="M10 1 2 12.5h5.5L6 21l8-11.5H8.5z"
-                fill={torchOn ? 'currentColor' : 'none'}
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinejoin="round"
-              />
-              {!torchOn && <path d="M1.5 2.5l13 17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />}
-            </svg>
+            <FlashIcon mode={flash} />
           </button>
         )}
       </div>
 
-      <div className="viewfinder__stage">
+      <div
+        ref={stageRef}
+        className={`viewfinder__stage${useNative ? ' viewfinder__stage--native' : ''}`}
+        onClick={handleStageClick}
+      >
         {error ? (
           <p className="viewfinder__error">{error}</p>
         ) : (
-          <video
-            ref={videoRef}
-            className={`viewfinder__video${ready ? ' viewfinder__video--ready' : ''}`}
-            autoPlay
-            playsInline
-            muted
-            onPlaying={revealWhenSettled}
-            onResize={revealWhenSettled}
-          />
+          !useNative && (
+            <video
+              ref={videoRef}
+              className={`viewfinder__video${ready ? ' viewfinder__video--ready' : ''}`}
+              autoPlay
+              playsInline
+              muted
+              onPlaying={revealWhenSettled}
+              onResize={revealWhenSettled}
+            />
+          )
         )}
         <div className="viewfinder__reticle" aria-hidden="true">
           <span className="corner corner--tl" />
@@ -246,10 +317,32 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
           <span className="corner corner--br" />
         </div>
 
-        {zoomRange && (
-          <button className="viewfinder__zoom" onClick={() => applyZoom(1)} aria-label={`Zoom ${zoom.toFixed(1)}×, tap to reset`}>
-            {zoom < 1.05 ? '1' : zoom.toFixed(1)}×
-          </button>
+        {focusRing && (
+          <span
+            key={focusRing.key}
+            className="viewfinder__focus"
+            style={{ left: focusRing.x, top: focusRing.y }}
+            aria-hidden="true"
+          />
+        )}
+        {blink && <span className="viewfinder__blink" aria-hidden="true" />}
+
+        {zoomRange && lenses.length > 0 && (
+          <div className="viewfinder__lenses">
+            {lenses.map((lens) => {
+              const active = lens === activeLens
+              return (
+                <button
+                  key={lens}
+                  className={`viewfinder__lens${active ? ' viewfinder__lens--active' : ''}`}
+                  onClick={() => setZoomTo(lens, true)}
+                  aria-label={active ? `Zoom ${formatZoom(zoom)}×` : `Zoom to ${formatZoom(lens)}×`}
+                >
+                  {active ? `${formatZoom(zoom)}×` : formatZoom(lens)}
+                </button>
+              )
+            })}
+          </div>
         )}
 
         {shots.length > 0 && (
@@ -281,5 +374,32 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
 
       <canvas ref={canvasRef} style={{ display: 'none' }} />
     </div>
+  )
+}
+
+/** ".5", "1", "2", "1.4" -- the Camera app's lens labels. */
+function formatZoom(value: number): string {
+  const rounded = Math.round(value * 10) / 10
+  if (rounded < 1) return `.${Math.round(rounded * 10)}`
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
+}
+
+function FlashIcon({ mode }: { mode: FlashMode }) {
+  return (
+    <svg viewBox="0 0 22 22" width="19" height="19" aria-hidden="true">
+      <path
+        d="M10 1 2 12.5h5.5L6 21l8-11.5H8.5z"
+        fill={mode === 'on' ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      {mode === 'off' && <path d="M1.5 2.5l13 17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />}
+      {mode === 'auto' && (
+        <text x="16" y="21" fontSize="8" fontWeight="700" fill="currentColor" fontFamily="system-ui">
+          A
+        </text>
+      )}
+    </svg>
   )
 }

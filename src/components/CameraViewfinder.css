@@ -10,6 +10,8 @@
 
 .viewfinder__top-bar {
   position: absolute;
+  /* Above the native stage's shadow, which paints over earlier siblings. */
+  z-index: 1;
   top: 0;
   left: 0;
   right: 0;
@@ -21,7 +23,7 @@
   padding-top: env(safe-area-inset-top);
 }
 
-.viewfinder__torch {
+.viewfinder__flash {
   width: 44px;
   height: 44px;
   margin-right: -12px;
@@ -34,8 +36,32 @@
   cursor: pointer;
 }
 
-.viewfinder__torch--on {
+.viewfinder__flash--on,
+.viewfinder__flash--auto {
   color: var(--semantic-warning);
+}
+
+/* Native camera: its preview is a native view *behind* the web page, lined
+   up with the stage. Everything else on the page goes clear or hidden, and
+   the stage's huge shadow paints the viewfinder's background around it. */
+html.native-camera,
+html.native-camera body,
+html.native-camera #root,
+html.native-camera .capture-screen {
+  background: transparent;
+}
+
+html.native-camera .capture-screen > :not(.viewfinder) {
+  visibility: hidden;
+}
+
+.viewfinder--native {
+  background: transparent;
+}
+
+.viewfinder__stage--native {
+  background: transparent;
+  box-shadow: 0 0 0 100vmax var(--bg-base);
 }
 
 .viewfinder__dismiss {
@@ -129,22 +155,65 @@
   border-right-width: 2px;
 }
 
-.viewfinder__zoom {
+.viewfinder__lenses {
   position: absolute;
   bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
-  min-width: 38px;
-  height: 38px;
-  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.viewfinder__lens {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 4px;
   border-radius: var(--radius-full);
   border: none;
-  background: rgba(0, 0, 0, 0.55);
-  color: var(--accent);
-  font-size: 13px;
+  background: rgba(0, 0, 0, 0.45);
+  color: var(--text-primary);
+  font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
+}
+
+.viewfinder__lens--active {
+  min-width: 38px;
+  height: 38px;
+  color: var(--accent);
+  font-size: 13px;
+}
+
+/* Where a tap set focus: a square that settles in, then fades. */
+.viewfinder__focus {
+  position: absolute;
+  width: 72px;
+  height: 72px;
+  margin: -36px 0 0 -36px;
+  border: 1.5px solid var(--accent);
+  pointer-events: none;
+  animation: viewfinder-focus 1s var(--easing-out) forwards;
+}
+
+@keyframes viewfinder-focus {
+  0% { transform: scale(1.4); opacity: 1; }
+  25% { transform: scale(1); opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* A brief dip to black when the shutter fires, as in the Camera app. */
+.viewfinder__blink {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0.85;
+  pointer-events: none;
 }
 
 /* Over the top of the preview, where it doesn't crowd the shutter. */

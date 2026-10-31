@@ -19,6 +19,7 @@
 		A1C0FFEE00000000000000A2 /* AmbientTranscriptionPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE00000000000000A1 /* AmbientTranscriptionPlugin.swift */; };
 		A1C0FFEE00000000000000B2 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE00000000000000B1 /* MainViewController.swift */; };
 		A1C0FFEE00000000000000C2 /* DeviceTiltPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE00000000000000C1 /* DeviceTiltPlugin.swift */; };
+		A1C0FFEE00000000000000D2 /* NativeCameraPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE00000000000000D1 /* NativeCameraPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,6 +37,7 @@
 		A1C0FFEE00000000000000A1 /* AmbientTranscriptionPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientTranscriptionPlugin.swift; sourceTree = "<group>"; };
 		A1C0FFEE00000000000000B1 /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
 		A1C0FFEE00000000000000C1 /* DeviceTiltPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTiltPlugin.swift; sourceTree = "<group>"; };
+		A1C0FFEE00000000000000D1 /* NativeCameraPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeCameraPlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -74,6 +76,7 @@
 				A1C0FFEE00000000000000B1 /* MainViewController.swift */,
 				A1C0FFEE00000000000000A1 /* AmbientTranscriptionPlugin.swift */,
 				A1C0FFEE00000000000000C1 /* DeviceTiltPlugin.swift */,
+				A1C0FFEE00000000000000D1 /* NativeCameraPlugin.swift */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -172,6 +175,7 @@
 				A1C0FFEE00000000000000B2 /* MainViewController.swift in Sources */,
 				A1C0FFEE00000000000000A2 /* AmbientTranscriptionPlugin.swift in Sources */,
 				A1C0FFEE00000000000000C2 /* DeviceTiltPlugin.swift in Sources */,
+				A1C0FFEE00000000000000D2 /* NativeCameraPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

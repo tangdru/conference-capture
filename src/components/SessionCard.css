@@ -22,9 +22,8 @@
 
 .session-card__active-row {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
+  align-items: baseline;
+  gap: 12px;
 }
 
 .session-card__active-status {
@@ -72,6 +71,7 @@
 
 .session-card__stats {
   display: flex;
+  align-items: baseline;
   gap: 12px;
 }
 
@@ -91,19 +91,6 @@
   gap: 6px;
 }
 
-.session-card__deck--ready {
-  margin-top: 6px;
-}
-
-/* On the active card it sits where the "Tap to…" hint would be. */
-.session-card--active .session-card__deck--ready {
-  margin-top: 0;
-}
-
-.session-card__deck--error {
-  color: var(--semantic-error);
-}
-
 .session-card__deck-dot {
   width: 6px;
   height: 6px;
@@ -113,18 +100,29 @@
   animation: pulse 2s ease-in-out infinite;
 }
 
-.session-card__deck-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--accent);
-  /* Just a 16px icon, so pad it out to a comfortable tap target (to the
-     right, keeping it aligned with the title) without changing the layout. */
-  padding: 8px 24px 8px 0;
-  margin: -8px -24px -8px 0;
+.session-card__deck-icon {
+  position: relative;
+  /* inline-block, not flex: its line keeps a real text baseline, so the icon
+     sits on it like the stat icons do. */
+  display: inline-block;
   cursor: pointer;
+}
+
+/* A cap-height icon is too small to tap reliably -- extend the tap area
+   invisibly around it without moving anything on the line. */
+.session-card__deck-icon::after {
+  content: '';
+  position: absolute;
+  inset: -12px -8px;
+}
+
+.session-card__deck-icon--generate,
+.session-card__deck-icon--ready {
+  color: var(--accent);
+}
+
+.session-card__deck-icon--error {
+  color: var(--recording-dot);
 }
 
 .session-card__meta .session-card__subtitle {

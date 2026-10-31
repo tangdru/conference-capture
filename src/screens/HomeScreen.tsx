@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Session } from '../types'
 import { isSessionActive } from '../sessionActivity'
+import { hasContentSinceDeck } from '../deck'
 import { SessionCard } from '../components/SessionCard'
 import {
   SwipeActions,
@@ -23,14 +24,6 @@ interface HomeScreenProps {
   onDeleteSession: (id: string) => void
   error: string | null
   onDismissError: () => void
-}
-
-/** Whether anything was captured (notes, photos, transcript, enrichment)
- * after the session's presentation was last generated. */
-function hasContentSinceDeck(session: Session): boolean {
-  const generatedAt = session.deckGeneratedAt
-  if (generatedAt === null) return true
-  return session.items.some((item) => item.timestamp > generatedAt)
 }
 
 export function HomeScreen({
@@ -101,6 +94,7 @@ export function HomeScreen({
           now={now}
           onTap={() => onOpenSession(session.id)}
           onViewDeck={() => onViewDeck(session.id)}
+          onGenerateDeck={() => onGenerateDeck(session.id)}
         />
       </SwipeActions>
     )

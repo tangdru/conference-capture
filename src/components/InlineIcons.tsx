@@ -56,3 +56,45 @@ export function CheckIcon() {
     </svg>
   )
 }
+
+/** Generate a presentation (the swipe row's sparkle, cropped). */
+export function SparkleIcon() {
+  return (
+    <svg className="inline-icon" viewBox="2 2 22 22" aria-hidden="true">
+      <path d="M13,2 C14,9 17,12 24,13 C17,14 14,17 13,24 C12,17 9,14 2,13 C9,12 12,9 13,2 Z" fill="currentColor" />
+      <path
+        d="M6,17 C6.6,19 7.4,19.4 9,20 C7.4,20.6 6.6,21.4 6,23 C5.4,21.4 4.6,20.6 3,20 C4.6,19.4 5.4,19 6,17 Z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
+
+/** A ready presentation (the swipe row's board on a stand, cropped). */
+export function PresentationIcon() {
+  return (
+    <svg className="inline-icon" viewBox="1.5 3 23 21.5" fill="none" aria-hidden="true">
+      <path d="M2.5 4h21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <rect x="4" y="4" width="18" height="12.5" rx="1" stroke="currentColor" strokeWidth="2" />
+      <path
+        d="M13 16.5V20M13 20l-4 3.5M13 20l4 3.5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M9 13v-2.5M13 13V8.5M17 13v-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/** Something failed: an exclamation mark in a circle. */
+export function ErrorIcon() {
+  return (
+    <svg className="inline-icon" viewBox="1 1 22 22" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+      <path d="M12 7v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="12" cy="16.5" r="1.2" fill="currentColor" />
+    </svg>
+  )
+}

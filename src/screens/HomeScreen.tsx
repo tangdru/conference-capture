@@ -8,7 +8,7 @@ import {
   DeleteIcon,
   GenerateIcon,
   ViewIcon,
-  DownloadIcon,
+  ShareIcon,
   RegenerateIcon,
 } from '../components/SwipeActions'
 import './HomeScreen.css'
@@ -20,10 +20,18 @@ interface HomeScreenProps {
   onSignOut: () => void
   onGenerateDeck: (id: string) => void
   onViewDeck: (id: string) => void
-  onDownloadDeck: (id: string) => void
+  onShareDeck: (id: string) => void
   onDeleteSession: (id: string) => void
   error: string | null
   onDismissError: () => void
+}
+
+/** Whether anything was captured (notes, photos, transcript, enrichment)
+ * after the session's presentation was last generated. */
+function hasContentSinceDeck(session: Session): boolean {
+  const generatedAt = session.deckGeneratedAt
+  if (generatedAt === null) return true
+  return session.items.some((item) => item.timestamp > generatedAt)
 }
 
 export function HomeScreen({
@@ -33,7 +41,7 @@ export function HomeScreen({
   onSignOut,
   onGenerateDeck,
   onViewDeck,
-  onDownloadDeck,
+  onShareDeck,
   onDeleteSession,
   error,
   onDismissError,
@@ -56,8 +64,11 @@ export function HomeScreen({
       case 'ready':
         return [
           { icon: <ViewIcon />, label: 'View presentation', onClick: () => onViewDeck(session.id) },
-          { icon: <DownloadIcon />, label: 'Download presentation', onClick: () => onDownloadDeck(session.id) },
-          { icon: <RegenerateIcon />, label: 'Regenerate presentation', onClick: () => onGenerateDeck(session.id) },
+          { icon: <ShareIcon />, label: 'Share presentation', onClick: () => onShareDeck(session.id) },
+          // Regenerating only makes sense once there's something new to add.
+          ...(hasContentSinceDeck(session)
+            ? [{ icon: <RegenerateIcon />, label: 'Regenerate presentation', onClick: () => onGenerateDeck(session.id) }]
+            : []),
         ]
       case 'generating':
         return []

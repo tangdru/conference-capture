@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
+import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
+import { Share } from '@capacitor/share'
 import type { Session as AuthSession } from '@supabase/supabase-js'
 import type { Session } from './types'
 import * as db from './db'
@@ -128,19 +130,43 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     }
   }
 
-  async function downloadDeck(id: string) {
+  async function shareDeck(id: string) {
     const session = sessions?.find((s) => s.id === id)
     if (!session?.deckPath) return
+    const fileName = `${session.title.replace(/[^\w\- ]+/g, '').trim() || 'presentation'}.html`
     try {
-      const url = await db.resolveDeckUrl(session.deckPath)
+      const html = await db.fetchDeckHtml(session.deckPath)
+      // The native app hands the page to the iOS share sheet as a file, from
+      // which it can be saved to Files, AirDropped, mailed, etc.
+      if (Capacitor.isNativePlatform()) {
+        const { uri } = await Filesystem.writeFile({
+          path: fileName,
+          data: html,
+          directory: Directory.Cache,
+          encoding: Encoding.UTF8,
+        })
+        await Share.share({ title: session.title, files: [uri] })
+        return
+      }
+      const file = new File([html], fileName, { type: 'text/html' })
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ title: session.title, files: [file] })
+        return
+      }
+      // No share sheet (most desktop browsers) -- download it instead.
+      const url = URL.createObjectURL(file)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${session.title.replace(/[^\w\- ]+/g, '').trim() || 'presentation'}.html`
+      a.download = fileName
       document.body.appendChild(a)
       a.click()
       a.remove()
+      URL.revokeObjectURL(url)
     } catch (err) {
-      setHomeError(err instanceof Error ? err.message : 'Failed to download presentation')
+      // Closing the share sheet without picking anything isn't an error.
+      const message = err instanceof Error ? err.message : ''
+      if (/cancel|abort/i.test(message) || (err as { name?: string })?.name === 'AbortError') return
+      setHomeError(message || 'Failed to share presentation')
     }
   }
 
@@ -195,7 +221,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       onSignOut={() => supabase.auth.signOut()}
       onGenerateDeck={generateDeckForSession}
       onViewDeck={viewDeck}
-      onDownloadDeck={downloadDeck}
+      onShareDeck={shareDeck}
       onDeleteSession={deleteSession}
       error={homeError}
       onDismissError={() => setHomeError(null)}

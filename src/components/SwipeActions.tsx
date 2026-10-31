@@ -223,11 +223,22 @@ export function ViewIcon() {
   )
 }
 
-export function DownloadIcon() {
+/** iOS-style share: an arrow rising out of an open box. */
+export function ShareIcon() {
   return (
-    <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
-      <path d="M10 3h6v10h5L13 22L3 13h5z" fill="var(--accent)" />
-      <rect x="5" y="23.5" width="16" height="2.5" rx="1" fill="var(--accent)" />
+    <svg
+      viewBox="0 0 26 26"
+      width="18"
+      height="18"
+      aria-hidden="true"
+      fill="none"
+      stroke="var(--accent)"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M13 3v13M8.5 7.5L13 3l4.5 4.5" />
+      <path d="M9 11H6.5a1.5 1.5 0 0 0-1.5 1.5v10A1.5 1.5 0 0 0 6.5 24h13a1.5 1.5 0 0 0 1.5-1.5v-10a1.5 1.5 0 0 0-1.5-1.5H17" />
     </svg>
   )
 }

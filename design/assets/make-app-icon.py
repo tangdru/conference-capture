@@ -13,7 +13,10 @@ from PIL import Image, ImageDraw
 N = 1024
 K = 4  # supersampling for smooth edges
 PAD_X = 158  # gap left and right of the rings; top/bottom follows from their shape
-STROKE = 18  # ring thickness at 1024px
+# Ring thickness at 1024px, drawn inward from each ring's outer edge so the
+# padding doesn't change with it.
+TEAL_STROKE = 16
+MAGENTA_STROKE = 22
 
 BG = (15, 15, 13)
 TEAL = (0, 240, 224)
@@ -43,8 +46,8 @@ def place(box):
 
 img = Image.new('RGB', (N * K, N * K), BG)
 draw = ImageDraw.Draw(img)
-draw.ellipse(place(teal), outline=TEAL, width=STROKE * K)
-draw.ellipse(place(magenta), outline=MAGENTA, width=STROKE * K)
+draw.ellipse(place(teal), outline=TEAL, width=TEAL_STROKE * K)
+draw.ellipse(place(magenta), outline=MAGENTA, width=MAGENTA_STROKE * K)
 img = img.resize((N, N), Image.LANCZOS)
 
 root = Path(__file__).resolve().parents[2]

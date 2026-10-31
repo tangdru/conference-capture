@@ -125,9 +125,10 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--accent);
-  /* A comfortable tap target without changing the line's layout. */
-  padding: 8px 0;
-  margin: -8px 0;
+  /* Just a 16px icon, so pad it out to a comfortable tap target (to the
+     right, keeping it aligned with the title) without changing the layout. */
+  padding: 8px 24px 8px 0;
+  margin: -8px -24px -8px 0;
   cursor: pointer;
 }
 

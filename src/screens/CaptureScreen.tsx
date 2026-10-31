@@ -49,6 +49,7 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
   // disabled, which raced the edge function into running twice and
   // doubling up enrichment content.
   const enhancingRef = useRef(false)
+  const savingNoteRef = useRef(false)
 
   useEffect(() => {
     if (session.status !== 'recording') return
@@ -77,6 +78,11 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
   )
 
   async function commitNewNote(text: string) {
+    // The editor stays mounted until the save returns, so a blur (keyboard
+    // dismissing, a tap elsewhere) after the checkmark would commit again and
+    // add the note twice. One save at a time.
+    if (savingNoteRef.current) return
+    savingNoteRef.current = true
     // Stay open on failure instead of clearing immediately -- losing the
     // save on bad wifi shouldn't also lose what was typed. The editor
     // keeps its text and the user can tap away again to retry.
@@ -86,6 +92,8 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
       setActiveId(null)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save note -- tap away again to retry')
+    } finally {
+      savingNoteRef.current = false
     }
   }
 

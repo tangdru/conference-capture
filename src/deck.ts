@@ -7,12 +7,3 @@ export function hasContentSinceDeck(session: Session): boolean {
   if (generatedAt === null) return true
   return session.items.some((item) => item.timestamp > generatedAt)
 }
-
-/** Whether a presentation has never been made but could be -- the session
- * has notes, photos or transcript to build it from. */
-export function isReadyToGenerate(session: Session): boolean {
-  return (
-    session.deckStatus === 'none' &&
-    session.items.some((item) => item.type === 'note' || item.type === 'photo' || item.type === 'transcript')
-  )
-}

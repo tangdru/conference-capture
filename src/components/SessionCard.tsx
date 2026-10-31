@@ -2,8 +2,7 @@ import type { ReactNode } from 'react'
 import type { Session } from '../types'
 import { formatElapsed, formatSessionSubtitle } from '../format'
 import { isSessionActive } from '../sessionActivity'
-import { ErrorIcon, NoteIcon, PhotoIcon, PresentationIcon, SparkleIcon } from './InlineIcons'
-import { isReadyToGenerate } from '../deck'
+import { ErrorIcon, NoteIcon, PhotoIcon, PresentationIcon } from './InlineIcons'
 import './SessionCard.css'
 
 interface SessionCardProps {
@@ -77,7 +76,7 @@ function StatusLine({
             {recording ? `REC ${elapsed}` : `${elapsed} recorded`}
           </span>
         )}
-        <DeckIcon session={session} onView={onView} onGenerate={onGenerate} live={live} />
+        <DeckIcon session={session} onView={onView} onGenerate={onGenerate} />
         <span className="session-card__stat" aria-label={`${notes} notes`}>
           <NoteIcon /> {notes}
         </span>
@@ -90,21 +89,19 @@ function StatusLine({
   )
 }
 
-/** The presentation's state as one tappable icon on the card's status line: a
- * sparkle when one could be made (past sessions only -- a live one is still
- * being captured), the board when it's ready, magenta when it failed.
+/** The presentation's state as one tappable icon on the card's status line:
+ * the board when it's ready, magenta when it failed, nothing otherwise
+ * (generating starts from the swipe row's sparkle).
  * A span, not a nested <button> (the card itself is one); it stops the tap
  * from also opening the session. */
 function DeckIcon({
   session,
   onView,
   onGenerate,
-  live = false,
 }: {
   session: Session
   onView: () => void
   onGenerate: () => void
-  live?: boolean
 }) {
   let icon: ReactNode
   let label: string
@@ -120,11 +117,6 @@ function DeckIcon({
     label = `Presentation failed${session.deckError ? `: ${session.deckError}` : ''}. Try again`
     action = onGenerate
     modifier = 'error'
-  } else if (!live && isReadyToGenerate(session)) {
-    icon = <SparkleIcon />
-    label = 'Generate presentation'
-    action = onGenerate
-    modifier = 'generate'
   } else {
     return null
   }

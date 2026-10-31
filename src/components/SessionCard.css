@@ -98,7 +98,6 @@
   inset: -12px -8px;
 }
 
-.session-card__deck-icon--generate,
 .session-card__deck-icon--ready {
   color: var(--accent);
 }

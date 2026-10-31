@@ -18,7 +18,7 @@
   height: var(--vf-top);
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   padding: 0 20px;
   padding-top: env(safe-area-inset-top);
 }
@@ -26,7 +26,6 @@
 .viewfinder__flash {
   width: 44px;
   height: 44px;
-  margin-right: -12px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -316,18 +315,6 @@ html.native-camera .capture-screen > :not(.viewfinder) {
   grid-row: 1;
 }
 
-/* Right of the shutter held upright, left of it held sideways. */
-.viewfinder__controls .viewfinder__dismiss {
-  grid-column: 3;
-  grid-row: 1;
-  justify-self: start;
-}
-
-.viewfinder__controls--sideways .viewfinder__dismiss {
-  grid-column: 1;
-  justify-self: end;
-}
-
 /* 68pt disc inside an 80pt ring, the Camera app's shutter size. */
 .viewfinder__shutter {
   width: 68px;
@@ -347,8 +334,7 @@ html.native-camera .capture-screen > :not(.viewfinder) {
    app's (the screen itself stays portrait). */
 .viewfinder__flash svg,
 .viewfinder__lens,
-.viewfinder__thumb,
-.viewfinder__dismiss {
+.viewfinder__thumb {
   transform: rotate(var(--vf-icon-turn, 0deg));
   transition: transform var(--duration-slow) var(--easing-base);
 }

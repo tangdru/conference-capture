@@ -46,14 +46,12 @@ export function CameraViewfinder({ onCapture, onClose }: CameraViewfinderProps) 
     }
   }
   // How the phone is held (native only), as DeviceTilt's turn for a photo.
-  // Sideways moves the close button to the shutter's left, where a thumb on
-  // that side of a landscape phone can reach it, and turns the icons upright.
+  // Sideways turns the icons upright and swipe-to-close with them.
   const [tilt, setTilt] = useState(0)
-  const sideways = tilt === 90 || tilt === 270
   // The icons turn opposite to the phone; the short way round, so going from
   // portrait to "270" doesn't spin them three quarters of a turn.
   const iconTurn = tilt === 90 ? -90 : tilt === 270 ? 90 : tilt
-  const touchStartY = useRef<number | null>(null)
+  const touchStart = useRef<{ x: number; y: number } | null>(null)
 
   // Zoom in the Camera app's units (1 = main lens). `lenses` are the buttons
   // under the preview: the phone's lenses natively; in a browser just one,
@@ -247,7 +245,7 @@ export function CameraViewfinder({ onCapture, onClose }: CameraViewfinderProps) 
 
   function handleTouchStart(e: React.TouchEvent) {
     if (e.touches.length === 1) {
-      touchStartY.current = e.touches[0].clientY
+      touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
       pinched.current = false
     } else if (e.touches.length === 2 && zoomRange) {
       pinch.current = { distance: fingerSpread(e.touches), zoom }
@@ -262,10 +260,14 @@ export function CameraViewfinder({ onCapture, onClose }: CameraViewfinderProps) 
 
   function handleTouchEnd(e: React.TouchEvent) {
     if (e.touches.length < 2) pinch.current = null
-    if (e.touches.length > 0 || touchStartY.current === null) return
-    const delta = e.changedTouches[0].clientY - touchStartY.current
-    touchStartY.current = null
-    if (delta > 80 && !pinched.current) onClose()
+    if (e.touches.length > 0 || touchStart.current === null) return
+    const dx = e.changedTouches[0].clientX - touchStart.current.x
+    const dy = e.changedTouches[0].clientY - touchStart.current.y
+    touchStart.current = null
+    // "Down" as the viewer holds the phone: sideways, that's across the
+    // portrait screen -- toward its left edge when the top is turned left.
+    const down = tilt === 90 ? dx : tilt === 270 ? -dx : tilt === 180 ? -dy : dy
+    if (down > 80 && !pinched.current) onClose()
   }
 
   const visibleThumbs = shots.slice(-MAX_THUMBS)
@@ -368,11 +370,8 @@ export function CameraViewfinder({ onCapture, onClose }: CameraViewfinderProps) 
           Swipe down to return to notes
           {shots.length > 0 && <span className="viewfinder__chevron"> ↓</span>}
         </span>
-        <div className={`viewfinder__controls${sideways ? ' viewfinder__controls--sideways' : ''}`}>
+        <div className="viewfinder__controls">
           <button className="viewfinder__shutter" onClick={capture} aria-label="Capture photo" />
-          <button className="viewfinder__dismiss" onClick={onClose} aria-label="Stop camera, return to notes">
-            ✕
-          </button>
         </div>
       </div>
 

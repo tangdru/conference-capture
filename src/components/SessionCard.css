@@ -39,7 +39,8 @@
   color: var(--text-muted);
 }
 
-/* Recorded time, action icon and counts on the left, start time on the right. */
+/* Recording time (live), action icon and counts on the left; start time on
+   the right (past). */
 .session-card__meta {
   display: flex;
   flex-wrap: wrap;

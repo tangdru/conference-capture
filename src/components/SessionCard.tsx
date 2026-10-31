@@ -43,9 +43,10 @@ export function SessionCard({ session, now, onTap, onViewDeck, onGenerateDeck }:
   )
 }
 
-/** The same line on live and past cards, left to right: recorded time, the
- * presentation's action icon, note/photo counts, and the start date and
- * time aligned right (wrapping under the rest on a narrow screen). */
+/** The status line, in one order on every card -- left to right, whichever
+ * apply: the recording time (live sessions), the presentation's action icon,
+ * note/photo counts, and the start date and time aligned right (past
+ * sessions; wraps under the rest on a narrow screen). */
 function StatusLine({
   session,
   now,
@@ -67,13 +68,15 @@ function StatusLine({
   return (
     <div className="session-card__meta">
       <span className="session-card__stats">
-        <span className="session-card__elapsed" aria-label={recording ? `Recording, ${elapsed}` : `${elapsed} recorded`}>
-          <span
-            className={`rec-dot session-card__rec-dot${recording ? ' rec-dot--live' : ''}`}
-            aria-hidden="true"
-          />{' '}
-          {recording ? `REC ${elapsed}` : elapsed}
-        </span>
+        {live && (
+          <span className="session-card__elapsed" aria-label={recording ? `Recording, ${elapsed}` : `${elapsed} recorded`}>
+            <span
+              className={`rec-dot session-card__rec-dot${recording ? ' rec-dot--live' : ''}`}
+              aria-hidden="true"
+            />{' '}
+            {recording ? `REC ${elapsed}` : `${elapsed} recorded`}
+          </span>
+        )}
         <DeckIcon session={session} onView={onView} onGenerate={onGenerate} live={live} />
         <span className="session-card__stat" aria-label={`${notes} notes`}>
           <NoteIcon /> {notes}
@@ -82,7 +85,7 @@ function StatusLine({
           <PhotoIcon /> {photos}
         </span>
       </span>
-      <span className="session-card__subtitle">{formatSessionSubtitle(session.startedAt)}</span>
+      {!live && <span className="session-card__subtitle">{formatSessionSubtitle(session.startedAt)}</span>}
     </div>
   )
 }

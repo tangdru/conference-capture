@@ -70,10 +70,10 @@ export function SessionCard({ session, now, onTap, onViewDeck }: SessionCardProp
       <div className="session-card__meta">
         <span className="session-card__stats">
           <span className="session-card__stat" aria-label={`${notes} notes`}>
-            <NoteIcon /> {notes}
+            <NoteIcon capHeight={9} /> {notes}
           </span>
           <span className="session-card__stat" aria-label={`${photos} photos`}>
-            <PhotoIcon /> {photos}
+            <PhotoIcon capHeight={9} /> {photos}
           </span>
         </span>
         <span className="session-card__subtitle">{formatSessionSubtitle(session.startedAt)}</span>

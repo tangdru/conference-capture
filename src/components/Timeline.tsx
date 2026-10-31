@@ -11,6 +11,7 @@ import { formatClock, formatClipDuration } from '../format'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
 import { useVideoUrl } from '../hooks/useVideoUrl'
 import { SwipeActions, DeleteIcon, ExcludeIcon, IncludeIcon, type DragHandle } from './SwipeActions'
+import { CheckIcon } from './InlineIcons'
 import './Timeline.css'
 
 /** 'new' means composing a brand-new note at the end of the list; a string is an existing item's id being edited; null means nothing is active. */
@@ -31,6 +32,8 @@ interface TimelineProps {
   onReorder: (orderedIds: string[]) => void
   /** While listening: the words heard so far ('' before any). null when not listening. */
   liveTranscript: string | null
+  /** Photos still being straightened and read on-device. */
+  processingPhotoIds?: ReadonlySet<string>
 }
 
 /** Only notes and photos have a drag handle -- a human typing a note may
@@ -60,6 +63,7 @@ export function Timeline({
   onToggleExcluded,
   onReorder,
   liveTranscript,
+  processingPhotoIds,
 }: TimelineProps) {
   const endRef = useRef<HTMLDivElement>(null)
   const userScrolledUp = useRef(false)
@@ -190,7 +194,7 @@ export function Timeline({
                   <NoteRow item={item} onTap={() => onStartEditNote(item.id)} />
                 )
               ) : item.type === 'photo' ? (
-                <PhotoRow item={item} onTap={() => onPhotoTap(item.id)} />
+                <PhotoRow item={item} processing={processingPhotoIds?.has(item.id) ?? false} onTap={() => onPhotoTap(item.id)} />
               ) : item.type === 'video' ? (
                 <VideoRow item={item} onTap={() => onVideoTap(item.id)} />
               ) : item.type === 'transcript' ? (
@@ -366,7 +370,7 @@ function NoteRowEditor({
   )
 }
 
-function PhotoRow({ item, onTap }: { item: PhotoItem; onTap: () => void }) {
+function PhotoRow({ item, processing, onTap }: { item: PhotoItem; processing: boolean; onTap: () => void }) {
   const resolvedUrl = usePhotoUrl(item)
 
   return (
@@ -381,7 +385,22 @@ function PhotoRow({ item, onTap }: { item: PhotoItem; onTap: () => void }) {
         </div>
         <div className="photo-row__body">
           <p className={`photo-row__caption${item.addedLater ? ' photo-row__caption--later' : ''}`}>
-            {item.caption}
+            {processing ? (
+              <>
+                Processing photo
+                <span className="live-ellipsis" aria-hidden="true">
+                  <span>.</span>
+                  <span>.</span>
+                  <span>.</span>
+                </span>
+              </>
+            ) : item.slideText !== undefined ? (
+              <span className="photo-row__processed">
+                <CheckIcon /> Processed
+              </span>
+            ) : (
+              item.caption
+            )}
           </p>
           {item.excluded && <ExcludedBadge />}
         </div>

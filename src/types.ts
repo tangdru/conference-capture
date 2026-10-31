@@ -20,6 +20,8 @@ export interface PhotoItem {
   /** Storage path in the cc-photos bucket — the persisted source of truth. */
   photoPath: string
   caption: string
+  /** Text read off the photo on-device (SlideScanner); '' when there was none. Absent until processed. */
+  slideText?: string
   timestamp: number
   addedLater?: boolean
   excluded?: boolean

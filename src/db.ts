@@ -138,6 +138,7 @@ function itemFromRow(row: ItemRow): TimelineItemData | null {
     type: 'photo',
     photoPath: row.photo_path ?? '',
     caption: row.caption ?? '',
+    slideText: row.text ?? undefined,
     timestamp,
     addedLater: row.added_later,
     excluded,
@@ -312,6 +313,35 @@ export async function addPhoto(sessionId: string, userId: string, blob: Blob): P
     caption,
     timestamp: new Date(data.item_timestamp).getTime(),
     dataUrl: URL.createObjectURL(blob),
+  }
+}
+
+/** After on-device processing: a flattened slide, if one was found, becomes
+ * the photo shown and used for the deck (the original stays in storage, its
+ * path kept in `payload`), and the text read off it goes in `text`. */
+export async function saveProcessedPhoto(
+  item: PhotoItem,
+  sessionId: string,
+  userId: string,
+  result: { flattened?: Blob; text: string },
+): Promise<Pick<PhotoItem, 'photoPath' | 'slideText' | 'dataUrl'>> {
+  const update: Record<string, unknown> = { text: result.text }
+  let photoPath = item.photoPath
+  if (result.flattened) {
+    photoPath = `${userId}/${sessionId}/${crypto.randomUUID()}.jpg`
+    const { error: uploadError } = await supabase.storage
+      .from(PHOTOS_BUCKET)
+      .upload(photoPath, result.flattened, { contentType: 'image/jpeg', upsert: false })
+    if (uploadError) throw uploadError
+    update.photo_path = photoPath
+    update.payload = { originalPhotoPath: item.photoPath }
+  }
+  const { error } = await supabase.from('cc_timeline_items').update(update).eq('id', item.id)
+  if (error) throw error
+  return {
+    photoPath,
+    slideText: result.text,
+    dataUrl: result.flattened ? URL.createObjectURL(result.flattened) : item.dataUrl,
   }
 }
 

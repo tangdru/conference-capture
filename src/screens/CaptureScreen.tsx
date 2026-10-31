@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Session, TimelineItemData, VideoItem } from '../types'
+import { Capacitor } from '@capacitor/core'
+import type { PhotoItem, Session, TimelineItemData, VideoItem } from '../types'
 import { formatElapsed, formatSessionSubtitle, formatDurationCompact } from '../format'
 import { Timeline } from '../components/Timeline'
 import { CheckIcon, NoteIcon, PhotoIcon, WarningIcon } from '../components/InlineIcons'
@@ -9,6 +10,7 @@ import { VideoViewer } from '../components/VideoViewer'
 import { useAmbientTranscription } from '../hooks/useAmbientTranscription'
 import { useWakeLock } from '../hooks/useWakeLock'
 import * as db from '../db'
+import { SlideScanner, blobToBase64 } from '../native/slideScanner'
 import './CaptureScreen.css'
 
 interface CaptureScreenProps {
@@ -44,6 +46,8 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
   // connection doesn't lose the actual capture. Retried on demand and
   // automatically once the browser reports it's back online.
   const [pendingPhotos, setPendingPhotos] = useState<{ id: string; blob: Blob }[]>([])
+  // Photos being straightened and read on-device (native only).
+  const [processingPhotoIds, setProcessingPhotoIds] = useState<ReadonlySet<string>>(new Set())
   // A ref, not just the `enhancing` state, guards re-entrancy -- a rapid
   // double-tap can fire two clicks before React re-renders with the button
   // disabled, which raced the edge function into running twice and
@@ -160,8 +164,35 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
       const item = await db.addPhoto(session.id, userId, blob)
       onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
       setPendingPhotos((p) => p.filter((x) => x.id !== pendingId))
+      if (Capacitor.isNativePlatform()) void processPhoto(item, blob)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save photo -- will retry automatically')
+    }
+  }
+
+  /** Straightens the slide in a just-saved photo and reads its text, on the
+   * phone. The photo is already safe in storage, so a failure here just
+   * leaves it as taken. */
+  async function processPhoto(item: PhotoItem, blob: Blob) {
+    setProcessingPhotoIds((ids) => new Set(ids).add(item.id))
+    try {
+      const result = await SlideScanner.process({ data: await blobToBase64(blob) })
+      const flattened = result.data
+        ? await fetch(`data:image/jpeg;base64,${result.data}`).then((r) => r.blob())
+        : undefined
+      const processed = await db.saveProcessedPhoto(item, session.id, userId, { flattened, text: result.text })
+      onUpdateLocal((s) => ({
+        ...s,
+        items: s.items.map((i) => (i.id === item.id && i.type === 'photo' ? { ...i, ...processed } : i)),
+      }))
+    } catch {
+      // Left unprocessed; it still goes into the deck as taken.
+    } finally {
+      setProcessingPhotoIds((ids) => {
+        const next = new Set(ids)
+        next.delete(item.id)
+        return next
+      })
     }
   }
 
@@ -372,6 +403,7 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
         onToggleExcluded={toggleExcluded}
         onReorder={reorderItems}
         liveTranscript={session.status === 'recording' ? liveText : null}
+        processingPhotoIds={processingPhotoIds}
       />
 
       <div className="capture-actions">

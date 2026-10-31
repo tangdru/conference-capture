@@ -401,3 +401,8 @@
   padding-top: 2px;
   flex-shrink: 0;
 }
+
+/* "✓ Processed" once the slide's been straightened and read on-device. */
+.photo-row__processed .inline-icon {
+  color: var(--accent);
+}

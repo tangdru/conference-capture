@@ -266,13 +266,6 @@ html.native-camera .capture-screen > :not(.viewfinder) {
   color: var(--text-secondary);
 }
 
-.viewfinder__count {
-  margin-left: auto;
-  padding: 2px 8px;
-  border-radius: var(--radius-full);
-  background: rgba(0, 0, 0, 0.55);
-}
-
 .viewfinder__bottom-bar {
   position: absolute;
   left: 0;

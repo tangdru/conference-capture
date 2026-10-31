@@ -360,7 +360,6 @@ export function CameraViewfinder({ onCapture, onClose }: CameraViewfinderProps) 
               </div>
             ))}
             {overflow > 0 && <span className="viewfinder__overflow">+{overflow}</span>}
-            <span className="mono-timestamp viewfinder__count">{shots.length} captured</span>
           </div>
         )}
       </div>

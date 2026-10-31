@@ -30,17 +30,21 @@ export function SessionCard({ session, now, onTap, onViewDeck, onGenerateDeck }:
     return (
       <button className="session-card session-card--active" onClick={onTap}>
         <p className="session-card__title">{session.title}</p>
-        <div className="session-card__active-row">
-          <DeckIcon session={session} onView={onViewDeck} onGenerate={onGenerateDeck} live />
-          <span className="session-card__active-status">
+        <div className="session-card__meta">
+          <span className="session-card__stats">
+            <DeckIcon session={session} onView={onViewDeck} onGenerate={onGenerateDeck} live />
+            <Stats notes={notes} photos={photos} />
+          </span>
+          {/* Where a past session shows when it happened, a live one shows
+              how long it has been recording. */}
+          <span className="session-card__subtitle session-card__elapsed">
             {session.status === 'recording' ? (
               <>
-                <span className="rec-dot rec-dot--live rec-dot--small" aria-hidden="true" /> REC{' '}
-                {elapsed}
+                <span className="rec-dot rec-dot--live session-card__rec-dot" aria-hidden="true" /> REC {elapsed}
               </>
             ) : (
               <>
-                <span className="rec-dot rec-dot--small" aria-hidden="true" /> {elapsed} recorded
+                <span className="rec-dot session-card__rec-dot" aria-hidden="true" /> {elapsed} recorded
               </>
             )}
           </span>
@@ -66,17 +70,25 @@ export function SessionCard({ session, now, onTap, onViewDeck, onGenerateDeck }:
       <div className="session-card__meta">
         <span className="session-card__stats">
           <DeckIcon session={session} onView={onViewDeck} onGenerate={onGenerateDeck} />
-          <span className="session-card__stat" aria-label={`${notes} notes`}>
-            <NoteIcon /> {notes}
-          </span>
-          <span className="session-card__stat" aria-label={`${photos} photos`}>
-            <PhotoIcon /> {photos}
-          </span>
+          <Stats notes={notes} photos={photos} />
         </span>
         <span className="session-card__subtitle">{formatSessionSubtitle(session.startedAt)}</span>
       </div>
       <BuildingStatus session={session} />
     </button>
+  )
+}
+
+function Stats({ notes, photos }: { notes: number; photos: number }) {
+  return (
+    <>
+      <span className="session-card__stat" aria-label={`${notes} notes`}>
+        <NoteIcon /> {notes}
+      </span>
+      <span className="session-card__stat" aria-label={`${photos} photos`}>
+        <PhotoIcon /> {photos}
+      </span>
+    </>
   )
 }
 

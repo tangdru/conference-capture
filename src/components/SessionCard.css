@@ -20,26 +20,6 @@
   border-color: var(--accent-subtle);
 }
 
-.session-card__active-row {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-}
-
-.session-card__active-status {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: var(--text-secondary);
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.rec-dot--small {
-  width: 8px;
-  height: 8px;
-}
-
 .session-card__title {
   margin: 0 0 4px;
   font-size: 17px;
@@ -123,6 +103,22 @@
 
 .session-card__deck-icon--error {
   color: var(--recording-dot);
+}
+
+/* Live sessions' recording time: a cap-height dot on the baseline, and
+   fixed-width digits so the line doesn't jiggle as it ticks. */
+.session-card__elapsed {
+  font-variant-numeric: tabular-nums;
+}
+
+.rec-dot.session-card__rec-dot {
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  width: 1cap;
+  height: 1cap;
+  margin-right: 2px;
+  vertical-align: baseline;
 }
 
 .session-card__meta .session-card__subtitle {

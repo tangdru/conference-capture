@@ -18,6 +18,11 @@ interface CaptureScreenProps {
   onBack: () => void
 }
 
+// The header's Enhance sparkle is hidden for now, even when there's new
+// transcript to enhance. The feature itself is intact -- set this to true
+// to bring the button back.
+const SHOW_ENHANCE_BUTTON = false
+
 function elapsedFor(session: Session, now: number): number {
   const live = session.status === 'recording' && session.liveSpanStartedAt
     ? now - session.liveSpanStartedAt
@@ -306,7 +311,7 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
           </div>
 
           <div className="capture-header__controls">
-            {(canEnhance || enhancing) && (
+            {SHOW_ENHANCE_BUTTON && (canEnhance || enhancing) && (
               <button
                 className="header-btn"
                 onClick={handleEnhance}

@@ -4,7 +4,9 @@ import Speech
 
 /// Native counterpart of src/hooks/useAmbientTranscription.ts: records the
 /// room continuously and transcribes it with Apple's Speech framework instead
-/// of the web build's WASM Whisper worker. Segments are cut at natural pauses
+/// of the web build's WASM Whisper worker. On iOS 26+ it uses the long-form
+/// engine (SpeechAnalyzerTranscriber.swift); the SFSpeechRecognizer code here
+/// is the fallback for older phones or when that engine can't start. Segments are cut at natural pauses
 /// in speech (or after a minute without one), and emitted to JS as `segment`
 /// events with the same shape as the web hook's (text, absolute start time,
 /// duration). While a segment is still being heard, its words so far are sent
@@ -32,6 +34,9 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private let audioEngine = AVAudioEngine()
     private var recognizer: SFSpeechRecognizer?
+    // The iOS 26 engine while it's the one running (a SpeechAnalyzerTranscriber;
+    // typed loosely so this file still builds its fallback for older iOS).
+    private var modern: AnyObject?
     private var segmentTimer: Timer?
     private var running = false
 
@@ -63,14 +68,56 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.reject(error)
                 return
             }
-            DispatchQueue.main.async {
-                do {
-                    try self.beginCapture()
-                    call.resolve()
-                } catch {
-                    self.teardown()
-                    call.reject("Couldn’t start the microphone: \(error.localizedDescription)")
-                }
+            if #available(iOS 26.0, *), SpeechTranscriber.isAvailable {
+                Task { await self.startModern(call) }
+                return
+            }
+            DispatchQueue.main.async { self.startLegacy(call) }
+        }
+    }
+
+    private func startLegacy(_ call: CAPPluginCall) {
+        do {
+            try beginCapture()
+            call.resolve()
+        } catch {
+            teardown()
+            call.reject("Couldn’t start the microphone: \(error.localizedDescription)")
+        }
+    }
+
+    @available(iOS 26.0, *)
+    private func startModern(_ call: CAPPluginCall) async {
+        let engine = SpeechAnalyzerTranscriber()
+        engine.onPartial = { [weak self] text in
+            self?.notifyListeners("partial", data: ["text": text])
+        }
+        engine.onSegment = { [weak self] segment in
+            // Whole milliseconds -- duration_ms is an integer column.
+            self?.notifyListeners("segment", data: [
+                "text": segment.text,
+                "startedAt": Int((segment.startedAt.timeIntervalSince1970 * 1000).rounded()),
+                "durationMs": Int((segment.duration * 1000).rounded()),
+            ])
+        }
+        engine.onError = { [weak self] message in
+            self?.notifyListeners("error", data: ["message": message])
+        }
+        do {
+            try await MainActor.run { try self.activateAudioSession() }
+            try await engine.start()
+            await MainActor.run {
+                self.modern = engine
+                self.running = true
+                self.observeInterruptions()
+            }
+            call.resolve()
+        } catch {
+            // No model for the language, no connection for its first
+            // download, etc. -- the older engine still works.
+            await MainActor.run {
+                engine.stop {}
+                self.startLegacy(call)
             }
         }
     }
@@ -82,6 +129,14 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
             self.running = false
+            if #available(iOS 26.0, *), let engine = self.modern as? SpeechAnalyzerTranscriber {
+                engine.stop {
+                    self.modern = nil
+                    self.teardown()
+                    call.resolve()
+                }
+                return
+            }
             self.segmentTimer?.invalidate()
             self.segmentTimer = nil
             self.audioEngine.inputNode.removeTap(onBus: 0)
@@ -127,9 +182,7 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
         self.recognizer = recognizer
         reportedFailure = false
 
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.record, mode: .measurement, options: [])
-        try session.setActive(true, options: .notifyOthersOnDeactivation)
+        try activateAudioSession()
 
         let input = audioEngine.inputNode
         let format = input.outputFormat(forBus: 0)
@@ -142,15 +195,24 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
         audioEngine.prepare()
         try audioEngine.start()
         running = true
-
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(handleInterruption(_:)),
-            name: AVAudioSession.interruptionNotification, object: session)
+        observeInterruptions()
 
         startSegment()
         segmentTimer = Timer.scheduledTimer(withTimeInterval: Self.boundaryCheckSeconds, repeats: true) { [weak self] _ in
             self?.checkSegmentBoundary()
         }
+    }
+
+    private func activateAudioSession() throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.record, mode: .measurement, options: [])
+        try session.setActive(true, options: .notifyOthersOnDeactivation)
+    }
+
+    private func observeInterruptions() {
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(handleInterruption(_:)),
+            name: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance())
     }
 
     /// Cuts the segment at a pause in speech, or once it hits the max length.
@@ -268,6 +330,23 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
         else { return }
         DispatchQueue.main.async {
             guard self.running else { return }
+            if #available(iOS 26.0, *), let engine = self.modern as? SpeechAnalyzerTranscriber {
+                switch type {
+                case .began:
+                    engine.interruptionBegan()
+                case .ended:
+                    do {
+                        try engine.interruptionEnded()
+                    } catch {
+                        self.notifyListeners("error", data: [
+                            "message": "Recording stopped after an interruption — pause and resume the session to restart it.",
+                        ])
+                    }
+                @unknown default:
+                    break
+                }
+                return
+            }
             switch type {
             case .began:
                 // A phone call etc. took the mic -- close out what we have.

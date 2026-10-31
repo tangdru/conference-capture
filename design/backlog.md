@@ -15,9 +15,6 @@ on the native app is in `native-app-migration.md`.
   first step.
 - **Name sessions from the calendar.** Read the event happening now (EventKit,
   with permission) and use it as the session title instead of "Session".
-- **Apple's long-form speech engine (SpeechAnalyzer, iOS 26).** Built for
-  lectures; likely more accurate and would let us drop the pause-based
-  segmenting workaround in `AmbientTranscriptionPlugin.swift`.
 - **Faster capture.** Action Button / Control Center / Lock Screen control to
   take a slide photo, and App Intents ("Hey Siri, start a session").
 - **Small native polish.** Haptics on shutter and note save; Spotlight

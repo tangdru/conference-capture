@@ -21,6 +21,7 @@
 		A1C0FFEE00000000000000C2 /* DeviceTiltPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE00000000000000C1 /* DeviceTiltPlugin.swift */; };
 		A1C0FFEE00000000000000D2 /* NativeCameraPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE00000000000000D1 /* NativeCameraPlugin.swift */; };
 		A1C0FFEE00000000000000E2 /* SlideScannerPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE00000000000000E1 /* SlideScannerPlugin.swift */; };
+		A1C0FFEE00000000000000F2 /* SpeechAnalyzerTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE00000000000000F1 /* SpeechAnalyzerTranscriber.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -40,6 +41,7 @@
 		A1C0FFEE00000000000000C1 /* DeviceTiltPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTiltPlugin.swift; sourceTree = "<group>"; };
 		A1C0FFEE00000000000000D1 /* NativeCameraPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeCameraPlugin.swift; sourceTree = "<group>"; };
 		A1C0FFEE00000000000000E1 /* SlideScannerPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlideScannerPlugin.swift; sourceTree = "<group>"; };
+		A1C0FFEE00000000000000F1 /* SpeechAnalyzerTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechAnalyzerTranscriber.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -80,6 +82,7 @@
 				A1C0FFEE00000000000000C1 /* DeviceTiltPlugin.swift */,
 				A1C0FFEE00000000000000D1 /* NativeCameraPlugin.swift */,
 				A1C0FFEE00000000000000E1 /* SlideScannerPlugin.swift */,
+				A1C0FFEE00000000000000F1 /* SpeechAnalyzerTranscriber.swift */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -180,6 +183,7 @@
 				A1C0FFEE00000000000000C2 /* DeviceTiltPlugin.swift in Sources */,
 				A1C0FFEE00000000000000D2 /* NativeCameraPlugin.swift in Sources */,
 				A1C0FFEE00000000000000E2 /* SlideScannerPlugin.swift in Sources */,
+				A1C0FFEE00000000000000F2 /* SpeechAnalyzerTranscriber.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

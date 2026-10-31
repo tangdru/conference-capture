@@ -1,7 +1,7 @@
 import type { Session } from '../types'
 import { formatElapsed, formatSessionSubtitle } from '../format'
 import { isSessionActive } from '../sessionActivity'
-import { NoteIcon, PhotoIcon } from './StatIcons'
+import { NoteIcon, PhotoIcon } from './InlineIcons'
 import { ViewIcon } from './SwipeActions'
 import './SessionCard.css'
 
@@ -70,10 +70,10 @@ export function SessionCard({ session, now, onTap, onViewDeck }: SessionCardProp
       <div className="session-card__meta">
         <span className="session-card__stats">
           <span className="session-card__stat" aria-label={`${notes} notes`}>
-            <NoteIcon capHeight={9} /> {notes}
+            <NoteIcon /> {notes}
           </span>
           <span className="session-card__stat" aria-label={`${photos} photos`}>
-            <PhotoIcon capHeight={9} /> {photos}
+            <PhotoIcon /> {photos}
           </span>
         </span>
         <span className="session-card__subtitle">{formatSessionSubtitle(session.startedAt)}</span>

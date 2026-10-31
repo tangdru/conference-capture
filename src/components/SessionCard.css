@@ -81,11 +81,6 @@
   gap: 4px;
 }
 
-/* Bottom on the baseline, as tall as the capitals (9px at 13px text). */
-.session-card__stat svg {
-  align-self: baseline;
-  flex-shrink: 0;
-}
 
 .session-card__deck {
   margin: 10px 0 0;

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Session, TimelineItemData, VideoItem } from '../types'
 import { formatElapsed, formatSessionSubtitle, formatDurationCompact } from '../format'
 import { Timeline } from '../components/Timeline'
-import { NoteIcon, PhotoIcon } from '../components/StatIcons'
+import { CheckIcon, NoteIcon, PhotoIcon, WarningIcon } from '../components/InlineIcons'
 import { CameraViewfinder } from '../components/CameraViewfinder'
 import { PhotoViewer } from '../components/PhotoViewer'
 import { VideoViewer } from '../components/VideoViewer'
@@ -404,31 +404,6 @@ function SparkleIcon() {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M11 2l1.8 5.8a3 3 0 002 2L20.5 11.6l-5.7 1.8a3 3 0 00-2 2L11 21.2l-1.8-5.8a3 3 0 00-2-2L1.5 11.6l5.7-1.8a3 3 0 002-2L11 2z" fill="currentColor" />
       <path d="M19 15l.7 2.3a1.2 1.2 0 00.8.8l2.3.7-2.3.7a1.2 1.2 0 00-.8.8L19 22.3l-.7-2.3a1.2 1.2 0 00-.8-.8l-2.3-.7 2.3-.7a1.2 1.2 0 00.8-.8L19 15z" fill="currentColor" />
-    </svg>
-  )
-}
-
-function WarningIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 3.5L21.5 20H2.5L12 3.5z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <line x1="12" y1="10" x2="12" y2="14.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="12" cy="17" r="0.75" fill="currentColor" />
-    </svg>
-  )
-}
-
-function CheckIcon() {
-  return (
-    <svg viewBox="0 0 26 26" width="12" height="12" aria-hidden="true">
-      <path
-        d="M5 13.5l5.5 5.5L21 7"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
     </svg>
   )
 }

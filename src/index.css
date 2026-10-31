@@ -101,3 +101,13 @@ textarea {
   color: var(--semantic-error);
   background: var(--bg-base);
 }
+
+/* An icon inside a line of text (see InlineIcons.tsx): exactly as tall as
+   the font's capitals, with its bottom on the baseline like a letter. */
+.inline-icon {
+  height: 0.7em; /* fallback where the cap unit isn't supported */
+  height: 1cap;
+  width: auto;
+  flex-shrink: 0;
+  vertical-align: baseline;
+}

@@ -112,7 +112,7 @@
 
 .capture-header__stat {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 4px;
   font-family: var(--font-mono);
   font-size: 12px;
@@ -141,7 +141,7 @@
 .capture-header__deck-warn,
 .capture-header__deck-ok {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 5px;
   font-size: 11px;
   white-space: nowrap;

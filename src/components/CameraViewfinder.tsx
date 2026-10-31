@@ -16,9 +16,28 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [shots, setShots] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
-  // WebKit shows the stream's first frames letterboxed at their intrinsic
-  // size before object-fit kicks in, so keep the video hidden until it plays.
-  const [playing, setPlaying] = useState(false)
+  // iOS starts the stream with a few landscape frames, shown letterboxed,
+  // before it settles into the portrait shape that fills the stage -- even
+  // after "playing" fires. Keep the video hidden until its frames match the
+  // stage's orientation, with a fallback so the camera always appears.
+  const [ready, setReady] = useState(false)
+  const revealFallback = useRef<number | null>(null)
+  useEffect(() => () => {
+    if (revealFallback.current) window.clearTimeout(revealFallback.current)
+  }, [])
+
+  function revealWhenSettled() {
+    const video = videoRef.current
+    if (!video || video.videoWidth === 0) return
+    const stagePortrait = window.innerHeight >= window.innerWidth
+    const framesPortrait = video.videoHeight >= video.videoWidth
+    if (framesPortrait === stagePortrait) {
+      // A beat more for the display layer to catch up with the new shape.
+      window.setTimeout(() => setReady(true), 200)
+    } else if (!revealFallback.current) {
+      revealFallback.current = window.setTimeout(() => setReady(true), 1500)
+    }
+  }
   // Held sideways (native only) -- moves the close button to the shutter's
   // left, where a thumb on that side of a landscape phone can reach it.
   const [sideways, setSideways] = useState(false)
@@ -139,11 +158,12 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
         ) : (
           <video
             ref={videoRef}
-            className={`viewfinder__video${playing ? ' viewfinder__video--playing' : ''}`}
+            className={`viewfinder__video${ready ? ' viewfinder__video--ready' : ''}`}
             autoPlay
             playsInline
             muted
-            onPlaying={() => requestAnimationFrame(() => setPlaying(true))}
+            onPlaying={revealWhenSettled}
+            onResize={revealWhenSettled}
           />
         )}
         <div className="viewfinder__reticle" aria-hidden="true">

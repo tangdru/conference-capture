@@ -49,7 +49,7 @@
   transition: opacity var(--duration-fast) var(--easing-out);
 }
 
-.viewfinder__video--playing {
+.viewfinder__video--ready {
   opacity: 1;
 }
 

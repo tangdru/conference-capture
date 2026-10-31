@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw
 
 N = 1024
 K = 4  # supersampling for smooth edges
-PAD_X = 180  # gap left and right of the rings; top/bottom follows from their shape
+PAD_X = 160  # gap left and right of the rings; top/bottom follows from their shape
 STROKE = 18  # ring thickness at 1024px
 
 BG = (15, 15, 13)

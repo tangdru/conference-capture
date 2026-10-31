@@ -1,6 +1,8 @@
 import type { Session } from '../types'
 import { formatElapsed, formatSessionSubtitle } from '../format'
 import { isSessionActive } from '../sessionActivity'
+import { NoteIcon, PhotoIcon } from './StatIcons'
+import { ViewIcon } from './SwipeActions'
 import './SessionCard.css'
 
 interface SessionCardProps {
@@ -40,9 +42,13 @@ export function SessionCard({ session, now, onTap, onViewDeck }: SessionCardProp
           </span>
         </div>
         <p className="session-card__title">{session.title}</p>
-        <p className="session-card__hint">
-          {session.status === 'recording' ? 'Tap to return to capture' : 'Tap to add more'}
-        </p>
+        {/* A ready presentation takes the hint's place -- the card itself
+            still opens the session. */}
+        {session.deckStatus !== 'ready' && (
+          <p className="session-card__hint">
+            {session.status === 'recording' ? 'Tap to return to capture' : 'Tap to add more'}
+          </p>
+        )}
         <DeckStatus session={session} onView={onViewDeck} />
       </button>
     )
@@ -61,10 +67,17 @@ export function SessionCard({ session, now, onTap, onViewDeck }: SessionCardProp
   return (
     <button className="session-card" onClick={onTap}>
       <p className="session-card__title">{session.title}</p>
-      <p className="session-card__subtitle">{formatSessionSubtitle(session.startedAt)}</p>
-      <p className="session-card__stats">
-        📝 {notes} &nbsp; 📷 {photos}
-      </p>
+      <div className="session-card__meta">
+        <span className="session-card__stats">
+          <span className="session-card__stat" aria-label={`${notes} notes`}>
+            <NoteIcon capHeight={9} /> {notes}
+          </span>
+          <span className="session-card__stat" aria-label={`${photos} photos`}>
+            <PhotoIcon capHeight={9} /> {photos}
+          </span>
+        </span>
+        <span className="session-card__subtitle">{formatSessionSubtitle(session.startedAt)}</span>
+      </div>
       <DeckStatus session={session} onView={onViewDeck} />
     </button>
   )
@@ -84,10 +97,11 @@ function DeckStatus({ session, onView }: { session: Session; onView: () => void 
       // A link-styled span, not a nested <button> (the card itself is one);
       // it stops the tap from also opening the session.
       return (
-        <p className="session-card__deck">
+        <p className="session-card__deck session-card__deck--ready">
           <span
             className="session-card__deck-link"
             role="link"
+            aria-label="View presentation"
             tabIndex={0}
             onClick={(e) => {
               e.stopPropagation()
@@ -100,7 +114,7 @@ function DeckStatus({ session, onView }: { session: Session; onView: () => void 
               }
             }}
           >
-            View presentation →
+            View <ViewIcon size={16} /> →
           </span>
         </p>
       )

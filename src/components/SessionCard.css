@@ -60,10 +60,31 @@
   color: var(--text-muted);
 }
 
-.session-card__stats {
-  margin: 0;
+/* Note/photo counts on the left, start time on the right, one line. */
+.session-card__meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+.session-card__stats {
+  display: flex;
+  gap: 12px;
+}
+
+.session-card__stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+/* Bottom on the baseline, as tall as the capitals (9px at 13px text). */
+.session-card__stat svg {
+  align-self: baseline;
+  flex-shrink: 0;
 }
 
 .session-card__deck {
@@ -73,6 +94,15 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.session-card__deck--ready {
+  margin-top: 6px;
+}
+
+/* On the active card it sits where the "Tap to…" hint would be. */
+.session-card--active .session-card__deck--ready {
+  margin-top: 0;
 }
 
 .session-card__deck--error {
@@ -89,12 +119,18 @@
 }
 
 .session-card__deck-link {
-  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--accent);
-  text-decoration: underline;
-  text-underline-offset: 3px;
   /* A comfortable tap target without changing the line's layout. */
   padding: 8px 0;
+  margin: -8px 0;
   cursor: pointer;
+}
+
+.session-card__meta .session-card__subtitle {
+  margin: 0;
 }

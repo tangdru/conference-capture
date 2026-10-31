@@ -212,9 +212,9 @@ export function GenerateIcon() {
 }
 
 /** A presentation board on a stand -- opens the generated presentation. */
-export function ViewIcon() {
+export function ViewIcon({ size = 18 }: { size?: number }) {
   return (
-    <svg viewBox="0 0 26 26" width="18" height="18" fill="none" aria-hidden="true">
+    <svg viewBox="0 0 26 26" width={size} height={size} fill="none" aria-hidden="true">
       <path d="M2.5 4h21" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
       <rect x="4" y="4" width="18" height="12.5" rx="1" stroke="var(--accent)" strokeWidth="2" />
       <path d="M13 16.5V20M13 20l-4 3.5M13 20l4 3.5" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />

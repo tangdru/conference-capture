@@ -47,6 +47,9 @@ export function usePullToRefresh(
 
     let start: { x: number; y: number } | null = null
     let mode: 'undecided' | 'pull' | 'native' = 'undecided'
+    // Which edge this drag is stretching -- fixed when the pull starts, since
+    // a list too short to scroll is at both edges at once.
+    let edge: 'top' | 'bottom' = 'top'
     let offset = 0
 
     function place(px: number, animate: boolean) {
@@ -79,6 +82,7 @@ export function usePullToRefresh(
         const vertical = Math.abs(dy) > Math.abs(dx)
         const pastEdge = (dy > 0 && atTop()) || (dy < 0 && atBottom())
         mode = vertical && pastEdge ? 'pull' : 'native'
+        edge = dy > 0 ? 'top' : 'bottom'
         if (mode === 'pull') start = { x: e.touches[0].clientX, y: e.touches[0].clientY }
       }
       if (mode !== 'pull') return
@@ -86,7 +90,7 @@ export function usePullToRefresh(
       e.preventDefault()
       const pull = e.touches[0].clientY - start.y
       // Only the top edge refreshes; the bottom edge just bounces.
-      place(resist(atTop() ? Math.max(pull, 0) : Math.min(pull, 0)), false)
+      place(resist(edge === 'top' ? Math.max(pull, 0) : Math.min(pull, 0)), false)
     }
 
     function onTouchEnd() {

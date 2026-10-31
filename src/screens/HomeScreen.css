@@ -71,10 +71,15 @@
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  /* Pulling past either end is handled in JS (usePullToRefresh) so it
-     feels the same whether or not the list is long enough to scroll. */
-  overscroll-behavior-y: none;
+  /* Native bounce stays on for flings that hit an end; dragging past either
+     end is handled in JS (usePullToRefresh), so a list too short to scroll
+     still stretches and springs back. */
   padding: 0 20px;
+  /* Cards are controls, not text -- a long press before a drag shouldn't
+     start selecting their contents. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .home-list {

@@ -90,7 +90,7 @@ async function generateDeck(
 
   await supabase.from('cc_sessions').update({ deck_status: 'generating', deck_error: null }).eq('id', sessionId)
 
-  const photos: { placeholder: string; dataUrl: string; caption: string; elapsed: string }[] = []
+  const photos: { placeholder: string; dataUrl: string; caption: string; slideText: string; elapsed: string }[] = []
   for (let i = 0; i < photoRows.length; i++) {
     const row = photoRows[i]
     const { data: blob, error: downloadError } = await supabase.storage
@@ -102,6 +102,8 @@ async function generateDeck(
       placeholder: `PHOTO_${i + 1}`,
       dataUrl: `data:${blob.type || 'image/jpeg'};base64,${base64}`,
       caption: row.caption ?? '',
+      // Read off the photo on the phone (SlideScanner); empty if none.
+      slideText: row.text ?? '',
       elapsed: formatElapsed(session.started_at, row.item_timestamp),
     })
   }
@@ -149,13 +151,21 @@ async function blobToBase64(blob: Blob): Promise<string> {
   return btoa(binary)
 }
 
+/** A photo's on-device text as one line for the prompt, capped so a dense
+ * slide can't crowd out the rest of the session. */
+function formatSlideText(text: string): string {
+  const flat = text.split('\n').map((l) => l.trim()).filter(Boolean).join(' / ')
+  if (!flat) return ''
+  return ` -- text on it: "${flat.length > 600 ? `${flat.slice(0, 600)}…` : flat}"`
+}
+
 async function callClaude(
   title: string,
   startedAt: string,
   notes: { text: string | null; item_timestamp: string }[],
   transcriptSegments: { text: string | null; item_timestamp: string }[],
   enrichmentRows: { subtype: string | null; payload: Record<string, unknown> | null }[],
-  photos: { placeholder: string; dataUrl: string; caption: string; elapsed: string }[],
+  photos: { placeholder: string; dataUrl: string; caption: string; slideText: string; elapsed: string }[],
 ): Promise<string> {
   const notesText = notes.length > 0
     ? notes.map((n) => `- [${formatElapsed(startedAt, n.item_timestamp)}] ${n.text}`).join('\n')
@@ -166,14 +176,14 @@ async function callClaude(
     : '(No ambient transcript was captured for this talk.)'
 
   const photosText = photos.length > 0
-    ? photos.map((p) => `- ${p.placeholder} [${p.elapsed}]${p.caption ? ` -- caption: "${p.caption}"` : ''}`).join('\n')
+    ? photos.map((p) => `- ${p.placeholder} [${p.elapsed}]${p.caption ? ` -- caption: "${p.caption}"` : ''}${formatSlideText(p.slideText)}`).join('\n')
     : '(No photos were captured for this talk.)'
 
   const enrichmentText = formatEnrichment(enrichmentRows)
 
   const instructions = `You are building a scrollytelling web page someone can keep as a personal resource, or share with friends and colleagues, as a record of a conference talk they attended titled "${title}". This is NOT a slide deck -- there is no click/arrow-key/swipe navigation of any kind. The reader scrolls continuously down one page and the page reacts to that scroll.
 
-You are given the attendee's raw notes (taken live, so they may be fragmentary or out of order), an ambient audio transcript of the speaker (auto-transcribed on-device, so it may contain mistranscribed words or awkward phrasing -- use it for content and quotes, but don't assume every word is verbatim), photos they took during the talk (mostly slides), and enrichment already extracted from this session (summary, action items, references, speaker bio, acronyms -- already vetted, safe to use directly). Every note, transcript line, and photo below is tagged with its elapsed time into the talk (MM:SS) -- this is real data about how the talk actually unfolded, not filler.
+You are given the attendee's raw notes (taken live, so they may be fragmentary or out of order), an ambient audio transcript of the speaker (auto-transcribed on-device, so it may contain mistranscribed words or awkward phrasing -- use it for content and quotes, but don't assume every word is verbatim), photos they took during the talk (mostly slides, usually straightened square-on; where text was found on a photo it's listed with it, read on-device -- use it to quote slide titles, figures and terms accurately, allowing for the odd misread character), and enrichment already extracted from this session (summary, action items, references, speaker bio, acronyms -- already vetted, safe to use directly). Every note, transcript line, and photo below is tagged with its elapsed time into the talk (MM:SS) -- this is real data about how the talk actually unfolded, not filler.
 
 Raw notes:
 ${notesText}

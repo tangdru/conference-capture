@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw
 
 N = 1024
 K = 4  # supersampling for smooth edges
-PAD = 100  # gap between the rings' outer edges and the icon's edges
+PAD = 166  # gap between the rings' outer edges and the icon's edges
 STROKE = 18  # ring thickness at 1024px
 
 BG = (15, 15, 13)

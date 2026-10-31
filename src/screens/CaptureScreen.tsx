@@ -32,12 +32,19 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
   const [viewingPhotoId, setViewingPhotoId] = useState<string | null>(null)
   const [viewingVideoId, setViewingVideoId] = useState<string | null>(null)
   const [activeId, setActiveId] = useState<string | 'new' | null>(null)
+  const [enhancing, setEnhancing] = useState(false)
   // Words heard so far in the transcript segment that's still in progress.
   const [liveText, setLiveText] = useState('')
   // Photos that failed to save -- kept in memory (not just dropped) so a bad
   // connection doesn't lose the actual capture. Retried on demand and
   // automatically once the browser reports it's back online.
   const [pendingPhotos, setPendingPhotos] = useState<{ id: string; blob: Blob }[]>([])
+  // A ref, not just the `enhancing` state, guards re-entrancy -- a rapid
+  // double-tap can fire two clicks before React re-renders with the button
+  // disabled, which raced the edge function into running twice and
+  // doubling up enrichment content.
+  const enhancingRef = useRef(false)
+
   useEffect(() => {
     if (session.status !== 'recording') return
     const id = window.setInterval(() => setNow(Date.now()), 1000)
@@ -60,6 +67,10 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
   const isLive = session.status === 'recording' || session.status === 'suspended'
   const noteCount = session.items.filter((i) => i.type === 'note').length
   const photoCount = session.items.filter((i) => i.type === 'photo').length
+  const canEnhance = !enhancing && session.items.some(
+    (i) => i.type === 'transcript' && i.timestamp > (session.lastEnrichedAt ?? -Infinity),
+  )
+
   async function commitNewNote(text: string) {
     // Stay open on failure instead of clearing immediately -- losing the
     // save on bad wifi shouldn't also lose what was typed. The editor
@@ -214,6 +225,28 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
     }
   }
 
+  /** Enhancement is its own action, independent of ending the session --
+   * callable any time there's new transcript since the last run (live,
+   * paused, or already complete), and repeatable as more audio comes in. */
+  async function handleEnhance() {
+    if (!canEnhance || enhancingRef.current) return
+    enhancingRef.current = true
+    setEnhancing(true)
+    try {
+      await db.enrichSession(session.id)
+      const [items, { lastEnrichedAt }] = await Promise.all([
+        db.fetchSessionItems(session.id),
+        db.fetchSessionEnrichmentState(session.id),
+      ])
+      onUpdateLocal((s) => ({ ...s, items, lastEnrichedAt }))
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to enhance')
+    } finally {
+      enhancingRef.current = false
+      setEnhancing(false)
+    }
+  }
+
   return (
     <div className="capture-screen">
       <header className="capture-header">
@@ -273,6 +306,16 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
           </div>
 
           <div className="capture-header__controls">
+            {(canEnhance || enhancing) && (
+              <button
+                className="header-btn"
+                onClick={handleEnhance}
+                disabled={enhancing}
+                aria-label={enhancing ? 'Enhancing…' : 'Enhance with new transcript'}
+              >
+                <SparkleIcon />
+              </button>
+            )}
             {!isLive && (
               session.deckStatus === 'ready' && session.deckGeneratedAt && (
                 session.updatedAt > session.deckGeneratedAt ? (
@@ -351,6 +394,15 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
         />
       )}
     </div>
+  )
+}
+
+function SparkleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M11 2l1.8 5.8a3 3 0 002 2L20.5 11.6l-5.7 1.8a3 3 0 00-2 2L11 21.2l-1.8-5.8a3 3 0 00-2-2L1.5 11.6l5.7-1.8a3 3 0 002-2L11 2z" fill="currentColor" />
+      <path d="M19 15l.7 2.3a1.2 1.2 0 00.8.8l2.3.7-2.3.7a1.2 1.2 0 00-.8.8L19 22.3l-.7-2.3a1.2 1.2 0 00-.8-.8l-2.3-.7 2.3-.7a1.2 1.2 0 00.8-.8L19 15z" fill="currentColor" />
+    </svg>
   )
 }
 

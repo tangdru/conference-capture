@@ -135,15 +135,15 @@
   flex-shrink: 0;
 }
 
-/* Paused: two bars in the record color, the same size as the dot. */
+/* Paused: two teal bars, the same size as the dot. */
 .rec-toggle__pause {
   width: 14px;
   height: 14px;
   background: linear-gradient(
     to right,
-    var(--recording-dot) 0 35%,
+    var(--accent) 0 35%,
     transparent 35% 65%,
-    var(--recording-dot) 65% 100%
+    var(--accent) 65% 100%
   );
   border-radius: 2px;
 }

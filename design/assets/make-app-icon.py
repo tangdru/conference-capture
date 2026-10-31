@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw
 
 N = 1024
 K = 4  # supersampling for smooth edges
-PAD = 166  # gap between the rings' outer edges and the icon's edges
+PAD_X = 180  # gap left and right of the rings; top/bottom follows from their shape
 STROKE = 18  # ring thickness at 1024px
 
 BG = (15, 15, 13)
@@ -29,7 +29,7 @@ x0 = min(teal[0], magenta[0])
 y0 = min(teal[1], magenta[1])
 x1 = max(teal[2], magenta[2])
 y1 = max(teal[3], magenta[3])
-scale = (N - 2 * PAD) / max(x1 - x0, y1 - y0)
+scale = (N - 2 * PAD_X) / (x1 - x0)
 dx = (N - (x1 - x0) * scale) / 2
 dy = (N - (y1 - y0) * scale) / 2
 

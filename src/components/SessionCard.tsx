@@ -32,7 +32,6 @@ export function SessionCard({ session, now, onTap, onViewDeck, onGenerateDeck }:
         <p className="session-card__title">{session.title}</p>
         <div className="session-card__meta">
           <span className="session-card__stats">
-            <DeckIcon session={session} onView={onViewDeck} onGenerate={onGenerateDeck} live />
             <Stats notes={notes} photos={photos} />
           </span>
           {/* Where a past session shows when it happened, a live one shows
@@ -47,6 +46,8 @@ export function SessionCard({ session, now, onTap, onViewDeck, onGenerateDeck }:
                 <span className="rec-dot session-card__rec-dot" aria-hidden="true" /> {elapsed} recorded
               </>
             )}
+            {/* On a live card the presentation icon trails the recording time. */}
+            <DeckIcon session={session} onView={onViewDeck} onGenerate={onGenerateDeck} live />
           </span>
         </div>
         <BuildingStatus session={session} />
@@ -92,9 +93,10 @@ function Stats({ notes, photos }: { notes: number; photos: number }) {
   )
 }
 
-/** The presentation's state as one tappable icon, leading the card's status
- * line: a sparkle when one could be made (past sessions only -- a live one is
- * still being captured), the board when it's ready, magenta when it failed.
+/** The presentation's state as one tappable icon on the card's status line
+ * (leading it on past cards, trailing the recording time on live ones): a
+ * sparkle when one could be made (past sessions only -- a live one is still
+ * being captured), the board when it's ready, magenta when it failed.
  * A span, not a nested <button> (the card itself is one); it stops the tap
  * from also opening the session. */
 function DeckIcon({

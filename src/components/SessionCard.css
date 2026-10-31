@@ -121,6 +121,10 @@
   vertical-align: baseline;
 }
 
+.session-card__elapsed .session-card__deck-icon {
+  margin-left: 10px;
+}
+
 .session-card__meta .session-card__subtitle {
   margin: 0;
 }

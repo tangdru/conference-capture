@@ -16,6 +16,9 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [shots, setShots] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
+  // WebKit shows the stream's first frames letterboxed at their intrinsic
+  // size before object-fit kicks in, so keep the video hidden until it plays.
+  const [playing, setPlaying] = useState(false)
   // Held sideways (native only) -- moves the close button to the shutter's
   // left, where a thumb on that side of a landscape phone can reach it.
   const [sideways, setSideways] = useState(false)
@@ -134,7 +137,14 @@ export function CameraViewfinder({ sessionTimer, onCapture, onClose }: CameraVie
         {error ? (
           <p className="viewfinder__error">{error}</p>
         ) : (
-          <video ref={videoRef} className="viewfinder__video" autoPlay playsInline muted />
+          <video
+            ref={videoRef}
+            className={`viewfinder__video${playing ? ' viewfinder__video--playing' : ''}`}
+            autoPlay
+            playsInline
+            muted
+            onPlaying={() => requestAnimationFrame(() => setPlaying(true))}
+          />
         )}
         <div className="viewfinder__reticle" aria-hidden="true">
           <span className="corner corner--tl" />

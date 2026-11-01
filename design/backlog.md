@@ -5,10 +5,6 @@ on the native app is in `native-app-migration.md`.
 
 ## Native iOS
 
-- **Live Activity / Dynamic Island while recording.** Timer and pause on the
-  Lock Screen and in the Dynamic Island, so it's obvious the app is still
-  listening while the phone is locked or in another app. Needs a widget
-  extension (ActivityKit).
 - **"Presentation ready" notification.** Generation takes minutes and is
   silent today. Push needs APNs (paid developer program, see
   `native-app-migration.md`); a local notification on return is a cheaper

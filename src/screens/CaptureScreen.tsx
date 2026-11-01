@@ -11,6 +11,7 @@ import { VideoViewer } from '../components/VideoViewer'
 import { AskSheet, type AskTurn } from '../components/AskSheet'
 import { useAmbientTranscription } from '../hooks/useAmbientTranscription'
 import { useWakeLock } from '../hooks/useWakeLock'
+import { useRecordingActivity } from '../hooks/useRecordingActivity'
 import * as db from '../db'
 import { SlideScanner, blobToBase64 } from '../native/slideScanner'
 import { backgroundUploads, queuePhoto } from '../photoUploads'
@@ -326,6 +327,14 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
       setSaveError(err instanceof Error ? err.message : 'Failed to save')
     }
   }
+
+  // Lock Screen / Dynamic Island. Its buttons can arrive late (the app was
+  // asleep), so ignore one that no longer applies.
+  useRecordingActivity(
+    session,
+    () => { if (session.status === 'recording') void stop() },
+    () => { if (session.status === 'suspended') void resume() },
+  )
 
   /** Enhancement is its own action, independent of ending the session --
    * callable any time there's new transcript since the last run (live,

@@ -90,11 +90,11 @@ function StatusLine({
   )
 }
 
-/** The presentation's state as one tappable icon on the card's status line: a
+/** The presentation's state as one icon on the card's status line: a
  * sparkle when one could be made (past sessions only -- a live one is still
- * being captured), the board when it's ready, magenta when it failed.
- * A span, not a nested <button> (the card itself is one); it stops the tap
- * from also opening the session. */
+ * being captured; display only), the board when it's ready, magenta when it
+ * failed. The latter two are tappable: a span, not a nested <button> (the
+ * card itself is one), that stops the tap from also opening the session. */
 function DeckIcon({
   session,
   onView,
@@ -121,10 +121,14 @@ function DeckIcon({
     action = onGenerate
     modifier = 'error'
   } else if (!live && isReadyToGenerate(session)) {
-    icon = <SparkleIcon />
-    label = 'Generate presentation'
-    action = onGenerate
-    modifier = 'generate'
+    // Only a hint that one could be made: it was too easy to start a
+    // generation by accident, so that lives in the swipe menu. A tap here
+    // falls through to the card and opens the session.
+    return (
+      <span className="session-card__deck-icon session-card__deck-icon--generate" aria-hidden="true">
+        <SparkleIcon />
+      </span>
+    )
   } else {
     return null
   }

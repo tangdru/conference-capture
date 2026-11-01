@@ -98,6 +98,15 @@
   inset: -12px -8px;
 }
 
+/* The sparkle is a hint only, not a control. */
+.session-card__deck-icon--generate {
+  cursor: inherit;
+}
+
+.session-card__deck-icon--generate::after {
+  content: none;
+}
+
 .session-card__deck-icon--generate,
 .session-card__deck-icon--ready {
   color: var(--accent);

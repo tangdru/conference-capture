@@ -468,6 +468,17 @@ export async function askSession(
   return data.answer
 }
 
+/** Ask across every session. `sessions` maps the answer's citation labels
+ * ([S2 12:30]) to session ids. */
+export async function askAllSessions(
+  question: string,
+  history: { role: 'user' | 'assistant'; content: string }[],
+): Promise<{ answer: string; sessions: Record<string, string> }> {
+  const { data, error } = await supabase.functions.invoke('ask-session', { body: { scope: 'all', question, history } })
+  if (error) throw new Error('Couldn’t get an answer -- check your connection and try again')
+  return { answer: data.answer, sessions: data.sessions ?? {} }
+}
+
 export async function enrichSession(sessionId: string): Promise<number> {
   const { data, error } = await supabase.functions.invoke('enrich-session', { body: { sessionId } })
   if (error) throw error

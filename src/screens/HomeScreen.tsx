@@ -30,6 +30,8 @@ interface HomeScreenProps {
   onRefresh: () => Promise<void>
   error: string | null
   onDismissError: () => void
+  /** Ask Claude the search text as a question, across all sessions. */
+  onAskAll: (question: string) => void
 }
 
 export function HomeScreen({
@@ -44,6 +46,7 @@ export function HomeScreen({
   onRefresh,
   error,
   onDismissError,
+  onAskAll,
 }: HomeScreenProps) {
   const [now, setNow] = useState(Date.now())
   const [revealedId, setRevealedId] = useState<string | null>(null)
@@ -180,7 +183,7 @@ export function HomeScreen({
             </svg>
           </div>
           {searching ? (
-            <SearchResults results={results} onOpen={onOpenSession} />
+            <SearchResults results={results} query={query.trim()} onOpen={onOpenSession} onAsk={() => onAskAll(query.trim())} />
           ) : (
             <>
               {live.map(renderCard)}

@@ -1,46 +1,80 @@
-import { useEffect, useRef, useState } from 'react'
-import * as db from '../db'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import './AskSheet.css'
 
-interface Turn {
+export interface AskTurn {
   role: 'user' | 'assistant'
   content: string
+  /** Cross-session answers: citation label (S2) -> session id. */
+  sessions?: Record<string, string>
 }
 
-const SUGGESTIONS = [
-  'What were the main points?',
-  'What did the speaker recommend?',
-  'What should I follow up on?',
-]
+export type AskFn = (
+  question: string,
+  history: { role: 'user' | 'assistant'; content: string }[],
+) => Promise<{ answer: string; sessions?: Record<string, string> }>
 
-/** "Ask a session": questions answered from its transcript, notes and
- * slides. The conversation lasts while the sheet is open. */
-export function AskSheet({ sessionId, title, onClose }: { sessionId: string; title: string; onClose: () => void }) {
-  const [turns, setTurns] = useState<Turn[]>([])
+interface AskSheetProps {
+  kicker: string
+  title: string
+  hint: string
+  suggestions?: string[]
+  ask: AskFn
+  /** Held by the parent so the conversation outlasts the sheet (e.g. while
+   * a cited session is open). */
+  turns: AskTurn[]
+  onTurnsChange: (turns: AskTurn[]) => void
+  /** Asked as soon as the sheet opens, if nothing has been asked yet. */
+  initialQuestion?: string
+  /** For cross-session answers: names the cited sessions, and opens one. */
+  sessionTitles?: Map<string, string>
+  onOpenCitation?: (sessionId: string, elapsedSeconds: number | null) => void
+  onClose: () => void
+}
+
+const CITATION = /\[(S\d+)(?:\s+(\d{1,3}(?::\d{2}){1,2}))?\]/g
+
+/** Questions answered by Claude from what was captured -- in one session,
+ * or across all of them. */
+export function AskSheet({
+  kicker,
+  title,
+  hint,
+  suggestions = [],
+  ask,
+  turns,
+  onTurnsChange,
+  initialQuestion,
+  sessionTitles,
+  onOpenCitation,
+  onClose,
+}: AskSheetProps) {
   const [draft, setDraft] = useState('')
   const [asking, setAsking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const askedInitial = useRef(false)
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' })
   }, [turns.length, asking])
 
-  async function ask(question: string) {
+  async function submit(question: string) {
     const q = question.trim()
     if (!q || asking) return
     const history = turns
-    setTurns([...history, { role: 'user', content: q }])
+    onTurnsChange([...history, { role: 'user', content: q }])
     setDraft('')
     setError(null)
     setAsking(true)
     try {
-      const answer = await db.askSession(sessionId, q, history)
-      setTurns((t) => [...t, { role: 'assistant', content: answer }])
+      const { answer, sessions } = await ask(
+        q,
+        history.map(({ role, content }) => ({ role, content })),
+      )
+      onTurnsChange([...history, { role: 'user', content: q }, { role: 'assistant', content: answer, sessions }])
     } catch (err) {
       // Take the question back so it can be sent again as it was.
-      setTurns(history)
+      onTurnsChange(history)
       setDraft(q)
       setError(err instanceof Error ? err.message : 'Couldn’t get an answer')
     } finally {
@@ -48,11 +82,48 @@ export function AskSheet({ sessionId, title, onClose }: { sessionId: string; tit
     }
   }
 
+  // A ref, not just `turns`, so StrictMode's double effect doesn't ask twice.
+  useEffect(() => {
+    if (initialQuestion && turns.length === 0 && !askedInitial.current) {
+      askedInitial.current = true
+      void submit(initialQuestion)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  /** An answer's text with its [S2 12:30] citations as tappable chips. */
+  function renderAnswer(turn: AskTurn): ReactNode {
+    if (!turn.sessions || !onOpenCitation) return turn.content
+    const parts: ReactNode[] = []
+    let last = 0
+    for (const match of turn.content.matchAll(CITATION)) {
+      const sessionId = turn.sessions[match[1]]
+      if (!sessionId) continue
+      parts.push(turn.content.slice(last, match.index))
+      const time = match[2]
+      const name = sessionTitles?.get(sessionId) ?? 'Session'
+      parts.push(
+        <button
+          key={match.index}
+          className="ask-cite"
+          onClick={() => onOpenCitation(sessionId, time ? toSeconds(time) : null)}
+          aria-label={`Open ${name}${time ? ` at ${time}` : ''}`}
+        >
+          <span className="ask-cite__name">{name}</span>
+          {time && <span className="ask-cite__time">{time}</span>}
+        </button>,
+      )
+      last = match.index + match[0].length
+    }
+    parts.push(turn.content.slice(last))
+    return parts
+  }
+
   return (
-    <div className="ask-sheet" role="dialog" aria-label={`Ask about ${title}`}>
+    <div className="ask-sheet" role="dialog" aria-label={`${kicker} ${title}`}>
       <header className="ask-sheet__header">
         <div className="ask-sheet__heading">
-          <p className="ask-sheet__kicker">Ask about</p>
+          <p className="ask-sheet__kicker">{kicker}</p>
           <h2 className="ask-sheet__title">{title}</h2>
         </div>
         <button className="ask-sheet__done" onClick={onClose}>
@@ -63,10 +134,10 @@ export function AskSheet({ sessionId, title, onClose }: { sessionId: string; tit
       <div className="ask-sheet__scroll">
         {turns.length === 0 && !asking && (
           <div className="ask-sheet__empty">
-            <p className="ask-sheet__hint">Answers come from this session’s transcript, notes and slides.</p>
+            <p className="ask-sheet__hint">{hint}</p>
             <div className="ask-sheet__suggestions">
-              {SUGGESTIONS.map((s) => (
-                <button key={s} className="ask-sheet__suggestion" onClick={() => void ask(s)}>
+              {suggestions.map((s) => (
+                <button key={s} className="ask-sheet__suggestion" onClick={() => void submit(s)}>
                   {s}
                 </button>
               ))}
@@ -76,7 +147,7 @@ export function AskSheet({ sessionId, title, onClose }: { sessionId: string; tit
 
         {turns.map((turn, i) => (
           <div key={i} className={`ask-turn ask-turn--${turn.role}`}>
-            <p className="ask-turn__text">{turn.content}</p>
+            <p className="ask-turn__text">{turn.role === 'assistant' ? renderAnswer(turn) : turn.content}</p>
           </div>
         ))}
 
@@ -104,15 +175,14 @@ export function AskSheet({ sessionId, title, onClose }: { sessionId: string; tit
         className="ask-sheet__composer"
         onSubmit={(e) => {
           e.preventDefault()
-          void ask(draft)
+          void submit(draft)
         }}
       >
         <textarea
-          ref={inputRef}
           className="ask-sheet__input"
           value={draft}
           rows={1}
-          placeholder="Ask a question"
+          placeholder={turns.length > 0 ? 'Ask a follow-up' : 'Ask a question'}
           enterKeyHint="send"
           onChange={(e) => {
             setDraft(e.target.value)
@@ -122,7 +192,7 @@ export function AskSheet({ sessionId, title, onClose }: { sessionId: string; tit
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
-              void ask(draft)
+              void submit(draft)
             }
           }}
         />
@@ -134,4 +204,8 @@ export function AskSheet({ sessionId, title, onClose }: { sessionId: string; tit
       </form>
     </div>
   )
+}
+
+function toSeconds(time: string): number {
+  return time.split(':').reduce((total, part) => total * 60 + Number(part), 0)
 }

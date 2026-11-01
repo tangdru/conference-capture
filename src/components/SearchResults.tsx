@@ -1,5 +1,6 @@
 import type { SessionResult } from '../search'
 import { formatClock, formatSessionSubtitle } from '../format'
+import { SparkleIcon } from './InlineIcons'
 import './SearchResults.css'
 
 const HITS_SHOWN = 3
@@ -8,17 +9,31 @@ const HITS_SHOWN = 3
  * words came up. Tapping a hit opens the session at that point. */
 export function SearchResults({
   results,
+  query,
   onOpen,
+  onAsk,
 }: {
   results: SessionResult[]
+  query: string
   onOpen: (sessionId: string, itemId?: string) => void
+  /** Hands the search text to Claude as a question across all sessions. */
+  onAsk: () => void
 }) {
-  if (results.length === 0) {
-    return <p className="search-empty">No sessions mention that.</p>
-  }
-
   return (
     <div className="search-results">
+      {/* First, not after the matches, so it's in reach however many there
+          are -- and it's what answers a question rather than a keyword. */}
+      <button className="search-ask" onClick={onAsk}>
+        <SparkleIcon />
+        <span className="search-ask__body">
+          <span className="search-ask__label">Ask Claude</span>
+          <span className="search-ask__query">“{query}”</span>
+        </span>
+        <span className="search-ask__hint">across all sessions</span>
+      </button>
+
+      {results.length === 0 && <p className="search-empty">No sessions mention those words.</p>}
+
       {results.map(({ session, hits }) => (
         <section key={session.id} className="search-result">
           <button className="search-result__session" onClick={() => onOpen(session.id)}>

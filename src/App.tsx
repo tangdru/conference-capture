@@ -10,6 +10,7 @@ import { AuthGate } from './auth/AuthGate'
 import { HomeScreen } from './screens/HomeScreen'
 import { CaptureScreen } from './screens/CaptureScreen'
 import { DeckViewer } from './components/DeckViewer'
+import { AskSheet, type AskTurn } from './components/AskSheet'
 import { onPhotoUploaded, pendingPhotos, syncPhotoUploadAuth } from './photoUploads'
 
 type Route = { screen: 'home' } | { screen: 'capture'; sessionId: string; focusItemId?: string }
@@ -25,6 +26,9 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [homeError, setHomeError] = useState<string | null>(null)
   const [openDeck, setOpenDeck] = useState<{ title: string; html: string } | null>(null)
+  // Ask across all sessions. Held here, not in HomeScreen, so it's still
+  // open with its answers on coming back from a session it cited.
+  const [askAll, setAskAll] = useState<{ question: string; turns: AskTurn[] } | null>(null)
 
   useEffect(() => syncPhotoUploadAuth(), [])
 
@@ -246,11 +250,27 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     )
   }
 
+  /** A citation in a cross-session answer: open that session at the item
+   * nearest the cited time. */
+  function openCitation(sessionId: string, elapsedSeconds: number | null) {
+    const session = sessions?.find((s) => s.id === sessionId)
+    if (!session) return
+    let itemId: string | undefined
+    if (elapsedSeconds !== null && session.items.length > 0) {
+      const at = session.startedAt + elapsedSeconds * 1000
+      itemId = session.items.reduce((best, item) =>
+        Math.abs(item.timestamp - at) < Math.abs(best.timestamp - at) ? item : best,
+      ).id
+    }
+    openSession(sessionId, itemId)
+  }
+
   if (openDeck) {
     return <DeckViewer title={openDeck.title} html={openDeck.html} onClose={() => setOpenDeck(null)} />
   }
 
   return (
+    <>
     <HomeScreen
       sessions={sessions}
       onOpenSession={openSession}
@@ -263,6 +283,22 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       onRefresh={refreshSessions}
       error={homeError}
       onDismissError={() => setHomeError(null)}
+      onAskAll={(question) => setAskAll({ question, turns: [] })}
     />
+    {askAll && (
+      <AskSheet
+        kicker="Ask across"
+        title="All sessions"
+        hint="Answers come from every session’s transcript, notes and slides."
+        ask={db.askAllSessions}
+        turns={askAll.turns}
+        onTurnsChange={(turns) => setAskAll((prev) => (prev ? { ...prev, turns } : prev))}
+        initialQuestion={askAll.question}
+        sessionTitles={new Map(sessions.map((s) => [s.id, s.title]))}
+        onOpenCitation={openCitation}
+        onClose={() => setAskAll(null)}
+      />
+    )}
+    </>
   )
 }

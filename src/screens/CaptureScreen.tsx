@@ -8,7 +8,7 @@ import { CheckIcon, NoteIcon, PhotoIcon, StarIcon, WarningIcon } from '../compon
 import { CameraViewfinder } from '../components/CameraViewfinder'
 import { PhotoViewer } from '../components/PhotoViewer'
 import { VideoViewer } from '../components/VideoViewer'
-import { AskSheet } from '../components/AskSheet'
+import { AskSheet, type AskTurn } from '../components/AskSheet'
 import { useAmbientTranscription } from '../hooks/useAmbientTranscription'
 import { useWakeLock } from '../hooks/useWakeLock'
 import * as db from '../db'
@@ -41,6 +41,9 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
   const [now, setNow] = useState(Date.now())
   const [cameraOpen, setCameraOpen] = useState(false)
   const [askOpen, setAskOpen] = useState(false)
+  // Kept while the session is open, so closing Ask and reopening it picks up
+  // the same conversation.
+  const [askTurns, setAskTurns] = useState<AskTurn[]>([])
   const [saveError, setSaveError] = useState<string | null>(null)
   const [viewingPhotoId, setViewingPhotoId] = useState<string | null>(null)
   const [viewingVideoId, setViewingVideoId] = useState<string | null>(null)
@@ -509,7 +512,18 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
         <VideoViewer item={viewingVideo} onClose={() => setViewingVideoId(null)} />
       )}
 
-      {askOpen && <AskSheet sessionId={session.id} title={session.title} onClose={() => setAskOpen(false)} />}
+      {askOpen && (
+        <AskSheet
+          kicker="Ask about"
+          title={session.title}
+          hint="Answers come from this session’s transcript, notes and slides."
+          suggestions={['What were the main points?', 'What did the speaker recommend?', 'What should I follow up on?']}
+          ask={async (question, history) => ({ answer: await db.askSession(session.id, question, history) })}
+          turns={askTurns}
+          onTurnsChange={setAskTurns}
+          onClose={() => setAskOpen(false)}
+        />
+      )}
 
       {cameraOpen && (
         <CameraViewfinder

@@ -3,15 +3,16 @@ import { Capacitor } from '@capacitor/core'
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
 import type { Session as AuthSession } from '@supabase/supabase-js'
-import type { Session } from './types'
+import type { PhotoItem, Session } from './types'
 import * as db from './db'
 import { supabase } from './supabaseClient'
 import { AuthGate } from './auth/AuthGate'
 import { HomeScreen } from './screens/HomeScreen'
 import { CaptureScreen } from './screens/CaptureScreen'
 import { DeckViewer } from './components/DeckViewer'
+import { onPhotoUploaded, pendingPhotos, syncPhotoUploadAuth } from './photoUploads'
 
-type Route = { screen: 'home' } | { screen: 'capture'; sessionId: string }
+type Route = { screen: 'home' } | { screen: 'capture'; sessionId: string; focusItemId?: string }
 
 export default function App() {
   return <AuthGate>{(authSession) => <AuthedApp authSession={authSession} />}</AuthGate>
@@ -25,11 +26,28 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   const [homeError, setHomeError] = useState<string | null>(null)
   const [openDeck, setOpenDeck] = useState<{ title: string; html: string } | null>(null)
 
+  useEffect(() => syncPhotoUploadAuth(), [])
+
+  // A photo that finishes uploading in the background is now in Supabase
+  // like any other.
+  useEffect(
+    () =>
+      onPhotoUploaded((id) =>
+        setSessions((prev) =>
+          prev?.map((s) => ({
+            ...s,
+            items: s.items.map((i) => (i.id === id && i.type === 'photo' ? { ...i, uploading: false } : i)),
+          })) ?? prev,
+        ),
+      ),
+    [],
+  )
+
   useEffect(() => {
     let cancelled = false
     async function load(attempt: number) {
       try {
-        const loaded = await db.fetchSessions(userId)
+        const loaded = await fetchSessionsWithPending()
         if (!cancelled) setSessions(loaded)
       } catch (err) {
         if (cancelled) return
@@ -79,9 +97,19 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     }
   }, [generatingIds])
 
+  /** Sessions as stored, plus photos still on the phone waiting to upload. */
+  async function fetchSessionsWithPending(): Promise<Session[]> {
+    const [loaded, pending] = await Promise.all([db.fetchSessions(userId), pendingPhotos().catch(() => new Map<string, PhotoItem[]>())])
+    return loaded.map((s) => {
+      const ids = new Set(s.items.map((i) => i.id))
+      const waiting = (pending.get(s.id) ?? []).filter((p) => !ids.has(p.id))
+      return waiting.length ? { ...s, items: [...s.items, ...waiting].sort((a, b) => a.timestamp - b.timestamp) } : s
+    })
+  }
+
   async function refreshSessions() {
     try {
-      setSessions(await db.fetchSessions(userId))
+      setSessions(await fetchSessionsWithPending())
     } catch (err) {
       setHomeError(err instanceof Error ? err.message : 'Failed to refresh')
     }
@@ -97,8 +125,8 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     setRoute({ screen: 'capture', sessionId: session.id })
   }
 
-  function openSession(id: string) {
-    setRoute({ screen: 'capture', sessionId: id })
+  function openSession(id: string, focusItemId?: string) {
+    setRoute({ screen: 'capture', sessionId: id, focusItemId })
   }
 
   async function generateDeckForSession(id: string) {
@@ -211,6 +239,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       <CaptureScreen
         session={session}
         userId={userId}
+        focusItemId={route.focusItemId}
         onUpdateLocal={(updater) => updateSessionLocally(session.id, updater)}
         onBack={() => setRoute({ screen: 'home' })}
       />

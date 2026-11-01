@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Session } from '../types'
 import { isSessionActive } from '../sessionActivity'
 import { hasContentSinceDeck } from '../deck'
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
 import { SessionCard } from '../components/SessionCard'
+import { SearchResults } from '../components/SearchResults'
+import { searchSessions } from '../search'
 import {
   SwipeActions,
   type SwipeAction,
@@ -16,7 +18,8 @@ import './HomeScreen.css'
 
 interface HomeScreenProps {
   sessions: Session[]
-  onOpenSession: (id: string) => void
+  /** `itemId`: open scrolled to that item (from a search hit). */
+  onOpenSession: (id: string, itemId?: string) => void
   onNewSession: () => void
   onSignOut: () => void
   onGenerateDeck: (id: string) => void
@@ -44,6 +47,9 @@ export function HomeScreen({
 }: HomeScreenProps) {
   const [now, setNow] = useState(Date.now())
   const [revealedId, setRevealedId] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const results = useMemo(() => searchSessions(sessions, query), [sessions, query])
+  const searching = query.trim().length > 0
   const scrollRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const { progress, refreshing } = usePullToRefresh(scrollRef, listRef, onRefresh)
@@ -116,6 +122,29 @@ export function HomeScreen({
             Sign out
           </button>
         </div>
+        {sessions.length > 0 && (
+          <div className="home-search">
+            <svg className="home-search__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" strokeWidth="2" />
+              <path d="M15.5 15.5L20 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <input
+              className="home-search__input"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search notes, transcripts and slides"
+              aria-label="Search sessions"
+              enterKeyHint="search"
+              autoCorrect="off"
+            />
+            {searching && (
+              <button className="home-search__clear" onClick={() => setQuery('')} aria-label="Clear search">
+                Cancel
+              </button>
+            )}
+          </div>
+        )}
       </header>
 
       {error && (
@@ -150,15 +179,21 @@ export function HomeScreen({
               <path d="M20 4v4.5h-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
-          {live.map(renderCard)}
+          {searching ? (
+            <SearchResults results={results} onOpen={onOpenSession} />
+          ) : (
+            <>
+              {live.map(renderCard)}
 
-          {sessions.length === 0 && (
-            <p className="home-empty">
-              No sessions yet. Tap "New Session" to start capturing your first talk.
-            </p>
+              {sessions.length === 0 && (
+                <p className="home-empty">
+                  No sessions yet. Tap "New Session" to start capturing your first talk.
+                </p>
+              )}
+
+              {past.map(renderCard)}
+            </>
           )}
-
-          {past.map(renderCard)}
         </div>
       </div>
 

@@ -15,17 +15,13 @@ on the native app is in `native-app-migration.md`.
   first step.
 - **Name sessions from the calendar.** Read the event happening now (EventKit,
   with permission) and use it as the session title instead of "Session".
+  (Untitled sessions are now named from their content when a presentation
+  is generated, 2026-10-31.)
 - **Faster capture.** Action Button / Control Center / Lock Screen control to
   take a slide photo, and App Intents ("Hey Siri, start a session").
 - **Small native polish.** Haptics on shutter and note save; Spotlight
-  indexing of sessions; background uploads (URLSession) so photos keep
-  uploading after leaving the app.
+  indexing of sessions.
 
 ## Product
 
-- **"Remember this" button.** One tap marks the moment as important; the
-  presentation emphasizes it and keeps the surrounding transcript.
-- **Ask a session.** Questions answered from its transcript, notes and slides.
-- **Search across sessions.** Easier once slide text is extracted (on-device
-  text recognition, built 2026-10-31).
 - **Export a written summary** to Notes, email or Notion, alongside the deck.

@@ -11,6 +11,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
 const ANTHROPIC_MODEL = 'claude-opus-5-5'
+// Naming is a one-line answer; a faster model keeps it from delaying the deck.
+const NAMING_MODEL = 'claude-sonnet-5-5'
+// What createSession titles every new session until the user renames it.
+const DEFAULT_TITLE = 'Session'
 const DECKS_BUCKET = 'cc-decks'
 const PHOTOS_BUCKET = 'cc-photos'
 
@@ -83,12 +87,24 @@ async function generateDeck(
   const transcriptSegments = itemRows.filter((r) => r.type === 'transcript' && r.text)
   const photoRows = itemRows.filter((r) => r.type === 'photo' && r.photo_path)
   const enrichmentRows = itemRows.filter((r) => r.type === 'enrichment' && r.payload)
+  const highlightRows = itemRows.filter((r) => r.type === 'highlight')
 
   if (notes.length === 0 && transcriptSegments.length === 0 && photoRows.length === 0) {
     throw new Error('This session has no notes, transcript, or photos to build a presentation from')
   }
 
   await supabase.from('cc_sessions').update({ deck_status: 'generating', deck_error: null }).eq('id', sessionId)
+
+  // A session the user never named gets one from its content, first, so the
+  // card shows it while the deck builds and the deck itself uses it.
+  let title: string = session.title
+  if (!title.trim() || title.trim() === DEFAULT_TITLE) {
+    const named = await nameSession(notes, transcriptSegments, photoRows, enrichmentRows).catch(() => null)
+    if (named) {
+      title = named
+      await supabase.from('cc_sessions').update({ title }).eq('id', sessionId)
+    }
+  }
 
   const photos: { placeholder: string; dataUrl: string; caption: string; slideText: string; elapsed: string }[] = []
   for (let i = 0; i < photoRows.length; i++) {
@@ -108,7 +124,8 @@ async function generateDeck(
     })
   }
 
-  const html = await callClaude(session.title, session.started_at, notes, transcriptSegments, enrichmentRows, photos)
+  const highlightsText = formatHighlights(session.started_at, highlightRows, transcriptSegments, notes)
+  const html = await callClaude(title, session.started_at, notes, transcriptSegments, enrichmentRows, photos, highlightsText)
   const finalHtml = substitutePhotos(html, photos)
 
   const deckPath = `${session.owner_id}/${sessionId}/deck.html`
@@ -135,9 +152,11 @@ async function generateDeck(
 
 function formatElapsed(startedAtIso: string, itemIso: string): string {
   const totalSec = Math.max(0, Math.round((new Date(itemIso).getTime() - new Date(startedAtIso).getTime()) / 1000))
-  const minutes = Math.floor(totalSec / 60)
-  const seconds = totalSec % 60
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+  const hours = Math.floor(totalSec / 3600)
+  const minutes = Math.floor((totalSec % 3600) / 60)
+  const seconds = (totalSec % 60).toString().padStart(2, '0')
+  // H:MM:SS past the hour (workshops, long sessions), else MM:SS.
+  return hours > 0 ? `${hours}:${minutes.toString().padStart(2, '0')}:${seconds}` : `${minutes}:${seconds}`
 }
 
 async function blobToBase64(blob: Blob): Promise<string> {
@@ -166,6 +185,7 @@ async function callClaude(
   transcriptSegments: { text: string | null; item_timestamp: string }[],
   enrichmentRows: { subtype: string | null; payload: Record<string, unknown> | null }[],
   photos: { placeholder: string; dataUrl: string; caption: string; slideText: string; elapsed: string }[],
+  highlightsText: string,
 ): Promise<string> {
   const notesText = notes.length > 0
     ? notes.map((n) => `- [${formatElapsed(startedAt, n.item_timestamp)}] ${n.text}`).join('\n')
@@ -183,7 +203,7 @@ async function callClaude(
 
   const instructions = `You are building a scrollytelling web page someone can keep as a personal resource, or share with friends and colleagues, as a record of a conference talk they attended titled "${title}". This is NOT a slide deck -- there is no click/arrow-key/swipe navigation of any kind. The reader scrolls continuously down one page and the page reacts to that scroll.
 
-You are given the attendee's raw notes (taken live, so they may be fragmentary or out of order), an ambient audio transcript of the speaker (auto-transcribed on-device, so it may contain mistranscribed words or awkward phrasing -- use it for content and quotes, but don't assume every word is verbatim), photos they took during the talk (mostly slides, usually straightened square-on; where text was found on a photo it's listed with it, read on-device -- use it to quote slide titles, figures and terms accurately, allowing for the odd misread character), and enrichment already extracted from this session (summary, action items, references, speaker bio, acronyms -- already vetted, safe to use directly). Every note, transcript line, and photo below is tagged with its elapsed time into the talk (MM:SS) -- this is real data about how the talk actually unfolded, not filler.
+You are given the attendee's raw notes (taken live, so they may be fragmentary or out of order), an ambient audio transcript of the speaker (auto-transcribed on-device, so it may contain mistranscribed words or awkward phrasing -- use it for content and quotes, but don't assume every word is verbatim), photos they took during the talk (mostly slides, usually straightened square-on; where text was found on a photo it's listed with it, read on-device -- use it to quote slide titles, figures and terms accurately, allowing for the odd misread character), and enrichment already extracted from this session (summary, action items, references, speaker bio, acronyms -- already vetted, safe to use directly). Every note, transcript line, and photo below is tagged with its elapsed time into the talk (MM:SS, or H:MM:SS past the hour) -- this is real data about how the talk actually unfolded, not filler.
 
 Raw notes:
 ${notesText}
@@ -197,12 +217,16 @@ ${enrichmentText}
 Photos available (shown to you below, in this order):
 ${photosText}
 
+Moments the attendee marked "Remember this" (tapped live, as it happened):
+${highlightsText}
+
 Requirements:
 - Return ONLY a single complete HTML document -- no markdown fences, no commentary before or after.
 - The document must be fully self-contained: all CSS and JavaScript inline in the file, no external resources except Google Fonts if you want them.
 - Structure it as one continuously scrolling page synthesizing and organizing the notes and transcript into a clear narrative, in the order the talk actually unfolded -- don't just dump either source verbatim, and don't chop it into slide-like sections with hard edges. Use the transcript to fill gaps the notes left out and to surface direct quotes worth calling out, but let the notes drive what the attendee actually found important.
 - Use scroll-driven motion deliberately: sticky/pinned photo or quote backgrounds that text scrolls past, a scroll progress indicator, and elements (quotes, stats, chart bars) that animate in via IntersectionObserver as they enter the viewport. Every animation should earn its place by clarifying content, not decorate for its own sake.
 - Build at least one real, inline-SVG (or <canvas>) data visualization driven by the actual elapsed-time data above -- for example, a timeline/activity chart across the talk's duration showing when notes, quotes, and photos landed, or a simple chart of the action-item/reference/acronym counts. It must reflect this session's real numbers, not invented or placeholder data.
+- The "Remember this" moments are the attendee's own signal of what mattered most. Give each one clear prominence -- its own section or a pull-quote/callout, more space and detail than the material around it, and a mention in the closing summary -- built from what was being said and shown at that point (a tap usually lands just after the thing it marks, so the transcript just before it is usually what it's about). Don't label them with the phrase "Remember this"; just let them read as the key moments. If there are none, ignore this.
 - Weave the photos into the page as first-class content at the point in the scroll that matches their elapsed time (not an appendix dumped at the end). Reference EACH photo using an <img> tag whose src is EXACTLY its placeholder token, e.g. <img src="PHOTO_1">. Do not invent placeholder names and do not attempt to embed real image data yourself.
 - Pick a visual theme (color palette, type, motion style) that fits the subject matter of the talk.
 - Open with a short title/hero section and close with a brief summary section. Use the extracted summary and speaker bio for these if present, rather than writing your own from scratch. Work action items, references, and acronym expansions into the page wherever they're contextually relevant -- not as a dumped appendix list.
@@ -317,6 +341,68 @@ function formatEnrichment(rows: { subtype: string | null; payload: Record<string
     }
   }
   return lines.map((l) => `- ${l}`).join('\n')
+}
+
+/** A short title for the talk from what was captured, or null if there's too
+ * little to tell what it was about. */
+async function nameSession(
+  notes: { text: string | null }[],
+  transcriptSegments: { text: string | null }[],
+  photoRows: { text: string | null; caption: string | null }[],
+  enrichmentRows: { subtype: string | null; payload: Record<string, unknown> | null }[],
+): Promise<string | null> {
+  const summary = enrichmentRows.find((r) => r.subtype === 'summary')?.payload?.text
+  const slideText = photoRows.map((p) => (p.text ?? '').split('\n').slice(0, 3).join(' / ')).filter(Boolean)
+  // The opening minutes usually say what the talk is; the cap keeps this quick.
+  const material = [
+    summary ? `Summary: ${summary}` : '',
+    slideText.length ? `Text on the slides photographed (first lines of each):\n${slideText.map((t) => `- ${t}`).join('\n')}` : '',
+    notes.length ? `Attendee's notes:\n${notes.map((n) => `- ${n.text}`).join('\n')}` : '',
+    transcriptSegments.length ? `Transcript:\n${transcriptSegments.map((t) => t.text).join(' ')}` : '',
+  ].filter(Boolean).join('\n\n').slice(0, 12000)
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY!,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: NAMING_MODEL,
+      max_tokens: 60,
+      messages: [{
+        role: 'user',
+        content: `Here is what an attendee captured during one conference talk. Give the talk a title for their list of sessions: what it was about, 2 to 7 words, Title Case, no quotes or trailing punctuation. Use the talk's own title if a slide shows it. If there isn't enough here to tell what it was about, reply with exactly NONE.\n\n${material}`,
+      }],
+    }),
+  })
+  if (!response.ok) return null
+  const data: { content?: { type: string; text?: string }[] } = await response.json()
+  const text = data.content?.find((b) => b.type === 'text')?.text?.trim().replace(/^["'“]|["'”.]$/g, '').trim()
+  if (!text || text === 'NONE' || text.length > 80) return null
+  return text
+}
+
+/** Each "Remember this" tap with what was said and noted around it --
+ * mostly the 90 seconds before, since a tap follows what it marks. */
+function formatHighlights(
+  startedAt: string,
+  highlights: { item_timestamp: string }[],
+  transcriptSegments: { text: string | null; item_timestamp: string }[],
+  notes: { text: string | null; item_timestamp: string }[],
+): string {
+  if (highlights.length === 0) return '(None marked.)'
+  return highlights.map((h) => {
+    const at = new Date(h.item_timestamp).getTime()
+    const near = (iso: string) => {
+      const t = new Date(iso).getTime()
+      return t >= at - 90_000 && t <= at + 20_000
+    }
+    const said = transcriptSegments.filter((t) => near(t.item_timestamp)).map((t) => t.text).join(' ')
+    const noted = notes.filter((n) => near(n.item_timestamp)).map((n) => `"${n.text}"`).join('; ')
+    return `- [${formatElapsed(startedAt, h.item_timestamp)}]${said ? ` -- being said around it: "${said}"` : ''}${noted ? ` -- noted around it: ${noted}` : ''}`
+  }).join('\n')
 }
 
 function stripCodeFence(text: string): string {

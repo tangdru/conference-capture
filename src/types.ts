@@ -22,6 +22,8 @@ export interface PhotoItem {
   caption: string
   /** Text read off the photo on-device (SlideScanner); '' when there was none. Absent until processed. */
   slideText?: string
+  /** Still on the phone, queued to upload in the background (native only). */
+  uploading?: boolean
   timestamp: number
   addedLater?: boolean
   excluded?: boolean
@@ -48,6 +50,15 @@ export interface TranscriptItem {
   text: string
   timestamp: number
   durationMs: number
+  excluded?: boolean
+}
+
+/** "Remember this": a tap marking the moment as one that mattered, so the
+ * presentation gives it -- and what was said around it -- more weight. */
+export interface HighlightItem {
+  id: string
+  type: 'highlight'
+  timestamp: number
   excluded?: boolean
 }
 
@@ -97,7 +108,7 @@ export type EnrichmentItemData =
   | EnrichmentSpeakerBioItem
   | EnrichmentAcronymsItem
 
-export type TimelineItemData = NoteItem | PhotoItem | VideoItem | TranscriptItem | EnrichmentItemData
+export type TimelineItemData = NoteItem | PhotoItem | VideoItem | TranscriptItem | HighlightItem | EnrichmentItemData
 
 export interface Session {
   id: string

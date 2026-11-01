@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type {
   EnrichmentItemData,
+  HighlightItem,
   NoteItem,
   PhotoItem,
   TimelineItemData,
@@ -11,7 +12,7 @@ import { formatClock, formatClipDuration } from '../format'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
 import { useVideoUrl } from '../hooks/useVideoUrl'
 import { SwipeActions, DeleteIcon, ExcludeIcon, IncludeIcon, type DragHandle } from './SwipeActions'
-import { CheckIcon } from './InlineIcons'
+import { CheckIcon, StarIcon } from './InlineIcons'
 import './Timeline.css'
 
 /** 'new' means composing a brand-new note at the end of the list; a string is an existing item's id being edited; null means nothing is active. */
@@ -34,6 +35,8 @@ interface TimelineProps {
   liveTranscript: string | null
   /** Photos still being straightened and read on-device. */
   processingPhotoIds?: ReadonlySet<string>
+  /** Scrolled to and flashed once on mount, instead of starting at the end. */
+  focusId?: string
 }
 
 /** Only notes and photos have a drag handle -- a human typing a note may
@@ -64,12 +67,27 @@ export function Timeline({
   onReorder,
   liveTranscript,
   processingPhotoIds,
+  focusId,
 }: TimelineProps) {
   const endRef = useRef<HTMLDivElement>(null)
   const userScrolledUp = useRef(false)
   const [revealedId, setRevealedId] = useState<string | null>(null)
   const [dragState, setDragState] = useState<DragState | null>(null)
   const rowRefs = useRef(new Map<string, HTMLDivElement>())
+  const [flashId, setFlashId] = useState<string | null>(null)
+
+  // Opened from a search hit: start at that item, not the end. (Declared
+  // before the scroll-to-end effect so it holds that one off.)
+  useEffect(() => {
+    if (!focusId) return
+    const el = rowRefs.current.get(focusId)
+    if (!el) return
+    userScrolledUp.current = true
+    el.scrollIntoView({ block: 'center' })
+    setFlashId(focusId)
+    const t = window.setTimeout(() => setFlashId(null), 1800)
+    return () => window.clearTimeout(t)
+  }, [focusId])
 
   useEffect(() => {
     if (!userScrolledUp.current) {
@@ -167,7 +185,9 @@ export function Timeline({
               if (el) rowRefs.current.set(item.id, el)
               else rowRefs.current.delete(item.id)
             }}
-            className={dragState?.draggedId === item.id ? 'timeline-row--dragging' : undefined}
+            className={
+              dragState?.draggedId === item.id ? 'timeline-row--dragging' : flashId === item.id ? 'timeline-row--flash' : undefined
+            }
           >
             {index > 0 && <div className="dot-divider" aria-hidden="true" />}
             <SwipeActions
@@ -199,6 +219,8 @@ export function Timeline({
                 <VideoRow item={item} onTap={() => onVideoTap(item.id)} />
               ) : item.type === 'transcript' ? (
                 <TranscriptRow item={item} />
+              ) : item.type === 'highlight' ? (
+                <HighlightRow item={item} />
               ) : (
                 <EnrichmentRow item={item} />
               )}
@@ -397,7 +419,10 @@ function PhotoRow({ item, processing, onTap }: { item: PhotoItem; processing: bo
             ) : item.slideText !== undefined ? (
               <span className="photo-row__processed">
                 <CheckIcon /> Processed
+                {item.uploading && <span className="photo-row__uploading"> · Uploading</span>}
               </span>
+            ) : item.uploading ? (
+              <span className="photo-row__uploading">Waiting to upload</span>
             ) : (
               item.caption
             )}
@@ -406,6 +431,22 @@ function PhotoRow({ item, processing, onTap }: { item: PhotoItem; processing: bo
         </div>
         <span className="mono-timestamp photo-row__timestamp">{formatClock(item.timestamp)}</span>
       </button>
+    </div>
+  )
+}
+
+function HighlightRow({ item }: { item: HighlightItem }) {
+  return (
+    <div
+      className={`highlight-row${item.excluded ? ' is-excluded' : ''}`}
+      role="group"
+      aria-label={`Remembered moment at ${formatClock(item.timestamp)}`}
+    >
+      <p className="highlight-row__label">
+        <StarIcon filled /> Remembered this moment
+      </p>
+      {item.excluded && <ExcludedBadge />}
+      <span className="mono-timestamp highlight-row__meta">{formatClock(item.timestamp)}</span>
     </div>
   )
 }

@@ -1,21 +1,26 @@
 import { useEffect, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
+import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import type { PhotoItem, Session, TimelineItemData, VideoItem } from '../types'
 import { formatElapsed, formatSessionSubtitle, formatDurationCompact } from '../format'
 import { Timeline } from '../components/Timeline'
-import { CheckIcon, NoteIcon, PhotoIcon, WarningIcon } from '../components/InlineIcons'
+import { CheckIcon, NoteIcon, PhotoIcon, StarIcon, WarningIcon } from '../components/InlineIcons'
 import { CameraViewfinder } from '../components/CameraViewfinder'
 import { PhotoViewer } from '../components/PhotoViewer'
 import { VideoViewer } from '../components/VideoViewer'
+import { AskSheet } from '../components/AskSheet'
 import { useAmbientTranscription } from '../hooks/useAmbientTranscription'
 import { useWakeLock } from '../hooks/useWakeLock'
 import * as db from '../db'
 import { SlideScanner, blobToBase64 } from '../native/slideScanner'
+import { backgroundUploads, queuePhoto } from '../photoUploads'
 import './CaptureScreen.css'
 
 interface CaptureScreenProps {
   session: Session
   userId: string
+  /** Scroll to and flash this item on opening (from a search hit). */
+  focusItemId?: string
   onUpdateLocal: (updater: (session: Session) => Session) => void
   onBack: () => void
 }
@@ -32,14 +37,17 @@ function elapsedFor(session: Session, now: number): number {
   return session.accumulatedMs + live
 }
 
-export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: CaptureScreenProps) {
+export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onBack }: CaptureScreenProps) {
   const [now, setNow] = useState(Date.now())
   const [cameraOpen, setCameraOpen] = useState(false)
+  const [askOpen, setAskOpen] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [viewingPhotoId, setViewingPhotoId] = useState<string | null>(null)
   const [viewingVideoId, setViewingVideoId] = useState<string | null>(null)
   const [activeId, setActiveId] = useState<string | 'new' | null>(null)
   const [enhancing, setEnhancing] = useState(false)
+  // Briefly true after "Remember this", as its confirmation.
+  const [remembered, setRemembered] = useState(false)
   // Words heard so far in the transcript segment that's still in progress.
   const [liveText, setLiveText] = useState('')
   // Photos that failed to save -- kept in memory (not just dropped) so a bad
@@ -98,6 +106,20 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
       setSaveError(err instanceof Error ? err.message : 'Failed to save note -- tap away again to retry')
     } finally {
       savingNoteRef.current = false
+    }
+  }
+
+  /** Marks right now as a moment that mattered. */
+  async function rememberThis() {
+    if (Capacitor.isNativePlatform()) void Haptics.impact({ style: ImpactStyle.Medium })
+    setRemembered(true)
+    window.setTimeout(() => setRemembered(false), 1600)
+    try {
+      const item = await db.addHighlight(session.id, userId)
+      onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
+    } catch (err) {
+      setRemembered(false)
+      setSaveError(err instanceof Error ? err.message : 'Failed to save -- tap again to retry')
     }
   }
 
@@ -196,7 +218,40 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
     }
   }
 
+  /** Native: the photo shows at once and goes to the background upload
+   * queue, which straightens and reads it first. */
+  async function queueNativePhoto(blob: Blob) {
+    const { item, processed } = queuePhoto(session.id, userId, blob)
+    onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
+    setProcessingPhotoIds((ids) => new Set(ids).add(item.id))
+    try {
+      const update = await processed
+      onUpdateLocal((s) => ({
+        ...s,
+        items: s.items.map((i) => (i.id === item.id && i.type === 'photo' ? { ...i, ...update } : i)),
+      }))
+    } catch {
+      // Couldn't even save it to the phone -- upload it directly instead.
+      onUpdateLocal((s) => ({ ...s, items: s.items.filter((i) => i.id !== item.id) }))
+      uploadPhoto(blob)
+    } finally {
+      setProcessingPhotoIds((ids) => {
+        const next = new Set(ids)
+        next.delete(item.id)
+        return next
+      })
+    }
+  }
+
   function commitPhoto(blob: Blob) {
+    if (backgroundUploads) {
+      void queueNativePhoto(blob)
+      return
+    }
+    uploadPhoto(blob)
+  }
+
+  function uploadPhoto(blob: Blob) {
     const pendingId = `${Date.now()}-${Math.random()}`
     setPendingPhotos((p) => [...p, { id: pendingId, blob }])
     void savePhoto(pendingId, blob)
@@ -299,6 +354,19 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
             ‹
           </button>
           <EditableTitle title={session.title} onCommit={commitTitle} />
+          {session.items.some((i) => i.type === 'transcript' || i.type === 'note' || i.type === 'photo') && (
+            <button className="ask-btn" onClick={() => setAskOpen(true)} aria-label="Ask about this session">
+              <svg className="inline-icon" viewBox="2.2 2.7 19.6 18.6" fill="none" aria-hidden="true">
+                <path
+                  d="M4 5.5A2 2 0 016 3.5h12a2 2 0 012 2v9a2 2 0 01-2 2h-7l-4.5 4v-4H6a2 2 0 01-2-2v-9z"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinejoin="round"
+                />
+              </svg>{' '}
+              Ask
+            </button>
+          )}
         </div>
 
         <div className="capture-header__row2">
@@ -404,6 +472,7 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
         onReorder={reorderItems}
         liveTranscript={session.status === 'recording' ? liveText : null}
         processingPhotoIds={processingPhotoIds}
+        focusId={focusItemId}
       />
 
       <div className="capture-actions">
@@ -421,6 +490,15 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
             <circle cx="12" cy="13" r="3.2" stroke="var(--accent)" strokeWidth="1.6" />
           </svg>
         </button>
+        {session.status === 'recording' && (
+          <button
+            className={`remember-btn${remembered ? ' remember-btn--done' : ''}`}
+            onClick={rememberThis}
+            aria-label="Remember this moment"
+          >
+            <StarIcon filled={remembered} /> {remembered ? 'Remembered' : 'Remember this'}
+          </button>
+        )}
       </div>
 
       {viewingPhoto && (
@@ -430,6 +508,8 @@ export function CaptureScreen({ session, userId, onUpdateLocal, onBack }: Captur
       {viewingVideo && (
         <VideoViewer item={viewingVideo} onClose={() => setViewingVideoId(null)} />
       )}
+
+      {askOpen && <AskSheet sessionId={session.id} title={session.title} onClose={() => setAskOpen(false)} />}
 
       {cameraOpen && (
         <CameraViewfinder

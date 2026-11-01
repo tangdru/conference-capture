@@ -15,35 +15,46 @@ public class SlideScannerPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "process", returnType: CAPPluginReturnPromise),
     ]
 
-    private let context = CIContext()
-
     /// {data}: base64 JPEG. Resolves with {text, straightened, data?} --
     /// `data` (base64 JPEG of the flattened slide) only when one was found.
     @objc func process(_ call: CAPPluginCall) {
-        guard
-            let base64 = call.getString("data"),
-            let bytes = Data(base64Encoded: base64),
-            let image = CIImage(data: bytes, options: [.applyOrientationProperty: true])
-        else {
+        guard let base64 = call.getString("data"), let bytes = Data(base64Encoded: base64) else {
             call.reject("Couldn't read the photo")
             return
         }
         DispatchQueue.global(qos: .userInitiated).async {
-            var result: [String: Any] = ["straightened": false]
-            var page = image
-            if let quad = self.findSlide(in: image), let flat = self.flatten(image, to: quad),
-               let jpeg = self.context.jpegRepresentation(
-                   of: flat,
-                   colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
-                   options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 0.85]
-               ) {
-                page = flat
-                result["straightened"] = true
-                result["data"] = jpeg.base64EncodedString()
+            guard let scan = SlideScan.process(bytes) else {
+                call.reject("Couldn't read the photo")
+                return
             }
-            result["text"] = self.readText(in: page)
+            var result: [String: Any] = ["straightened": scan.flattened != nil, "text": scan.text]
+            if let flattened = scan.flattened { result["data"] = flattened.base64EncodedString() }
             call.resolve(result)
         }
+    }
+}
+
+/// The processing itself, shared with PhotoUploadQueue (which runs it on
+/// each photo it's handed, before uploading).
+enum SlideScan {
+    private static let context = CIContext()
+
+    /// The text on the photo, and the flattened slide as a JPEG if one was
+    /// found. Nil if the bytes aren't an image. Slow -- call off the main thread.
+    static func process(_ jpeg: Data) -> (text: String, flattened: Data?)? {
+        guard let image = CIImage(data: jpeg, options: [.applyOrientationProperty: true]) else { return nil }
+        var page = image
+        var flattened: Data?
+        if let quad = findSlide(in: image), let flat = flatten(image, to: quad),
+           let data = context.jpegRepresentation(
+               of: flat,
+               colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
+               options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 0.85]
+           ) {
+            page = flat
+            flattened = data
+        }
+        return (readText(in: page), flattened)
     }
 
     // MARK: - Finding the slide
@@ -51,7 +62,7 @@ public class SlideScannerPlugin: CAPPlugin, CAPBridgedPlugin {
     /// The slide's corners (Vision's normalized, bottom-left-origin space),
     /// or nil when there's no confident, reasonably sized rectangle -- a
     /// photo of people or a room is left as it is.
-    private func findSlide(in image: CIImage) -> VNRectangleObservation? {
+    private static func findSlide(in image: CIImage) -> VNRectangleObservation? {
         let handler = VNImageRequestHandler(ciImage: image, options: [:])
 
         // Projected slides and screens read as rectangles; document
@@ -68,9 +79,9 @@ public class SlideScannerPlugin: CAPPlugin, CAPBridgedPlugin {
 
         let candidates = (rectangles.results ?? []) + (document.results ?? []).filter { $0.confidence >= 0.8 }
         return candidates.first { quad in
-            let area = Self.area(of: quad)
+            let size = area(of: quad)
             // Too small to be the subject, or already the whole frame.
-            return area >= 0.15 && area <= 0.95
+            return size >= 0.15 && size <= 0.95
         }
     }
 
@@ -84,7 +95,7 @@ public class SlideScannerPlugin: CAPPlugin, CAPBridgedPlugin {
         return abs(sum) / 2
     }
 
-    private func flatten(_ image: CIImage, to quad: VNRectangleObservation) -> CIImage? {
+    private static func flatten(_ image: CIImage, to quad: VNRectangleObservation) -> CIImage? {
         let size = image.extent.size
         func point(_ p: CGPoint) -> CIVector {
             CIVector(x: image.extent.minX + p.x * size.width, y: image.extent.minY + p.y * size.height)
@@ -101,7 +112,7 @@ public class SlideScannerPlugin: CAPPlugin, CAPBridgedPlugin {
     // MARK: - Reading the text
 
     /// The text on the slide, top to bottom, one line per recognized line.
-    private func readText(in image: CIImage) -> String {
+    private static func readText(in image: CIImage) -> String {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true

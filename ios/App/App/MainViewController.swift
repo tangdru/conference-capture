@@ -11,5 +11,6 @@ class MainViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(DeviceTiltPlugin())
         bridge?.registerPluginInstance(NativeCameraPlugin())
         bridge?.registerPluginInstance(SlideScannerPlugin())
+        bridge?.registerPluginInstance(PhotoUploadsPlugin())
     }
 }

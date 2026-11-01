@@ -406,3 +406,40 @@
 .photo-row__processed .inline-icon {
   color: var(--accent);
 }
+
+/* Saved on the phone, still going up in the background. */
+.photo-row__uploading {
+  color: var(--text-muted);
+}
+
+/* "Remember this" -- a marked moment */
+
+.highlight-row {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 8px 0;
+}
+
+.highlight-row__label {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--semantic-warning);
+}
+
+.highlight-row__meta {
+  flex-shrink: 0;
+}
+
+/* Landed on from a search hit. */
+.timeline-row--flash {
+  border-radius: var(--radius-md);
+  animation: timeline-flash 1.8s var(--easing-out);
+}
+
+@keyframes timeline-flash {
+  0%, 40% { background: var(--accent-subtle); }
+  100% { background: transparent; }
+}

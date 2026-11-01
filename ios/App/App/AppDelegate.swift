@@ -7,8 +7,21 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // Pick up photo uploads still running from before the app was closed.
+        PhotoUploadQueue.shared.attach()
         return true
+    }
+
+    /// iOS relaunched the app in the background to report on photo uploads.
+    func application(_ application: UIApplication,
+                     handleEventsForBackgroundURLSession identifier: String,
+                     completionHandler: @escaping () -> Void) {
+        guard identifier == PhotoUploadQueue.sessionIdentifier else {
+            completionHandler()
+            return
+        }
+        PhotoUploadQueue.shared.backgroundCompletion = completionHandler
+        PhotoUploadQueue.shared.attach()
     }
 
     func applicationWillResignActive(_ application: UIApplication) {

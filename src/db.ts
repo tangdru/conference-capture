@@ -1,5 +1,6 @@
 import { supabase, PHOTOS_BUCKET, VIDEOS_BUCKET, DECKS_BUCKET } from './supabaseClient'
-import type { DeckStatus, EnrichmentItemData, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData, TranscriptItem, VideoItem } from './types'
+import { cancelPhotoUploads } from './photoUploads'
+import type { DeckStatus, EnrichmentItemData, HighlightItem, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData, TranscriptItem, VideoItem } from './types'
 
 const ITEM_COLUMNS = 'id, session_id, type, subtype, payload, text, caption, photo_path, video_path, duration_ms, item_timestamp, added_later, excluded, position'
 const SESSION_COLUMNS = 'id, title, status, started_at, accumulated_ms, live_span_started_at, deck_status, deck_path, deck_error, deck_generated_at, enrichment_error, last_enriched_at, updated_at'
@@ -23,7 +24,7 @@ interface SessionRow {
 interface ItemRow {
   id: string
   session_id: string
-  type: 'note' | 'photo' | 'video' | 'transcript' | 'enrichment'
+  type: 'note' | 'photo' | 'video' | 'transcript' | 'highlight' | 'enrichment'
   subtype: string | null
   payload: Record<string, unknown> | null
   text: string | null
@@ -130,6 +131,9 @@ function itemFromRow(row: ItemRow): TimelineItemData | null {
   if (row.type === 'transcript') {
     return { id: row.id, type: 'transcript', text: row.text ?? '', timestamp, durationMs: row.duration_ms ?? 0, excluded }
   }
+  if (row.type === 'highlight') {
+    return { id: row.id, type: 'highlight', timestamp, excluded }
+  }
   if (row.type === 'enrichment') {
     return enrichmentItemFromRow(row)
   }
@@ -217,6 +221,7 @@ export async function updateSession(
 }
 
 export async function deleteSession(session: Session): Promise<void> {
+  await cancelPhotoUploads({ sessionId: session.id })
   const photoPaths = session.items
     .filter((i): i is PhotoItem => i.type === 'photo')
     .map((i) => i.photoPath)
@@ -248,6 +253,17 @@ export async function addNote(sessionId: string, userId: string, text: string): 
   return { id: data.id, type: 'note', text, timestamp: new Date(data.item_timestamp).getTime() }
 }
 
+export async function addHighlight(sessionId: string, userId: string): Promise<HighlightItem> {
+  const { data, error } = await supabase
+    .from('cc_timeline_items')
+    .insert({ session_id: sessionId, owner_id: userId, type: 'highlight', item_timestamp: new Date().toISOString() })
+    .select('id, item_timestamp')
+    .single()
+
+  if (error) throw error
+  return { id: data.id, type: 'highlight', timestamp: new Date(data.item_timestamp).getTime() }
+}
+
 export async function updateNoteText(itemId: string, text: string): Promise<void> {
   const { error } = await supabase.from('cc_timeline_items').update({ text }).eq('id', itemId)
   if (error) throw error
@@ -271,6 +287,7 @@ export async function reorderItems(orderedIds: string[]): Promise<void> {
 }
 
 export async function deleteTimelineItem(item: TimelineItemData): Promise<void> {
+  if (item.type === 'photo' && item.uploading) await cancelPhotoUploads({ id: item.id })
   if (item.type === 'photo') {
     // Best-effort -- an orphaned storage object is a minor cleanup issue,
     // not something that should block the item disappearing for the user.
@@ -439,6 +456,18 @@ export async function generateDeck(sessionId: string): Promise<void> {
   if (error) throw error
 }
 
+/** "Ask a session": answered from what was captured in it. `history` is the
+ * conversation so far, oldest first. */
+export async function askSession(
+  sessionId: string,
+  question: string,
+  history: { role: 'user' | 'assistant'; content: string }[],
+): Promise<string> {
+  const { data, error } = await supabase.functions.invoke('ask-session', { body: { sessionId, question, history } })
+  if (error) throw new Error('Couldn’t get an answer -- check your connection and try again')
+  return data.answer
+}
+
 export async function enrichSession(sessionId: string): Promise<number> {
   const { data, error } = await supabase.functions.invoke('enrich-session', { body: { sessionId } })
   if (error) throw error
@@ -479,14 +508,16 @@ export async function fetchSessionEnrichmentState(sessionId: string): Promise<{ 
 
 export async function fetchSessionDeckState(
   sessionId: string,
-): Promise<{ deckStatus: DeckStatus; deckPath: string | null; deckError: string | null; deckGeneratedAt: number | null }> {
+): Promise<{ title: string; deckStatus: DeckStatus; deckPath: string | null; deckError: string | null; deckGeneratedAt: number | null }> {
+  // The title too: generating names a session that was never named.
   const { data, error } = await supabase
     .from('cc_sessions')
-    .select('deck_status, deck_path, deck_error, deck_generated_at')
+    .select('title, deck_status, deck_path, deck_error, deck_generated_at')
     .eq('id', sessionId)
     .single()
   if (error) throw error
   return {
+    title: data.title,
     deckStatus: data.deck_status,
     deckPath: data.deck_path,
     deckError: data.deck_error,

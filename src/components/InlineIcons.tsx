@@ -42,6 +42,20 @@ export function WarningIcon() {
   )
 }
 
+export function StarIcon({ filled = false }: { filled?: boolean }) {
+  return (
+    <svg className="inline-icon" viewBox="1.2 1.4 21.6 20.8" aria-hidden="true">
+      <path
+        d="M12 2.5l2.9 6 6.6.8-4.9 4.5 1.3 6.5L12 17.1l-5.9 3.2 1.3-6.5-4.9-4.5 6.6-.8L12 2.5z"
+        fill={filled ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 export function CheckIcon() {
   return (
     <svg className="inline-icon" viewBox="3.75 5.75 18.5 14.5" aria-hidden="true">

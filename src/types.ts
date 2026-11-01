@@ -8,6 +8,8 @@ export interface NoteItem {
   timestamp: number
   addedLater?: boolean
   excluded?: boolean
+  /** Starred from the swipe menu: an entry that mattered, weighted up in the presentation and Ask. */
+  starred?: boolean
   /** Explicit display/export order, set once the user drags this item -- absent means "sort by timestamp." */
   position?: number
 }
@@ -27,6 +29,7 @@ export interface PhotoItem {
   timestamp: number
   addedLater?: boolean
   excluded?: boolean
+  starred?: boolean
   /** Explicit display/export order, set once the user drags this item -- absent means "sort by timestamp." */
   position?: number
 }
@@ -42,6 +45,7 @@ export interface VideoItem {
   timestamp: number
   addedLater?: boolean
   excluded?: boolean
+  starred?: boolean
 }
 
 export interface TranscriptItem {
@@ -51,6 +55,7 @@ export interface TranscriptItem {
   timestamp: number
   durationMs: number
   excluded?: boolean
+  starred?: boolean
 }
 
 /** "Remember this": a tap marking the moment as one that mattered, so the
@@ -60,6 +65,7 @@ export interface HighlightItem {
   type: 'highlight'
   timestamp: number
   excluded?: boolean
+  starred?: boolean
 }
 
 interface BaseEnrichmentItem {
@@ -67,6 +73,7 @@ interface BaseEnrichmentItem {
   type: 'enrichment'
   timestamp: number
   excluded?: boolean
+  starred?: boolean
 }
 
 export interface EnrichmentSummaryItem extends BaseEnrichmentItem {

@@ -2,7 +2,7 @@ import { supabase, PHOTOS_BUCKET, VIDEOS_BUCKET, DECKS_BUCKET } from './supabase
 import { cancelPhotoUploads } from './photoUploads'
 import type { DeckStatus, EnrichmentItemData, HighlightItem, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData, TranscriptItem, VideoItem } from './types'
 
-const ITEM_COLUMNS = 'id, session_id, type, subtype, payload, text, caption, photo_path, video_path, duration_ms, item_timestamp, added_later, excluded, position'
+const ITEM_COLUMNS = 'id, session_id, type, subtype, payload, text, caption, photo_path, video_path, duration_ms, item_timestamp, added_later, excluded, starred, position'
 const SESSION_COLUMNS = 'id, title, status, started_at, accumulated_ms, live_span_started_at, deck_status, deck_path, deck_error, deck_generated_at, enrichment_error, last_enriched_at, updated_at'
 
 interface SessionRow {
@@ -35,6 +35,7 @@ interface ItemRow {
   item_timestamp: string
   added_later: boolean
   excluded: boolean
+  starred: boolean
   position: number | null
 }
 
@@ -60,11 +61,12 @@ function sessionFromRow(row: SessionRow, items: TimelineItemData[]): Session {
 function enrichmentItemFromRow(row: ItemRow): EnrichmentItemData | null {
   const timestamp = new Date(row.item_timestamp).getTime()
   const excluded = row.excluded || undefined
+  const starred = row.starred || undefined
   const payload = row.payload ?? {}
 
   switch (row.subtype) {
     case 'summary':
-      return { id: row.id, type: 'enrichment', subtype: 'summary', timestamp, excluded, text: String(payload.text ?? '') }
+      return { id: row.id, type: 'enrichment', subtype: 'summary', timestamp, excluded, starred, text: String(payload.text ?? '') }
     case 'action_items':
       return {
         id: row.id,
@@ -72,6 +74,7 @@ function enrichmentItemFromRow(row: ItemRow): EnrichmentItemData | null {
         subtype: 'action_items',
         timestamp,
         excluded,
+        starred,
         items: Array.isArray(payload.items) ? (payload.items as { text: string; context: string }[]) : [],
       }
     case 'references':
@@ -81,6 +84,7 @@ function enrichmentItemFromRow(row: ItemRow): EnrichmentItemData | null {
         subtype: 'references',
         timestamp,
         excluded,
+        starred,
         items: Array.isArray(payload.items)
           ? (payload.items as { title: string; source: string; description: string; url: string | null }[])
           : [],
@@ -92,6 +96,7 @@ function enrichmentItemFromRow(row: ItemRow): EnrichmentItemData | null {
         subtype: 'speaker_bio',
         timestamp,
         excluded,
+        starred,
         name: String(payload.name ?? ''),
         role: String(payload.role ?? ''),
         org: String(payload.org ?? ''),
@@ -104,6 +109,7 @@ function enrichmentItemFromRow(row: ItemRow): EnrichmentItemData | null {
         subtype: 'acronyms',
         timestamp,
         excluded,
+        starred,
         items: Array.isArray(payload.items) ? (payload.items as { term: string; expansion: string }[]) : [],
       }
     default:
@@ -114,8 +120,9 @@ function enrichmentItemFromRow(row: ItemRow): EnrichmentItemData | null {
 function itemFromRow(row: ItemRow): TimelineItemData | null {
   const timestamp = new Date(row.item_timestamp).getTime()
   const excluded = row.excluded || undefined
+  const starred = row.starred || undefined
   if (row.type === 'note') {
-    return { id: row.id, type: 'note', text: row.text ?? '', timestamp, addedLater: row.added_later, excluded, position: row.position ?? undefined }
+    return { id: row.id, type: 'note', text: row.text ?? '', timestamp, addedLater: row.added_later, excluded, starred, position: row.position ?? undefined }
   }
   if (row.type === 'video') {
     return {
@@ -126,10 +133,11 @@ function itemFromRow(row: ItemRow): TimelineItemData | null {
       timestamp,
       addedLater: row.added_later,
       excluded,
+      starred,
     }
   }
   if (row.type === 'transcript') {
-    return { id: row.id, type: 'transcript', text: row.text ?? '', timestamp, durationMs: row.duration_ms ?? 0, excluded }
+    return { id: row.id, type: 'transcript', text: row.text ?? '', timestamp, durationMs: row.duration_ms ?? 0, excluded, starred }
   }
   if (row.type === 'highlight') {
     return { id: row.id, type: 'highlight', timestamp, excluded }
@@ -146,6 +154,7 @@ function itemFromRow(row: ItemRow): TimelineItemData | null {
     timestamp,
     addedLater: row.added_later,
     excluded,
+    starred,
     position: row.position ?? undefined,
   }
 }
@@ -266,6 +275,11 @@ export async function addHighlight(sessionId: string, userId: string): Promise<H
 
 export async function updateNoteText(itemId: string, text: string): Promise<void> {
   const { error } = await supabase.from('cc_timeline_items').update({ text }).eq('id', itemId)
+  if (error) throw error
+}
+
+export async function setItemStarred(itemId: string, starred: boolean): Promise<void> {
+  const { error } = await supabase.from('cc_timeline_items').update({ starred }).eq('id', itemId)
   if (error) throw error
 }
 

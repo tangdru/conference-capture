@@ -75,7 +75,7 @@ async function generateDeck(
 
   const { data: allItemRows, error: itemsError } = await supabase
     .from('cc_timeline_items')
-    .select('type, subtype, payload, text, caption, photo_path, item_timestamp, excluded')
+    .select('type, subtype, payload, text, caption, photo_path, item_timestamp, excluded, starred')
     .eq('session_id', sessionId)
     .order('position', { ascending: true, nullsFirst: false })
     .order('item_timestamp', { ascending: true })
@@ -106,7 +106,7 @@ async function generateDeck(
     }
   }
 
-  const photos: { placeholder: string; dataUrl: string; caption: string; slideText: string; elapsed: string }[] = []
+  const photos: { placeholder: string; dataUrl: string; caption: string; slideText: string; elapsed: string; starred: boolean }[] = []
   for (let i = 0; i < photoRows.length; i++) {
     const row = photoRows[i]
     const { data: blob, error: downloadError } = await supabase.storage
@@ -121,6 +121,7 @@ async function generateDeck(
       // Read off the photo on the phone (SlideScanner); empty if none.
       slideText: row.text ?? '',
       elapsed: formatElapsed(session.started_at, row.item_timestamp),
+      starred: !!row.starred,
     })
   }
 
@@ -181,22 +182,22 @@ function formatSlideText(text: string): string {
 async function callClaude(
   title: string,
   startedAt: string,
-  notes: { text: string | null; item_timestamp: string }[],
-  transcriptSegments: { text: string | null; item_timestamp: string }[],
+  notes: { text: string | null; item_timestamp: string; starred?: boolean }[],
+  transcriptSegments: { text: string | null; item_timestamp: string; starred?: boolean }[],
   enrichmentRows: { subtype: string | null; payload: Record<string, unknown> | null }[],
-  photos: { placeholder: string; dataUrl: string; caption: string; slideText: string; elapsed: string }[],
+  photos: { placeholder: string; dataUrl: string; caption: string; slideText: string; elapsed: string; starred: boolean }[],
   highlightsText: string,
 ): Promise<string> {
   const notesText = notes.length > 0
-    ? notes.map((n) => `- [${formatElapsed(startedAt, n.item_timestamp)}] ${n.text}`).join('\n')
+    ? notes.map((n) => `- [${formatElapsed(startedAt, n.item_timestamp)}]${n.starred ? ' ★' : ''} ${n.text}`).join('\n')
     : '(No written notes were captured -- build the piece from the transcript and photos alone.)'
 
   const transcriptText = transcriptSegments.length > 0
-    ? transcriptSegments.map((t) => `- [${formatElapsed(startedAt, t.item_timestamp)}] ${t.text}`).join('\n')
+    ? transcriptSegments.map((t) => `- [${formatElapsed(startedAt, t.item_timestamp)}]${t.starred ? ' ★' : ''} ${t.text}`).join('\n')
     : '(No ambient transcript was captured for this talk.)'
 
   const photosText = photos.length > 0
-    ? photos.map((p) => `- ${p.placeholder} [${p.elapsed}]${p.caption ? ` -- caption: "${p.caption}"` : ''}${formatSlideText(p.slideText)}`).join('\n')
+    ? photos.map((p) => `- ${p.placeholder} [${p.elapsed}]${p.starred ? ' ★' : ''}${p.caption ? ` -- caption: "${p.caption}"` : ''}${formatSlideText(p.slideText)}`).join('\n')
     : '(No photos were captured for this talk.)'
 
   const enrichmentText = formatEnrichment(enrichmentRows)
@@ -227,6 +228,7 @@ Requirements:
 - Use scroll-driven motion deliberately: sticky/pinned photo or quote backgrounds that text scrolls past, a scroll progress indicator, and elements (quotes, stats, chart bars) that animate in via IntersectionObserver as they enter the viewport. Every animation should earn its place by clarifying content, not decorate for its own sake.
 - Build at least one real, inline-SVG (or <canvas>) data visualization driven by the actual elapsed-time data above -- for example, a timeline/activity chart across the talk's duration showing when notes, quotes, and photos landed, or a simple chart of the action-item/reference/acronym counts. It must reflect this session's real numbers, not invented or placeholder data.
 - The "Remember this" moments are the attendee's own signal of what mattered most. Give each one clear prominence -- its own section or a pull-quote/callout, more space and detail than the material around it, and a mention in the closing summary -- built from what was being said and shown at that point (a tap usually lands just after the thing it marks, so the transcript just before it is usually what it's about). Don't label them with the phrase "Remember this"; just let them read as the key moments. If there are none, ignore this.
+- Notes, transcript lines and photos marked ★ were starred by the attendee afterwards as entries that mattered most. Give them the same weight as the "Remember this" moments: prominent placement, more space, and a place in the closing summary. Don't show the ★ itself or call them "starred".
 - Weave the photos into the page as first-class content at the point in the scroll that matches their elapsed time (not an appendix dumped at the end). Reference EACH photo using an <img> tag whose src is EXACTLY its placeholder token, e.g. <img src="PHOTO_1">. Do not invent placeholder names and do not attempt to embed real image data yourself.
 - Pick a visual theme (color palette, type, motion style) that fits the subject matter of the talk.
 - Open with a short title/hero section and close with a brief summary section. Use the extracted summary and speaker bio for these if present, rather than writing your own from scratch. Work action items, references, and acronym expansions into the page wherever they're contextually relevant -- not as a dumped appendix list.

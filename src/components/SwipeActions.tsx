@@ -243,6 +243,21 @@ export function ShareIcon() {
   )
 }
 
+/** Star / Unstar: filled once the entry is starred. */
+export function StarActionIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <path
+        d="M12 2.5l2.9 6 6.6.8-4.9 4.5 1.3 6.5L12 17.1l-5.9 3.2 1.3-6.5-4.9-4.5 6.6-.8L12 2.5z"
+        fill={filled ? 'var(--semantic-warning)' : 'none'}
+        stroke="var(--semantic-warning)"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 export function ExcludeIcon() {
   return (
     <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">

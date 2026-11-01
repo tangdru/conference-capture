@@ -36,6 +36,7 @@ interface ItemRow {
   text: string | null
   caption: string | null
   item_timestamp: string
+  starred: boolean | null
 }
 
 interface SessionRow {
@@ -86,7 +87,7 @@ Deno.serve(async (req) => {
 })
 
 const GROUND_RULES = `- The transcript is the speaker, auto-transcribed on the phone -- expect the odd misheard word. Slide text was read off photos on the phone -- expect the odd misread character.
-- Notes are the attendee's own. "Remembered" marks a moment they flagged as important.
+- Notes are the attendee's own. "Remembered" marks a moment they flagged as important, and ★ marks an entry they starred as important.
 - Answer from this material only. If it doesn't cover the question, say so plainly, and say what it does cover that's closest. Never fill gaps with outside knowledge presented as if a speaker said it; if general background would genuinely help, keep it brief and say it's not from the talks.
 - Be concise: a direct answer first, then only the detail that helps.
 - Plain text for a phone screen: short paragraphs, "- " for lists, no headings, tables or other markdown.`
@@ -106,7 +107,7 @@ async function answerInSession(
 
   const { data: rows, error: itemsError } = await supabase
     .from('cc_timeline_items')
-    .select('session_id, type, subtype, payload, text, caption, item_timestamp')
+    .select('session_id, type, subtype, payload, text, caption, item_timestamp, starred')
     .eq('session_id', sessionId)
     .order('item_timestamp', { ascending: true })
   if (itemsError) throw itemsError
@@ -143,7 +144,7 @@ async function answerAcrossSessions(
 
   const { data: itemRows, error: itemsError } = await supabase
     .from('cc_timeline_items')
-    .select('session_id, type, subtype, payload, text, caption, item_timestamp')
+    .select('session_id, type, subtype, payload, text, caption, item_timestamp, starred')
     .order('item_timestamp', { ascending: true })
   if (itemsError) throw itemsError
 
@@ -233,7 +234,7 @@ function describeSession(startedAt: string, rows: ItemRow[]): string {
   const lines: string[] = []
   const extras: string[] = []
   for (const row of rows) {
-    const at = formatElapsed(startedAt, row.item_timestamp)
+    const at = formatElapsed(startedAt, row.item_timestamp) + (row.starred ? ' ★' : '')
     switch (row.type) {
       case 'transcript':
         if (row.text) lines.push(`[${at}] Speaker: ${row.text}`)

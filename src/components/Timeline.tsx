@@ -11,7 +11,7 @@ import type {
 import { formatClock, formatClipDuration } from '../format'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
 import { useVideoUrl } from '../hooks/useVideoUrl'
-import { SwipeActions, DeleteIcon, ExcludeIcon, IncludeIcon, type DragHandle } from './SwipeActions'
+import { SwipeActions, DeleteIcon, ExcludeIcon, IncludeIcon, StarActionIcon, type DragHandle } from './SwipeActions'
 import { CheckIcon, StarIcon } from './InlineIcons'
 import './Timeline.css'
 
@@ -30,6 +30,7 @@ interface TimelineProps {
   onCancelActive: () => void
   onDeleteItem: (item: TimelineItemData) => void
   onToggleExcluded: (item: TimelineItemData) => void
+  onToggleStarred: (item: TimelineItemData) => void
   onReorder: (orderedIds: string[]) => void
   /** While listening: the words heard so far ('' before any). null when not listening. */
   liveTranscript: string | null
@@ -64,6 +65,7 @@ export function Timeline({
   onCancelActive,
   onDeleteItem,
   onToggleExcluded,
+  onToggleStarred,
   onReorder,
   liveTranscript,
   processingPhotoIds,
@@ -195,6 +197,13 @@ export function Timeline({
               revealedId={revealedId}
               onReveal={setRevealedId}
               actions={[
+                ...(item.type === 'highlight' || item.type === 'enrichment'
+                  ? []
+                  : [{
+                      icon: <StarActionIcon filled={!!item.starred} />,
+                      label: item.starred ? 'Unstar' : 'Star',
+                      onClick: () => onToggleStarred(item),
+                    }]),
                 item.excluded
                   ? { icon: <IncludeIcon />, label: 'Include in export', onClick: () => onToggleExcluded(item) }
                   : { icon: <ExcludeIcon />, label: 'Exclude from export', onClick: () => onToggleExcluded(item) },
@@ -274,6 +283,14 @@ function LiveTranscriptRow({ text }: { text: string }) {
   )
 }
 
+function StarredBadge() {
+  return (
+    <span className="starred-badge" aria-label="Starred">
+      <StarIcon filled />
+    </span>
+  )
+}
+
 function ExcludedBadge() {
   return <span className="excluded-badge">Excluded</span>
 }
@@ -290,7 +307,10 @@ function NoteRow({ item, onTap }: { item: NoteItem; onTap: () => void }) {
           <p className="note-row__text">{item.text}</p>
         </div>
         <div className="note-row__meta">
-          <span className="mono-timestamp">{formatClock(item.timestamp)}</span>
+          <span className="row-time">
+            {item.starred && <StarredBadge />}
+            <span className="mono-timestamp">{formatClock(item.timestamp)}</span>
+          </span>
           {item.addedLater && <span className="added-later">Added later</span>}
           {item.excluded && <ExcludedBadge />}
         </div>
@@ -429,7 +449,10 @@ function PhotoRow({ item, processing, onTap }: { item: PhotoItem; processing: bo
           </p>
           {item.excluded && <ExcludedBadge />}
         </div>
-        <span className="mono-timestamp photo-row__timestamp">{formatClock(item.timestamp)}</span>
+        <span className="row-time photo-row__timestamp">
+          {item.starred && <StarredBadge />}
+          <span className="mono-timestamp">{formatClock(item.timestamp)}</span>
+        </span>
       </button>
     </div>
   )
@@ -463,7 +486,10 @@ function TranscriptRow({ item }: { item: TranscriptItem }) {
         <p className="transcript-row__text">{item.text}</p>
         {item.excluded && <ExcludedBadge />}
       </div>
-      <span className="mono-timestamp transcript-row__meta">{formatClock(item.timestamp)}</span>
+      <span className="row-time transcript-row__meta">
+        {item.starred && <StarredBadge />}
+        <span className="mono-timestamp">{formatClock(item.timestamp)}</span>
+      </span>
     </div>
   )
 }
@@ -493,7 +519,10 @@ function VideoRow({ item, onTap }: { item: VideoItem; onTap: () => void }) {
         <p className={`photo-row__caption${item.addedLater ? ' photo-row__caption--later' : ''}`}>Video</p>
         {item.excluded && <ExcludedBadge />}
       </div>
-      <span className="mono-timestamp photo-row__timestamp">{formatClock(item.timestamp)}</span>
+      <span className="row-time photo-row__timestamp">
+        {item.starred && <StarredBadge />}
+        <span className="mono-timestamp">{formatClock(item.timestamp)}</span>
+      </span>
     </button>
   )
 }

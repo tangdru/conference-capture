@@ -268,27 +268,24 @@
 /* "Remember this": marks the moment for the presentation to dwell on. */
 .remember-btn {
   margin-left: auto;
-  /* Room for "Remembered" too, so the button doesn't jump between them. */
-  min-width: 158px;
-  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
   display: flex;
-  align-items: baseline;
-  gap: 6px;
-  min-height: 44px;
-  padding: 0 18px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border-radius: var(--radius-full);
   border: 1px solid var(--border);
   background: var(--bg-surface);
   color: var(--text-primary);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 44px;
   cursor: pointer;
   transition: color var(--duration-fast) var(--easing-base), border-color var(--duration-fast) var(--easing-base);
 }
 
 .remember-btn .inline-icon {
+  width: 20px;
+  height: 20px;
   color: var(--semantic-warning);
 }
 

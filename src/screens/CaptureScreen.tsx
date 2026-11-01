@@ -163,6 +163,20 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
     }
   }
 
+  async function toggleStarred(item: TimelineItemData) {
+    const starred = !item.starred
+    if (starred && Capacitor.isNativePlatform()) void Haptics.impact({ style: ImpactStyle.Light })
+    onUpdateLocal((s) => ({
+      ...s,
+      items: s.items.map((i) => (i.id === item.id ? { ...i, starred } : i)),
+    }))
+    try {
+      await db.setItemStarred(item.id, starred)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save')
+    }
+  }
+
   async function reorderItems(orderedIds: string[]) {
     const positionById = new Map(orderedIds.map((id, index) => [id, index]))
     onUpdateLocal((s) => ({
@@ -481,6 +495,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
         onCancelActive={() => setActiveId(null)}
         onDeleteItem={deleteItem}
         onToggleExcluded={toggleExcluded}
+        onToggleStarred={toggleStarred}
         onReorder={reorderItems}
         liveTranscript={session.status === 'recording' ? liveText : null}
         processingPhotoIds={processingPhotoIds}
@@ -506,9 +521,9 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
           <button
             className={`remember-btn${remembered ? ' remember-btn--done' : ''}`}
             onClick={rememberThis}
-            aria-label="Remember this moment"
+            aria-label={remembered ? 'Remembered' : 'Remember this moment'}
           >
-            <StarIcon filled={remembered} /> {remembered ? 'Remembered' : 'Remember this'}
+            <StarIcon filled={remembered} />
           </button>
         )}
       </div>

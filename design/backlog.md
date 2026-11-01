@@ -18,6 +18,36 @@ on the native app is in `native-app-migration.md`.
 - **Small native polish.** Haptics on shutter and note save; Spotlight
   indexing of sessions.
 
+## Less note-taking (opt-in tools, the user stays in control)
+
+Step by step toward not needing to type notes, building on "Remember this"
+and starring any entry (2026-11-01). Rough order of value.
+
+1. **Mark without looking at the phone.**
+   - ★ Remember button on the recording Live Activity, next to Pause
+     (Lock Screen and Dynamic Island).
+   - "Remember this" as an Action Button / Control Center control.
+   - Back Tap via a Shortcuts action.
+2. **Say why it mattered, in one tap.**
+   - Typed marks: long-press the star to pick Action item, Question,
+     Quote, Key idea or Disagree; Sparkle and Ask use the type.
+   - Voice aside: hold the star and whisper a thought; it becomes a note in
+     the user's words, kept apart from the speaker's transcript.
+3. **The app suggests, the user decides.**
+   - Suggested moments after the talk: Claude proposes 3-5 moments that
+     mattered as dimmed cards; tap to keep (starred), swipe to dismiss.
+     Nothing is added unless kept.
+   - Running "so far" card during long talks, refreshed every few minutes,
+     bullets starrable. Costs per refresh, so a setting.
+4. **Turn it into things to do.**
+   - Action items to Reminders with one tap (native Reminders).
+   - QR codes and URLs on slide photos pulled out as tappable references.
+
 ## Product
+
+- **Save Ask conversations** per session so they can be continued later,
+  and/or save an answer as a note on the session.
+- **Record the cost of each AI call** (token usage) to see what each
+  question and sparkle really costs.
 
 - **Export a written summary** to Notes, email or Notion, alongside the deck.

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Session } from '../types'
 import { isSessionActive } from '../sessionActivity'
+import { hasContentSinceDeck } from '../deck'
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
 import { SessionCard } from '../components/SessionCard'
 import { SearchResults } from '../components/SearchResults'
@@ -72,9 +73,10 @@ export function HomeScreen({
         return [
           { icon: <ViewIcon />, label: 'View presentation', onClick: () => onViewDeck(session.id) },
           { icon: <ShareIcon />, label: 'Share presentation', onClick: () => onShareDeck(session.id) },
-          // Always offered: new captures, or a newer page layout, are both
-          // reasons to rebuild.
-          { icon: <GenerateIcon />, label: 'Regenerate presentation', onClick: () => onGenerateDeck(session.id) },
+          // Regenerating only makes sense once there's something new to add.
+          ...(hasContentSinceDeck(session)
+            ? [{ icon: <GenerateIcon />, label: 'Regenerate presentation', onClick: () => onGenerateDeck(session.id) }]
+            : []),
         ]
       case 'generating':
         return []

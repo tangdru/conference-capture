@@ -17,6 +17,12 @@ const NAMING_MODEL = 'claude-sonnet-5-5'
 const DEFAULT_TITLE = 'Session'
 const DECKS_BUCKET = 'cc-decks'
 const PHOTOS_BUCKET = 'cc-photos'
+// How long one round may write before handing off to the next (the free
+// plan stops a function at 150s; this leaves room to save and hand off).
+const ROUND_BUDGET_MS = 115_000
+const MAX_ROUNDS = 8
+
+declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void }
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,10 +34,13 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  const invokedAt = Date.now()
   let supabase: ReturnType<typeof createClient>
+  let authHeader: string
   let sessionId: string
+  let part: number
   try {
-    const authHeader = req.headers.get('Authorization')
+    authHeader = req.headers.get('Authorization') ?? ''
     if (!authHeader) throw new Error('Missing Authorization header')
 
     supabase = createClient(
@@ -43,29 +52,68 @@ Deno.serve(async (req) => {
     const body = await req.json()
     sessionId = body.sessionId
     if (!sessionId) throw new Error('Missing sessionId')
+    part = Number.isInteger(body.part) ? body.part : 0
   } catch (err) {
     return jsonResponse({ error: err instanceof Error ? err.message : 'Bad request' }, 400)
   }
 
-  try {
-    const html = await generateDeck(supabase, sessionId)
-    return jsonResponse({ deckPath: html.deckPath })
-  } catch (err) {
+  const recordError = async (err: unknown) => {
     const message = err instanceof Error ? err.message : 'Deck generation failed'
     await supabase
       .from('cc_sessions')
       .update({ deck_status: 'error', deck_error: message })
       .eq('id', sessionId)
-    return jsonResponse({ error: message }, 500)
+    return message
   }
+
+  // The first call checks there's something to build from and marks the
+  // session 'generating' before answering, so the app's next read sees it.
+  if (part === 0) {
+    try {
+      await markGenerating(supabase, sessionId)
+    } catch (err) {
+      return jsonResponse({ error: await recordError(err) }, 500)
+    }
+  }
+
+  // The writing runs after the response, in rounds: the app polls the
+  // session row for the outcome rather than waiting on this request.
+  EdgeRuntime.waitUntil(
+    generateDeckPart(supabase, authHeader, sessionId, part, invokedAt).catch(recordError),
+  )
+  return jsonResponse({ started: true }, 202)
 })
 
-async function generateDeck(
-  supabase: ReturnType<typeof createClient>,
-  sessionId: string,
-): Promise<{ deckPath: string }> {
+async function markGenerating(supabase: ReturnType<typeof createClient>, sessionId: string): Promise<void> {
   if (!ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured')
+  const { data: rows, error } = await supabase
+    .from('cc_timeline_items')
+    .select('type, text, photo_path, excluded')
+    .eq('session_id', sessionId)
+  if (error) throw error
+  const usable = (rows ?? []).some((r) =>
+    !r.excluded && (((r.type === 'note' || r.type === 'transcript') && r.text) || (r.type === 'photo' && r.photo_path)))
+  if (!usable) {
+    throw new Error('This session has no notes, transcript, or photos to build a presentation from')
+  }
+  const { error: updateError } = await supabase
+    .from('cc_sessions')
+    .update({ deck_status: 'generating', deck_error: null })
+    .eq('id', sessionId)
+  if (updateError) throw updateError
+}
 
+/** One round of writing the page. Supabase stops a function after 150s on
+ * the free plan, and writing a whole page takes longer than that, so each
+ * round writes for at most ROUND_BUDGET_MS, saves what it has, and calls
+ * this function again to continue from there. */
+async function generateDeckPart(
+  supabase: ReturnType<typeof createClient>,
+  authHeader: string,
+  sessionId: string,
+  part: number,
+  invokedAt: number,
+): Promise<void> {
   const { data: session, error: sessionError } = await supabase
     .from('cc_sessions')
     .select('id, title, owner_id, started_at')
@@ -89,16 +137,10 @@ async function generateDeck(
   const enrichmentRows = itemRows.filter((r) => r.type === 'enrichment' && r.payload)
   const highlightRows = itemRows.filter((r) => r.type === 'highlight')
 
-  if (notes.length === 0 && transcriptSegments.length === 0 && photoRows.length === 0) {
-    throw new Error('This session has no notes, transcript, or photos to build a presentation from')
-  }
-
-  await supabase.from('cc_sessions').update({ deck_status: 'generating', deck_error: null }).eq('id', sessionId)
-
   // A session the user never named gets one from its content, first, so the
   // card shows it while the deck builds and the deck itself uses it.
   let title: string = session.title
-  if (!title.trim() || title.trim() === DEFAULT_TITLE) {
+  if (part === 0 && (!title.trim() || title.trim() === DEFAULT_TITLE)) {
     const named = await nameSession(notes, transcriptSegments, photoRows, enrichmentRows).catch(() => null)
     if (named) {
       title = named
@@ -125,9 +167,42 @@ async function generateDeck(
     })
   }
 
+  const partialPath = `${session.owner_id}/${sessionId}/deck.partial.html`
+  let written = ''
+  if (part > 0) {
+    const { data: partialBlob, error: partialError } = await supabase.storage.from(DECKS_BUCKET).download(partialPath)
+    if (partialError) throw partialError
+    written = await partialBlob.text()
+  }
+
   const highlightsText = formatHighlights(session.started_at, highlightRows, transcriptSegments, notes)
-  const html = await callClaude(title, session.started_at, notes, transcriptSegments, enrichmentRows, photos, highlightsText)
-  const finalHtml = substitutePhotos(html, photos)
+  const { text, finished } = await callClaude(
+    title, session.started_at, notes, transcriptSegments, enrichmentRows, photos, highlightsText,
+    written, invokedAt + ROUND_BUDGET_MS,
+  )
+  written += text
+
+  if (!finished) {
+    if (part + 1 >= MAX_ROUNDS) throw new Error('The presentation took too long to write')
+    const { error: saveError } = await supabase.storage
+      .from(DECKS_BUCKET)
+      .upload(partialPath, new Blob([written], { type: 'text/plain' }), { contentType: 'text/plain', upsert: true })
+    if (saveError) throw saveError
+    const next = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-deck`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: authHeader,
+        apikey: Deno.env.get('SUPABASE_ANON_KEY')!,
+      },
+      body: JSON.stringify({ sessionId, part: part + 1 }),
+    })
+    if (!next.ok) throw new Error(`Couldn't continue the presentation (${next.status})`)
+    return
+  }
+
+  if (!written.trim()) throw new Error('Claude returned no presentation content')
+  const finalHtml = substitutePhotos(stripCodeFence(written.trim()), photos)
 
   const deckPath = `${session.owner_id}/${sessionId}/deck.html`
   const { error: uploadError } = await supabase.storage
@@ -148,7 +223,7 @@ async function generateDeck(
     })
     .eq('id', sessionId)
 
-  return { deckPath }
+  if (part > 0) await supabase.storage.from(DECKS_BUCKET).remove([partialPath])
 }
 
 function formatElapsed(startedAtIso: string, itemIso: string): string {
@@ -187,7 +262,9 @@ async function callClaude(
   enrichmentRows: { subtype: string | null; payload: Record<string, unknown> | null }[],
   photos: { placeholder: string; dataUrl: string; caption: string; slideText: string; elapsed: string; starred: boolean }[],
   highlightsText: string,
-): Promise<string> {
+  writtenSoFar: string,
+  deadline: number,
+): Promise<{ text: string; finished: boolean }> {
   const notesText = notes.length > 0
     ? notes.map((n) => `- [${formatElapsed(startedAt, n.item_timestamp)}]${n.starred ? ' ★' : ''} ${n.text}`).join('\n')
     : '(No written notes were captured -- build the piece from the transcript and photos alone.)'
@@ -245,6 +322,20 @@ Requirements:
       source: { type: 'base64', media_type: mediaType ?? 'image/jpeg', data: base64 },
     })
   }
+  // Every round re-sends this same prompt; caching it keeps later rounds cheap.
+  content[content.length - 1].cache_control = { type: 'ephemeral' }
+
+  // A later round shows Claude the page so far and asks for the rest.
+  const messages: Record<string, unknown>[] = [{ role: 'user', content }]
+  if (writtenSoFar) {
+    messages.push(
+      { role: 'assistant', content: writtenSoFar },
+      {
+        role: 'user',
+        content: 'Your reply was cut off there. Continue the HTML document exactly from the last character above. Output only what comes next -- repeat nothing already written, and add no commentary or code fence.',
+      },
+    )
+  }
 
   // Streamed, not one blocking request: writing a whole page takes minutes,
   // and a connection that sits silent that long gets dropped upstream (seen
@@ -260,7 +351,7 @@ Requirements:
       model: ANTHROPIC_MODEL,
       max_tokens: 48000,
       stream: true,
-      messages: [{ role: 'user', content }],
+      messages,
     }),
   })
 
@@ -269,24 +360,37 @@ Requirements:
     throw new Error(`Claude API error (${response.status}): ${errText.slice(0, 500)}`)
   }
 
-  const { text, stopReason } = await readMessageStream(response.body)
+  const { text, stopReason, cutOff } = await readMessageStream(response.body, deadline)
   if (stopReason === 'refusal') {
     throw new Error('Claude declined to generate this presentation')
   }
-  if (!text) throw new Error('Claude returned no presentation content')
 
-  return stripCodeFence(text.trim())
+  return { text, finished: !cutOff && stopReason !== 'max_tokens' }
 }
 
 /** Collects the text and stop reason from a streamed Messages API response
- * (server-sent events). */
-async function readMessageStream(body: ReadableStream<Uint8Array>): Promise<{ text: string; stopReason: string | null }> {
+ * (server-sent events), stopping early (cutOff) once `deadline` passes. */
+async function readMessageStream(
+  body: ReadableStream<Uint8Array>,
+  deadline: number,
+): Promise<{ text: string; stopReason: string | null; cutOff: boolean }> {
   const reader = body.pipeThrough(new TextDecoderStream()).getReader()
   let buffer = ''
   let text = ''
   let stopReason: string | null = null
   for (;;) {
-    const { done, value } = await reader.read()
+    let timer: number | undefined
+    const timeout = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), Math.max(0, deadline - Date.now()))
+    })
+    const result = await Promise.race([reader.read(), timeout])
+    clearTimeout(timer)
+    if (result === null) {
+      // Keep only whole events: text from a half-read line is dropped.
+      await reader.cancel().catch(() => {})
+      return { text, stopReason, cutOff: true }
+    }
+    const { done, value } = result
     if (done) break
     buffer += value
     let newline: number
@@ -304,7 +408,7 @@ async function readMessageStream(body: ReadableStream<Uint8Array>): Promise<{ te
       }
     }
   }
-  return { text, stopReason }
+  return { text, stopReason, cutOff: false }
 }
 
 function formatEnrichment(rows: { subtype: string | null; payload: Record<string, unknown> | null }[]): string {

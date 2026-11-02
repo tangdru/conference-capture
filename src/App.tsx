@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
+import { ActionSheet, ActionSheetButtonStyle } from '@capacitor/action-sheet'
 import type { Session as AuthSession } from '@supabase/supabase-js'
 import type { PhotoItem, Session } from './types'
 import * as db from './db'
+import { compactDeckPhotos, hasShortVersion, shortDeckHtml } from './deck'
 import { supabase } from './supabaseClient'
 import { AuthGate } from './auth/AuthGate'
 import { HomeScreen } from './screens/HomeScreen'
@@ -153,6 +155,39 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     }
   }
 
+  /** The presentation's page, its photos shrunk -- saved back the first time
+   * so later opens and shares download the small one. */
+  async function loadDeckHtml(session: Session, deckPath: string): Promise<string> {
+    const html = await db.fetchDeckHtml(deckPath)
+    const compacted = await compactDeckPhotos(html)
+    // Skip the save while a rebuild runs: it would overwrite the new page.
+    if (compacted.length < html.length * 0.8) {
+      const { deckStatus } = await db.fetchSessionDeckState(session.id).catch(() => ({ deckStatus: null }))
+      if (deckStatus === 'ready') void db.replaceDeckHtml(deckPath, compacted).catch(() => {})
+    }
+    return compacted
+  }
+
+  /** Short (TL;DR and chapter openings) or full -- asked only when the page
+   * has a short version. Null if the question was dismissed. */
+  async function chooseDeckLength(html: string): Promise<'short' | 'full' | null> {
+    if (!hasShortVersion(html)) return 'full'
+    if (!Capacitor.isNativePlatform()) {
+      return window.confirm('Share the short version (TL;DR and chapter summaries)? Cancel shares the full presentation.')
+        ? 'short'
+        : 'full'
+    }
+    const { index } = await ActionSheet.showActions({
+      title: 'Share presentation',
+      options: [
+        { title: 'Short version (TL;DR)' },
+        { title: 'Full presentation' },
+        { title: 'Cancel', style: ActionSheetButtonStyle.Cancel },
+      ],
+    })
+    return index === 0 ? 'short' : index === 1 ? 'full' : null
+  }
+
   async function viewDeck(id: string) {
     const session = sessions?.find((s) => s.id === id)
     if (!session?.deckPath) return
@@ -160,7 +195,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       // A new tab works in a browser, but the native app can't pass a blob:
       // URL to Safari -- show the page full-screen in-app there instead.
       if (Capacitor.isNativePlatform()) {
-        setOpenDeck({ title: session.title, html: await db.fetchDeckHtml(session.deckPath) })
+        setOpenDeck({ title: session.title, html: await loadDeckHtml(session, session.deckPath) })
         return
       }
       const url = await db.resolveDeckUrl(session.deckPath)
@@ -173,9 +208,13 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   async function shareDeck(id: string) {
     const session = sessions?.find((s) => s.id === id)
     if (!session?.deckPath) return
-    const fileName = `${session.title.replace(/[^\w\- ]+/g, '').trim() || 'presentation'}.html`
     try {
-      const html = await db.fetchDeckHtml(session.deckPath)
+      const fullHtml = await loadDeckHtml(session, session.deckPath)
+      const length = await chooseDeckLength(fullHtml)
+      if (!length) return
+      const html = length === 'short' ? shortDeckHtml(fullHtml) : fullHtml
+      const baseName = session.title.replace(/[^\w\- ]+/g, '').trim() || 'presentation'
+      const fileName = `${baseName}${length === 'short' ? ' - TLDR' : ''}.html`
       // The native app hands the page to the iOS share sheet as a file, from
       // which it can be saved to Files, AirDropped, mailed, etc.
       if (Capacitor.isNativePlatform()) {

@@ -557,6 +557,14 @@ export async function fetchDeckHtml(path: string): Promise<string> {
   return data.text()
 }
 
+/** Saves a presentation back over itself (after its photos were shrunk). */
+export async function replaceDeckHtml(path: string, html: string): Promise<void> {
+  const { error } = await supabase.storage
+    .from(DECKS_BUCKET)
+    .upload(path, new Blob([html], { type: 'text/html' }), { contentType: 'text/html', upsert: true })
+  if (error) throw error
+}
+
 // A Blob URL (rather than a signed URL) so the browser treats it as same-origin
 // -- the only way an <a download> actually saves the file instead of just
 // navigating to it, since the real file lives in a private, cross-origin bucket.

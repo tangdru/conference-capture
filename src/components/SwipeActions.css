@@ -1,4 +1,7 @@
 .swipe-actions {
+  /* Set from the swipe position: 0 closed, 1 fully open. */
+  --swipe-reveal: 0;
+  --swipe-reveal-transition: 0.2s;
   position: relative;
   overflow: hidden;
   width: 100%;
@@ -21,6 +24,16 @@
   background: transparent;
   border: none;
   cursor: pointer;
+}
+
+.swipe-actions__icon {
+  display: flex;
+  /* Closed: about 1px across (the icons are ~18px) at 10% opacity. */
+  transform: scale(calc(0.055 + 0.945 * var(--swipe-reveal)));
+  opacity: calc(0.1 + 0.9 * var(--swipe-reveal));
+  transition:
+    transform var(--swipe-reveal-transition) ease-out,
+    opacity var(--swipe-reveal-transition) ease-out;
 }
 
 .swipe-actions__drag-handle {

@@ -44,6 +44,7 @@ export function SwipeActions({ id, revealedId, onReveal, actions, dragHandle, di
   const slotCount = actions.length + (dragHandle ? 1 : 0)
   const revealWidth = slotCount * ACTION_WIDTH
   const isRevealed = !disabled && revealedId === id
+  const rootRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<DragState | null>(null)
   // A browser can still synthesize a click after pointerup even when the
@@ -59,6 +60,12 @@ export function SwipeActions({ id, revealedId, onReveal, actions, dragHandle, di
     if (!el) return
     el.style.transition = animate ? 'transform 0.2s ease-out' : 'none'
     el.style.transform = px === 0 ? '' : `translateX(${px}px)`
+    // The icons grow and fade in with the swipe (0 closed, 1 open), in step
+    // with the row: following the finger, or easing with it as it settles.
+    const root = rootRef.current
+    if (!root || revealWidth === 0) return
+    root.style.setProperty('--swipe-reveal', String(Math.min(1, -px / revealWidth)))
+    root.style.setProperty('--swipe-reveal-transition', animate ? '0.2s' : '0s')
   }
 
   // Sync to the "rest" position whenever revealedId changes for a reason
@@ -140,7 +147,7 @@ export function SwipeActions({ id, revealedId, onReveal, actions, dragHandle, di
   }
 
   return (
-    <div className="swipe-actions">
+    <div ref={rootRef} className="swipe-actions">
       <div className="swipe-actions__row" style={{ width: revealWidth }}>
         {actions.map((action) => (
           <button
@@ -149,7 +156,7 @@ export function SwipeActions({ id, revealedId, onReveal, actions, dragHandle, di
             onClick={action.onClick}
             aria-label={action.label}
           >
-            {action.icon}
+            <span className="swipe-actions__icon">{action.icon}</span>
           </button>
         ))}
         {dragHandle && (
@@ -161,7 +168,9 @@ export function SwipeActions({ id, revealedId, onReveal, actions, dragHandle, di
             onPointerUp={dragHandle.onDragPointerUp}
             onPointerCancel={dragHandle.onDragPointerCancel}
           >
-            <GripIcon />
+            <span className="swipe-actions__icon">
+              <GripIcon />
+            </span>
           </button>
         )}
       </div>

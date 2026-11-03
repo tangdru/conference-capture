@@ -1,4 +1,4 @@
-import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useEffect, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import './SwipeActions.css'
 
 const ACTION_WIDTH = 72
@@ -60,11 +60,12 @@ export function SwipeActions({ id, revealedId, onReveal, actions, dragHandle, di
     if (!el) return
     el.style.transition = animate ? 'transform 0.2s ease-out' : 'none'
     el.style.transform = px === 0 ? '' : `translateX(${px}px)`
-    // The icons grow and fade in with the swipe (0 closed, 1 open), in step
-    // with the row: following the finger, or easing with it as it settles.
+    // How far the row is open, in px: each icon grows and fades in as its own
+    // slot is uncovered (see .swipe-actions__icon), following the finger or
+    // easing with the row as it settles.
     const root = rootRef.current
-    if (!root || revealWidth === 0) return
-    root.style.setProperty('--swipe-reveal', String(Math.min(1, -px / revealWidth)))
+    if (!root) return
+    root.style.setProperty('--swipe-offset', String(Math.max(0, -px)))
     root.style.setProperty('--swipe-reveal-transition', animate ? '0.2s' : '0s')
   }
 
@@ -149,14 +150,16 @@ export function SwipeActions({ id, revealedId, onReveal, actions, dragHandle, di
   return (
     <div ref={rootRef} className="swipe-actions">
       <div className="swipe-actions__row" style={{ width: revealWidth }}>
-        {actions.map((action) => (
+        {actions.map((action, i) => (
           <button
             key={action.label}
             className="swipe-actions__action"
             onClick={action.onClick}
             aria-label={action.label}
           >
-            <span className="swipe-actions__icon">{action.icon}</span>
+            <span className="swipe-actions__icon" style={slotStyle(slotCount - 1 - i)}>
+              {action.icon}
+            </span>
           </button>
         ))}
         {dragHandle && (
@@ -168,7 +171,7 @@ export function SwipeActions({ id, revealedId, onReveal, actions, dragHandle, di
             onPointerUp={dragHandle.onDragPointerUp}
             onPointerCancel={dragHandle.onDragPointerCancel}
           >
-            <span className="swipe-actions__icon">
+            <span className="swipe-actions__icon" style={slotStyle(0)}>
               <GripIcon />
             </span>
           </button>
@@ -187,6 +190,12 @@ export function SwipeActions({ id, revealedId, onReveal, actions, dragHandle, di
       </div>
     </div>
   )
+}
+
+/** A slot's place counted from the row's right edge -- the one uncovered
+ * first is 0 -- so its icon grows once the swipe reaches it. */
+function slotStyle(fromRight: number): CSSProperties {
+  return { '--swipe-slot': fromRight } as CSSProperties
 }
 
 export function DeleteIcon() {

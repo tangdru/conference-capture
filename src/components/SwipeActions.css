@@ -1,6 +1,6 @@
 .swipe-actions {
-  /* Set from the swipe position: 0 closed, 1 fully open. */
-  --swipe-reveal: 0;
+  /* How far the row is open, in px (unitless), set from the swipe. */
+  --swipe-offset: 0;
   --swipe-reveal-transition: 0.2s;
   position: relative;
   overflow: hidden;
@@ -27,10 +27,14 @@
 }
 
 .swipe-actions__icon {
+  /* Each icon grows across its own 72px slot (ACTION_WIDTH): from when the
+     swipe starts to uncover the slot to when the slot is fully showing.
+     --swipe-slot counts slots from the right edge, the first uncovered 0. */
+  --slot-reveal: clamp(0, calc((var(--swipe-offset) - var(--swipe-slot) * 72) / 72), 1);
   display: flex;
-  /* Closed: about 1px across (the icons are ~18px) at 10% opacity. */
-  transform: scale(calc(0.055 + 0.945 * var(--swipe-reveal)));
-  opacity: calc(0.1 + 0.9 * var(--swipe-reveal));
+  /* Hidden: about 1px across (the icons are ~18px) at 10% opacity. */
+  transform: scale(calc(0.055 + 0.945 * var(--slot-reveal)));
+  opacity: calc(0.1 + 0.9 * var(--slot-reveal));
   transition:
     transform var(--swipe-reveal-transition) ease-out,
     opacity var(--swipe-reveal-transition) ease-out;

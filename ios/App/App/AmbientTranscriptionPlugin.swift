@@ -129,6 +129,7 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
             self.running = false
+            ClipRecorder.shared.end()
             if #available(iOS 26.0, *), let engine = self.modern as? SpeechAnalyzerTranscriber {
                 engine.stop {
                     self.modern = nil
@@ -187,6 +188,7 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
         let input = audioEngine.inputNode
         let format = input.outputFormat(forBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+            ClipRecorder.shared.append(buffer)
             guard let self else { return }
             self.requestLock.lock()
             self.currentRequest?.append(buffer)
@@ -204,9 +206,11 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func activateAudioSession() throws {
+        ClipPlayer.shared.stop()
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.record, mode: .measurement, options: [])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
+        ClipRecorder.shared.begin()
     }
 
     private func observeInterruptions() {
@@ -238,6 +242,7 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
         guard isCurrent, !text.isEmpty, text != currentText else { return }
         currentText = text
         lastTextChangeAt = Date()
+        ClipRecorder.shared.heard(text)
         notifyListeners("partial", data: ["text": text])
     }
 
@@ -368,6 +373,7 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func teardown() {
+        ClipRecorder.shared.end()
         NotificationCenter.default.removeObserver(self, name: AVAudioSession.interruptionNotification, object: nil)
         segmentTimer?.invalidate()
         segmentTimer = nil

@@ -29,7 +29,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Conference Capture uses the camera to photograph slides and moments during a talk.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Conference Capture listens to the room to transcribe the speaker while you take notes.</string>
+	<string>Conference Capture listens to the room to transcribe the speaker while you take notes, and saves a short audio clip when you tap Remember this.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Conference Capture transcribes the speaker on your iPhone so your notes include what was said.</string>
 	<key>NSSupportsLiveActivities</key>

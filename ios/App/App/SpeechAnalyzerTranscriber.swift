@@ -123,6 +123,7 @@ final class SpeechAnalyzerTranscriber {
     private func startAudio() throws {
         let input = audioEngine.inputNode
         input.installTap(onBus: 0, bufferSize: 4096, format: input.outputFormat(forBus: 0)) { [weak self] buffer, _ in
+            ClipRecorder.shared.append(buffer)
             guard let self, let converted = self.convert(buffer) else { return }
             self.inputBuilder?.yield(AnalyzerInput(buffer: converted))
         }
@@ -174,6 +175,7 @@ final class SpeechAnalyzerTranscriber {
         }
         lastTextChangeAt = Date()
         let shown = [finalText, volatileText].filter { !$0.isEmpty }.joined(separator: " ")
+        ClipRecorder.shared.heard(shown)
         if !shown.isEmpty { onPartial?(shown) }
     }
 

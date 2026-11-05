@@ -452,6 +452,64 @@
   flex-shrink: 0;
 }
 
+.clip-status {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.clip-player {
+  padding-bottom: 8px;
+}
+
+.clip-player__controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.clip-player__play {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #0f1110;
+  cursor: pointer;
+}
+
+.clip-player__wave {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.clip-player__wave span {
+  flex: 1;
+  min-width: 1px;
+  border-radius: 1px;
+  background: var(--text-muted);
+}
+
+.clip-player__wave span.is-played {
+  background: var(--accent);
+}
+
+.clip-player__words {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
 /* Landed on from a search hit. */
 .timeline-row--flash {
   border-radius: var(--radius-md);

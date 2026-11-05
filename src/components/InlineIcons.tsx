@@ -56,6 +56,23 @@ export function StarIcon({ filled = false }: { filled?: boolean }) {
   )
 }
 
+export function PlayIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d="M4 2.5v11a.5.5 0 0 0 .76.43l9-5.5a.5.5 0 0 0 0-.86l-9-5.5A.5.5 0 0 0 4 2.5Z" />
+    </svg>
+  )
+}
+
+export function PauseIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <rect x="3.5" y="2.5" width="3.5" height="11" rx="1" />
+      <rect x="9" y="2.5" width="3.5" height="11" rx="1" />
+    </svg>
+  )
+}
+
 export function CheckIcon() {
   return (
     <svg className="inline-icon" viewBox="3.75 5.75 18.5 14.5" aria-hidden="true">

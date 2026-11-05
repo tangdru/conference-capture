@@ -1,5 +1,6 @@
 import { supabase, PHOTOS_BUCKET, VIDEOS_BUCKET, DECKS_BUCKET } from './supabaseClient'
 import { cancelPhotoUploads } from './photoUploads'
+import { removeClip, removeSessionClips } from './clips'
 import { dropQueuedRow, dropQueuedSession, flushOutbox, patchQueuedRow, queuedRows, queueRow } from './itemOutbox'
 import type { DeckStatus, EnrichmentItemData, HighlightItem, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData, TranscriptItem, VideoItem } from './types'
 
@@ -248,6 +249,7 @@ export async function updateSession(
 export async function deleteSession(session: Session): Promise<void> {
   await cancelPhotoUploads({ sessionId: session.id })
   dropQueuedSession(session.id)
+  await removeSessionClips(session.id)
   const photoPaths = session.items
     .filter((i): i is PhotoItem => i.type === 'photo')
     .map((i) => i.photoPath)
@@ -319,6 +321,7 @@ export async function reorderItems(orderedIds: string[]): Promise<void> {
 }
 
 export async function deleteTimelineItem(item: TimelineItemData): Promise<void> {
+  if (item.type === 'highlight') await removeClip(item.id)
   if (dropQueuedRow(item.id)) return
   if (item.type === 'photo' && item.uploading) await cancelPhotoUploads({ id: item.id })
   if (item.type === 'photo') {

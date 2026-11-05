@@ -15,6 +15,7 @@ import { useRecordingActivity } from '../hooks/useRecordingActivity'
 import * as db from '../db'
 import { SlideScanner, blobToBase64 } from '../native/slideScanner'
 import { backgroundUploads, queuePhoto } from '../photoUploads'
+import { saveClip } from '../clips'
 import './CaptureScreen.css'
 
 interface CaptureScreenProps {
@@ -120,6 +121,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
     window.setTimeout(() => setRemembered(false), 1600)
     const item = await db.addHighlight(session.id, userId)
     onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
+    void saveClip(item.id, session.id)
   }
 
   async function commitNoteEdit(id: string, text: string) {

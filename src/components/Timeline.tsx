@@ -12,7 +12,9 @@ import { formatClock, formatClipDuration } from '../format'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
 import { useVideoUrl } from '../hooks/useVideoUrl'
 import { SwipeActions, DeleteIcon, ExcludeIcon, IncludeIcon, StarActionIcon, type DragHandle } from './SwipeActions'
-import { CheckIcon, StarIcon } from './InlineIcons'
+import { CheckIcon, PauseIcon, PlayIcon, StarIcon } from './InlineIcons'
+import { seekClip, togglePlay, useClip, usePlayback } from '../clips'
+import type { ClipInfo } from '../native/clips'
 import './Timeline.css'
 
 /** 'new' means composing a brand-new note at the end of the list; a string is an existing item's id being edited; null means nothing is active. */
@@ -229,7 +231,7 @@ export function Timeline({
               ) : item.type === 'transcript' ? (
                 <TranscriptRow item={item} />
               ) : item.type === 'highlight' ? (
-                <HighlightRow item={item} />
+                <HighlightRow item={item} items={items} />
               ) : (
                 <EnrichmentRow item={item} />
               )}
@@ -458,18 +460,78 @@ function PhotoRow({ item, processing, onTap }: { item: PhotoItem; processing: bo
   )
 }
 
-function HighlightRow({ item }: { item: HighlightItem }) {
+function HighlightRow({ item, items }: { item: HighlightItem; items: TimelineItemData[] }) {
+  const clip = useClip(item.id)
   return (
     <div
-      className={`highlight-row${item.excluded ? ' is-excluded' : ''}`}
+      className={`highlight-block${item.excluded ? ' is-excluded' : ''}`}
       role="group"
       aria-label={`Remembered moment at ${formatClock(item.timestamp)}`}
     >
-      <p className="highlight-row__label">
-        <StarIcon filled /> Remembered this moment
-      </p>
-      {item.excluded && <ExcludedBadge />}
-      <span className="mono-timestamp highlight-row__meta">{formatClock(item.timestamp)}</span>
+      <div className="highlight-row">
+        <p className="highlight-row__label">
+          <StarIcon filled /> Remembered this moment
+        </p>
+        {item.excluded && <ExcludedBadge />}
+        <span className="mono-timestamp highlight-row__meta">{formatClock(item.timestamp)}</span>
+      </div>
+      {clip === 'saving' && <p className="clip-status">Saving clip…</p>}
+      {clip && clip !== 'saving' && <ClipPlayer clip={clip} items={items} />}
+    </div>
+  )
+}
+
+/** What was transcribed during a clip. */
+function clipWords(clip: ClipInfo, items: TimelineItemData[]): string {
+  const end = clip.startedAt + clip.durationMs
+  return items
+    .filter((i): i is TranscriptItem => i.type === 'transcript')
+    .filter((i) => i.timestamp < end && i.timestamp + i.durationMs > clip.startedAt)
+    .map((i) => i.text)
+    .join(' ')
+}
+
+function ClipPlayer({ clip, items }: { clip: ClipInfo; items: TimelineItemData[] }) {
+  const playback = usePlayback()
+  const [error, setError] = useState<string | null>(null)
+  const current = playback.id === clip.id
+  const playing = current && playback.playing
+  const fraction = current ? playback.fraction : 0
+  const words = clipWords(clip, items)
+
+  function toggle() {
+    setError(null)
+    togglePlay(clip.id).catch((err: unknown) => {
+      setError(err instanceof Error ? err.message : 'Couldn’t play this clip')
+    })
+  }
+
+  return (
+    <div className="clip-player">
+      <div className="clip-player__controls">
+        <button className="clip-player__play" onClick={toggle} aria-label={playing ? 'Pause clip' : 'Play clip'}>
+          {playing ? <PauseIcon /> : <PlayIcon />}
+        </button>
+        <div
+          className="clip-player__wave"
+          aria-hidden="true"
+          onClick={(e) => {
+            const box = e.currentTarget.getBoundingClientRect()
+            seekClip(clip.id, (e.clientX - box.left) / box.width)
+          }}
+        >
+          {clip.peaks.map((peak, i) => (
+            <span
+              key={i}
+              className={(i + 0.5) / clip.peaks.length <= fraction ? 'is-played' : undefined}
+              style={{ height: `${Math.max(Math.sqrt(peak) * 100, 8)}%` }}
+            />
+          ))}
+        </div>
+        <span className="mono-timestamp">{formatClipDuration(clip.durationMs)}</span>
+      </div>
+      {error && <p className="clip-status">{error}</p>}
+      {words && <p className="clip-player__words">{words}</p>}
     </div>
   )
 }

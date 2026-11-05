@@ -1,5 +1,6 @@
 import { supabase, PHOTOS_BUCKET, VIDEOS_BUCKET, DECKS_BUCKET } from './supabaseClient'
 import { cancelPhotoUploads } from './photoUploads'
+import { dropQueuedRow, dropQueuedSession, flushOutbox, patchQueuedRow, queuedRows, queueRow } from './itemOutbox'
 import type { DeckStatus, EnrichmentItemData, HighlightItem, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData, TranscriptItem, VideoItem } from './types'
 
 const ITEM_COLUMNS = 'id, session_id, type, subtype, payload, text, caption, photo_path, video_path, duration_ms, item_timestamp, added_later, excluded, starred, position'
@@ -189,6 +190,21 @@ export async function fetchSessions(userId: string): Promise<Session[]> {
   return (sessionRows ?? []).map((row) => sessionFromRow(row, itemsBySession.get(row.id) ?? []))
 }
 
+/** Transcript lines and "Remember this" taps still on the phone waiting to be
+ * sent, by session. */
+export async function pendingItems(): Promise<Map<string, TimelineItemData[]>> {
+  const bySession = new Map<string, TimelineItemData[]>()
+  for (const row of await queuedRows()) {
+    const timestamp = new Date(row.item_timestamp).getTime()
+    const shared = { id: row.id, timestamp, excluded: row.excluded }
+    const item: TimelineItemData = row.type === 'transcript'
+      ? { ...shared, type: 'transcript', text: row.text ?? '', durationMs: row.duration_ms ?? 0, starred: row.starred }
+      : { ...shared, type: 'highlight' }
+    bySession.set(row.session_id, [...(bySession.get(row.session_id) ?? []), item])
+  }
+  return bySession
+}
+
 export async function createSession(userId: string): Promise<Session> {
   const now = new Date().toISOString()
   const { data, error } = await supabase
@@ -231,6 +247,7 @@ export async function updateSession(
 
 export async function deleteSession(session: Session): Promise<void> {
   await cancelPhotoUploads({ sessionId: session.id })
+  dropQueuedSession(session.id)
   const photoPaths = session.items
     .filter((i): i is PhotoItem => i.type === 'photo')
     .map((i) => i.photoPath)
@@ -263,14 +280,10 @@ export async function addNote(sessionId: string, userId: string, text: string): 
 }
 
 export async function addHighlight(sessionId: string, userId: string): Promise<HighlightItem> {
-  const { data, error } = await supabase
-    .from('cc_timeline_items')
-    .insert({ session_id: sessionId, owner_id: userId, type: 'highlight', item_timestamp: new Date().toISOString() })
-    .select('id, item_timestamp')
-    .single()
-
-  if (error) throw error
-  return { id: data.id, type: 'highlight', timestamp: new Date(data.item_timestamp).getTime() }
+  const id = crypto.randomUUID()
+  const timestamp = Date.now()
+  await queueRow({ id, session_id: sessionId, owner_id: userId, type: 'highlight', item_timestamp: new Date(timestamp).toISOString() })
+  return { id, type: 'highlight', timestamp }
 }
 
 export async function updateNoteText(itemId: string, text: string): Promise<void> {
@@ -279,11 +292,13 @@ export async function updateNoteText(itemId: string, text: string): Promise<void
 }
 
 export async function setItemStarred(itemId: string, starred: boolean): Promise<void> {
+  if (patchQueuedRow(itemId, { starred })) return
   const { error } = await supabase.from('cc_timeline_items').update({ starred }).eq('id', itemId)
   if (error) throw error
 }
 
 export async function setItemExcluded(itemId: string, excluded: boolean): Promise<void> {
+  if (patchQueuedRow(itemId, { excluded })) return
   const { error } = await supabase.from('cc_timeline_items').update({ excluded }).eq('id', itemId)
   if (error) throw error
 }
@@ -294,13 +309,17 @@ export async function setItemExcluded(itemId: string, excluded: boolean): Promis
  * all falling back to raw timestamp order, which would bunch them together. */
 export async function reorderItems(orderedIds: string[]): Promise<void> {
   const results = await Promise.all(
-    orderedIds.map((id, index) => supabase.from('cc_timeline_items').update({ position: index }).eq('id', id)),
+    orderedIds
+      .map((id, index) => ({ id, index }))
+      .filter(({ id, index }) => !patchQueuedRow(id, { position: index }))
+      .map(({ id, index }) => supabase.from('cc_timeline_items').update({ position: index }).eq('id', id)),
   )
   const firstError = results.find((r) => r.error)?.error
   if (firstError) throw firstError
 }
 
 export async function deleteTimelineItem(item: TimelineItemData): Promise<void> {
+  if (dropQueuedRow(item.id)) return
   if (item.type === 'photo' && item.uploading) await cancelPhotoUploads({ id: item.id })
   if (item.type === 'photo') {
     // Best-effort -- an orphaned storage object is a minor cleanup issue,
@@ -448,24 +467,21 @@ export async function addTranscriptSegment(
   timestamp: number,
   durationMs: number,
 ): Promise<TranscriptItem> {
-  const { data, error } = await supabase
-    .from('cc_timeline_items')
-    .insert({
-      session_id: sessionId,
-      owner_id: userId,
-      type: 'transcript',
-      text,
-      duration_ms: durationMs,
-      item_timestamp: new Date(timestamp).toISOString(),
-    })
-    .select('id')
-    .single()
-
-  if (error) throw error
-  return { id: data.id, type: 'transcript', text, timestamp, durationMs }
+  const id = crypto.randomUUID()
+  await queueRow({
+    id,
+    session_id: sessionId,
+    owner_id: userId,
+    type: 'transcript',
+    text,
+    duration_ms: durationMs,
+    item_timestamp: new Date(timestamp).toISOString(),
+  })
+  return { id, type: 'transcript', text, timestamp, durationMs }
 }
 
 export async function generateDeck(sessionId: string): Promise<void> {
+  await flushOutbox()
   const { error } = await supabase.functions.invoke('generate-deck', { body: { sessionId } })
   if (error) throw error
 }
@@ -477,6 +493,7 @@ export async function askSession(
   question: string,
   history: { role: 'user' | 'assistant'; content: string }[],
 ): Promise<string> {
+  await flushOutbox()
   const { data, error } = await supabase.functions.invoke('ask-session', { body: { sessionId, question, history } })
   if (error) throw new Error('Couldn’t get an answer -- check your connection and try again')
   return data.answer
@@ -488,12 +505,14 @@ export async function askAllSessions(
   question: string,
   history: { role: 'user' | 'assistant'; content: string }[],
 ): Promise<{ answer: string; sessions: Record<string, string> }> {
+  await flushOutbox()
   const { data, error } = await supabase.functions.invoke('ask-session', { body: { scope: 'all', question, history } })
   if (error) throw new Error('Couldn’t get an answer -- check your connection and try again')
   return { answer: data.answer, sessions: data.sessions ?? {} }
 }
 
 export async function enrichSession(sessionId: string): Promise<number> {
+  await flushOutbox()
   const { data, error } = await supabase.functions.invoke('enrich-session', { body: { sessionId } })
   if (error) throw error
   return data.count

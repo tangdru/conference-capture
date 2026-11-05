@@ -118,13 +118,8 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
     if (Capacitor.isNativePlatform()) void Haptics.impact({ style: ImpactStyle.Medium })
     setRemembered(true)
     window.setTimeout(() => setRemembered(false), 1600)
-    try {
-      const item = await db.addHighlight(session.id, userId)
-      onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
-    } catch (err) {
-      setRemembered(false)
-      setSaveError(err instanceof Error ? err.message : 'Failed to save -- tap again to retry')
-    }
+    const item = await db.addHighlight(session.id, userId)
+    onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
   }
 
   async function commitNoteEdit(id: string, text: string) {
@@ -299,16 +294,11 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
   }, [])
 
   async function commitTranscriptSegment(text: string, startedAt: number, durationMs: number) {
-    try {
-      // duration_ms is an integer column -- round in case a capture source
-      // reports fractional milliseconds.
-      const item = await db.addTranscriptSegment(session.id, userId, text, startedAt, Math.round(durationMs))
-      onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
-      setLiveText('')
-    } catch {
-      // Best-effort -- a dropped transcript segment isn't worth surfacing as
-      // an error; the next segment will still come through.
-    }
+    // duration_ms is an integer column -- round in case a capture source
+    // reports fractional milliseconds.
+    const item = await db.addTranscriptSegment(session.id, userId, text, startedAt, Math.round(durationMs))
+    onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
+    setLiveText('')
   }
 
   useAmbientTranscription({

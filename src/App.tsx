@@ -14,6 +14,7 @@ import { CaptureScreen } from './screens/CaptureScreen'
 import { DeckViewer } from './components/DeckViewer'
 import { AskSheet, type AskTurn } from './components/AskSheet'
 import { onPhotoUploaded, pendingPhotos, syncPhotoUploadAuth } from './photoUploads'
+import { startOutbox } from './itemOutbox'
 
 type Route = { screen: 'home' } | { screen: 'capture'; sessionId: string; focusItemId?: string }
 
@@ -33,6 +34,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   const [askAll, setAskAll] = useState<{ question: string; turns: AskTurn[] } | null>(null)
 
   useEffect(() => syncPhotoUploadAuth(), [])
+  useEffect(() => startOutbox(), [])
 
   // A photo that finishes uploading in the background is now in Supabase
   // like any other.
@@ -103,12 +105,16 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     }
   }, [generatingIds])
 
-  /** Sessions as stored, plus photos still on the phone waiting to upload. */
+  /** Sessions as stored, plus what's still on the phone waiting to be sent. */
   async function fetchSessionsWithPending(): Promise<Session[]> {
-    const [loaded, pending] = await Promise.all([db.fetchSessions(userId), pendingPhotos().catch(() => new Map<string, PhotoItem[]>())])
+    const [loaded, photos, items] = await Promise.all([
+      db.fetchSessions(userId),
+      pendingPhotos().catch(() => new Map<string, PhotoItem[]>()),
+      db.pendingItems(),
+    ])
     return loaded.map((s) => {
       const ids = new Set(s.items.map((i) => i.id))
-      const waiting = (pending.get(s.id) ?? []).filter((p) => !ids.has(p.id))
+      const waiting = [...(photos.get(s.id) ?? []), ...(items.get(s.id) ?? [])].filter((p) => !ids.has(p.id))
       return waiting.length ? { ...s, items: [...s.items, ...waiting].sort((a, b) => a.timestamp - b.timestamp) } : s
     })
   }

@@ -277,6 +277,9 @@ export async function deleteSession(session: Session): Promise<void> {
   if (videoPaths.length > 0) {
     await supabase.storage.from(VIDEOS_BUCKET).remove(videoPaths)
   }
+  if (session.deckPath) {
+    await supabase.storage.from(DECKS_BUCKET).remove([session.deckPath])
+  }
   await supabase.from('cc_timeline_items').delete().eq('session_id', session.id)
   const { error } = await supabase.from('cc_sessions').delete().eq('id', session.id)
   if (error) throw error

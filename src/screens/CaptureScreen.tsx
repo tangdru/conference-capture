@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
-import { Haptics, ImpactStyle } from '@capacitor/haptics'
+import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'
+import { PHOTOS_DENIED_MESSAGE, saveToPhotoLibrary } from '../native/photoLibrary'
 import type { PhotoItem, Session, TimelineItemData, VideoItem } from '../types'
 import { formatElapsed, formatSessionSubtitle, formatDurationCompact } from '../format'
 import { Timeline } from '../components/Timeline'
@@ -47,6 +48,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
   // the same conversation.
   const [askTurns, setAskTurns] = useState<AskTurn[]>([])
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [savedPhotoNotice, setSavedPhotoNotice] = useState(false)
   const [viewingPhotoId, setViewingPhotoId] = useState<string | null>(null)
   const [viewingVideoId, setViewingVideoId] = useState<string | null>(null)
   const [activeId, setActiveId] = useState<string | 'new' | null>(null)
@@ -146,6 +148,22 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
       setSaveError(err instanceof Error ? err.message : 'Failed to delete')
     }
   }
+
+  async function saveToAlbum(item: PhotoItem) {
+    try {
+      await saveToPhotoLibrary(item.dataUrl ?? (await db.resolvePhotoUrl(item.photoPath)))
+      setSavedPhotoNotice(true)
+      void Haptics.notification({ type: NotificationType.Success })
+    } catch (err) {
+      setSaveError((err as { code?: string }).code === 'denied' ? PHOTOS_DENIED_MESSAGE : "Couldn't save this photo")
+    }
+  }
+
+  useEffect(() => {
+    if (!savedPhotoNotice) return
+    const timer = setTimeout(() => setSavedPhotoNotice(false), 3000)
+    return () => clearTimeout(timer)
+  }, [savedPhotoNotice])
 
   async function toggleExcluded(item: TimelineItemData) {
     const excluded = !item.excluded
@@ -488,11 +506,16 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
         onDeleteItem={deleteItem}
         onToggleExcluded={toggleExcluded}
         onToggleStarred={toggleStarred}
+        onSavePhoto={Capacitor.isNativePlatform() ? saveToAlbum : undefined}
         onReorder={reorderItems}
         liveTranscript={session.status === 'recording' ? liveText : null}
         processingPhotoIds={processingPhotoIds}
         focusId={focusItemId}
       />
+
+      <div className="save-notice" role="status">
+        {savedPhotoNotice && <span>Saved to Photos</span>}
+      </div>
 
       <div className="capture-actions">
         <button

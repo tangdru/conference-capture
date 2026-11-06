@@ -88,6 +88,22 @@ export function CheckIcon() {
   )
 }
 
+/** Save to Photos: an arrow dropping into a tray. */
+export function SaveToPhotosIcon() {
+  return (
+    <svg className="inline-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 3v12M7 10.5l5 5 5-5M4 16.5V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 /** Generate a presentation (the swipe row's sparkle, cropped). */
 export function SparkleIcon() {
   return (

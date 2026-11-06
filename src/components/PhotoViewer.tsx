@@ -1,7 +1,12 @@
+import { useEffect, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
+import { Haptics, NotificationType } from '@capacitor/haptics'
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch'
 import type { PhotoItem } from '../types'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
 import { formatClock } from '../format'
+import { PHOTOS_DENIED_MESSAGE, saveToPhotoLibrary } from '../native/photoLibrary'
+import { CheckIcon, SaveToPhotosIcon } from './InlineIcons'
 import './PhotoViewer.css'
 
 interface PhotoViewerProps {
@@ -9,16 +14,55 @@ interface PhotoViewerProps {
   onClose: () => void
 }
 
+type SaveState = 'idle' | 'saving' | 'saved' | 'denied' | 'failed'
+
+const SAVE_MESSAGES: Partial<Record<SaveState, string>> = {
+  saved: 'Saved to Photos',
+  denied: PHOTOS_DENIED_MESSAGE,
+  failed: "Couldn't save this photo",
+}
+
 export function PhotoViewer({ item, onClose }: PhotoViewerProps) {
   const url = usePhotoUrl(item)
+  const [saveState, setSaveState] = useState<SaveState>('idle')
+
+  useEffect(() => {
+    if (saveState === 'idle' || saveState === 'saving') return
+    const timer = setTimeout(() => setSaveState('idle'), 3000)
+    return () => clearTimeout(timer)
+  }, [saveState])
+
+  async function save() {
+    if (!url || saveState === 'saving') return
+    setSaveState('saving')
+    try {
+      await saveToPhotoLibrary(url)
+      setSaveState('saved')
+      void Haptics.notification({ type: NotificationType.Success })
+    } catch (err) {
+      setSaveState((err as { code?: string }).code === 'denied' ? 'denied' : 'failed')
+    }
+  }
 
   return (
     <div className="photo-viewer">
       <div className="photo-viewer__top-bar">
         <span className="mono-timestamp">{formatClock(item.timestamp)}</span>
-        <button className="photo-viewer__close" onClick={onClose} aria-label="Close photo">
-          ✕
-        </button>
+        <div className="photo-viewer__actions">
+          {Capacitor.isNativePlatform() && (
+            <button
+              className="photo-viewer__save"
+              onClick={save}
+              disabled={!url || saveState === 'saving'}
+              aria-label="Save to Photos"
+            >
+              {saveState === 'saved' ? <CheckIcon /> : <SaveToPhotosIcon />}
+            </button>
+          )}
+          <button className="photo-viewer__close" onClick={onClose} aria-label="Close photo">
+            ✕
+          </button>
+        </div>
       </div>
 
       <div className="photo-viewer__stage">
@@ -38,6 +82,9 @@ export function PhotoViewer({ item, onClose }: PhotoViewerProps) {
             </TransformComponent>
           </TransformWrapper>
         )}
+        <div className="photo-viewer__status" role="status">
+          {SAVE_MESSAGES[saveState] && <span>{SAVE_MESSAGES[saveState]}</span>}
+        </div>
       </div>
 
       {item.caption && item.caption !== 'Untitled photo' && (

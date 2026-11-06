@@ -11,7 +11,7 @@ import type {
 import { formatClock, formatClipDuration } from '../format'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
 import { useVideoUrl } from '../hooks/useVideoUrl'
-import { SwipeActions, DeleteIcon, ExcludeIcon, IncludeIcon, StarActionIcon, type DragHandle } from './SwipeActions'
+import { SwipeActions, DeleteIcon, ExcludeIcon, IncludeIcon, SaveIcon, StarActionIcon, type DragHandle } from './SwipeActions'
 import { CheckIcon, PauseIcon, PlayIcon, StarIcon } from './InlineIcons'
 import { seekClip, togglePlay, useClip, usePlayback } from '../clips'
 import type { ClipInfo } from '../native/clips'
@@ -33,6 +33,8 @@ interface TimelineProps {
   onDeleteItem: (item: TimelineItemData) => void
   onToggleExcluded: (item: TimelineItemData) => void
   onToggleStarred: (item: TimelineItemData) => void
+  /** Saves a photo to the phone's album. Absent where there's no album to save to. */
+  onSavePhoto?: (item: PhotoItem) => void
   onReorder: (orderedIds: string[]) => void
   /** While listening: the words heard so far ('' before any). null when not listening. */
   liveTranscript: string | null
@@ -68,6 +70,7 @@ export function Timeline({
   onDeleteItem,
   onToggleExcluded,
   onToggleStarred,
+  onSavePhoto,
   onReorder,
   liveTranscript,
   processingPhotoIds,
@@ -199,6 +202,12 @@ export function Timeline({
               revealedId={revealedId}
               onReveal={setRevealedId}
               actions={[
+                ...(item.type === 'photo' && onSavePhoto
+                  ? [{ icon: <SaveIcon />, label: 'Save to Photos', onClick: () => {
+                      setRevealedId(null)
+                      onSavePhoto(item)
+                    } }]
+                  : []),
                 ...(item.type === 'highlight' || item.type === 'enrichment'
                   ? []
                   : [{

@@ -13,6 +13,7 @@ class MainViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(SlideScannerPlugin())
         bridge?.registerPluginInstance(PhotoUploadsPlugin())
         bridge?.registerPluginInstance(ClipsPlugin())
+        bridge?.registerPluginInstance(PhotoLibraryPlugin())
         bridge?.registerPluginInstance(RecordingActivityPlugin())
     }
 }

@@ -316,3 +316,22 @@
   line-height: 32px;
   cursor: pointer;
 }
+
+.save-notice {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(120px + env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.save-notice span {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 14px;
+}

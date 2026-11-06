@@ -28,6 +28,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Conference Capture uses the camera to photograph slides and moments during a talk.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Conference Capture saves your photos to your photo album when you ask it to.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Conference Capture listens to the room to transcribe the speaker while you take notes, and saves a short audio clip when you tap Remember this.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

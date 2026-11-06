@@ -79,6 +79,8 @@ export function SwipeActions({ id, revealedId, onReveal, actions, dragHandle, di
   function onPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
     if (disabled) return
     if (e.pointerType === 'mouse' && e.button !== 0) return
+    // A new touch means the drag's trailing click never came, so this tap is real.
+    suppressNextClick.current = false
     dragRef.current = {
       startX: e.clientX,
       startY: e.clientY,
@@ -237,6 +239,25 @@ export function ViewIcon({ size = 18 }: { size?: number }) {
       <rect x="4" y="4" width="18" height="12.5" rx="1" stroke="var(--accent)" strokeWidth="2" />
       <path d="M13 16.5V20M13 20l-4 3.5M13 20l4 3.5" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M9 13v-2.5M13 13V8.5M17 13v-3.5" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/** Save to Photos: an arrow dropping into a tray. */
+export function SaveIcon() {
+  return (
+    <svg
+      viewBox="0 0 26 26"
+      width="18"
+      height="18"
+      aria-hidden="true"
+      fill="none"
+      stroke="var(--accent)"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M13 3v13M8 11.5l5 5 5-5M4.5 17.5V21a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-3.5" />
     </svg>
   )
 }

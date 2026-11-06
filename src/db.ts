@@ -5,7 +5,7 @@ import { dropQueuedRow, dropQueuedSession, flushOutbox, patchQueuedRow, queuedRo
 import type { DeckStatus, EnrichmentItemData, HighlightItem, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData, TranscriptItem, VideoItem } from './types'
 
 const ITEM_COLUMNS = 'id, session_id, type, subtype, payload, text, caption, photo_path, video_path, duration_ms, item_timestamp, added_later, excluded, starred, position'
-const SESSION_COLUMNS = 'id, title, status, started_at, accumulated_ms, live_span_started_at, deck_status, deck_path, deck_error, deck_generated_at, enrichment_error, last_enriched_at, updated_at'
+const SESSION_COLUMNS = 'id, title, status, started_at, accumulated_ms, live_span_started_at, deck_status, deck_path, deck_error, deck_generated_at, deck_heartbeat_at, enrichment_error, last_enriched_at, updated_at'
 
 interface SessionRow {
   id: string
@@ -18,6 +18,7 @@ interface SessionRow {
   deck_path: string | null
   deck_error: string | null
   deck_generated_at: string | null
+  deck_heartbeat_at: string | null
   enrichment_error: string | null
   last_enriched_at: string | null
   updated_at: string
@@ -41,6 +42,19 @@ interface ItemRow {
   position: number | null
 }
 
+// A round reports in within about two minutes. A crash can't report at all
+// (running out of memory ends the function on the spot), so silence this long
+// means the build died and would otherwise read as "building" forever.
+const DECK_SILENCE_MS = 6 * 60 * 1000
+
+function deckProgress(row: Pick<SessionRow, 'deck_status' | 'deck_error' | 'deck_heartbeat_at'>): { deckStatus: DeckStatus; deckError: string | null } {
+  const lastHeard = row.deck_heartbeat_at ? new Date(row.deck_heartbeat_at).getTime() : 0
+  if (row.deck_status === 'generating' && Date.now() - lastHeard > DECK_SILENCE_MS) {
+    return { deckStatus: 'error', deckError: 'It stopped before finishing' }
+  }
+  return { deckStatus: row.deck_status, deckError: row.deck_error }
+}
+
 function sessionFromRow(row: SessionRow, items: TimelineItemData[]): Session {
   return {
     id: row.id,
@@ -50,9 +64,8 @@ function sessionFromRow(row: SessionRow, items: TimelineItemData[]): Session {
     accumulatedMs: row.accumulated_ms,
     liveSpanStartedAt: row.live_span_started_at ? new Date(row.live_span_started_at).getTime() : null,
     items,
-    deckStatus: row.deck_status,
+    ...deckProgress(row),
     deckPath: row.deck_path,
-    deckError: row.deck_error,
     deckGeneratedAt: row.deck_generated_at ? new Date(row.deck_generated_at).getTime() : null,
     enrichmentError: row.enrichment_error,
     lastEnrichedAt: row.last_enriched_at ? new Date(row.last_enriched_at).getTime() : null,
@@ -559,15 +572,14 @@ export async function fetchSessionDeckState(
   // The title too: generating names a session that was never named.
   const { data, error } = await supabase
     .from('cc_sessions')
-    .select('title, deck_status, deck_path, deck_error, deck_generated_at')
+    .select('title, deck_status, deck_path, deck_error, deck_generated_at, deck_heartbeat_at')
     .eq('id', sessionId)
     .single()
   if (error) throw error
   return {
     title: data.title,
-    deckStatus: data.deck_status,
+    ...deckProgress(data),
     deckPath: data.deck_path,
-    deckError: data.deck_error,
     deckGeneratedAt: data.deck_generated_at ? new Date(data.deck_generated_at).getTime() : null,
   }
 }

@@ -17,14 +17,22 @@ export function isReadyToGenerate(session: Session): boolean {
   )
 }
 
-// Presentations embed their photos at full camera size (a dozen photos make
-// a 7 MB page, heavy to mail or send in Messages). The edge function can't
-// afford to re-encode them, so the phone does it the first time the page is
-// opened or shared, and saves the smaller page back.
+// The edge function can't hold or re-encode photos, so a new presentation
+// links to them. The phone embeds them the first time the page is opened or
+// shared, scaled down, and saves that page back: it then works offline and
+// outlasts the links. Older presentations embed full-size photos; those get
+// scaled down the same way.
 const PHOTO_MAX_SIDE = 1600
 const PHOTO_QUALITY = 0.78
+const PHOTO_LINK = /https:\/\/[^"'\s)]+\/storage\/v1\/object\/sign\/cc-photos\/[^"'\s)]+/g
 
-/** The page with its JPEG photos scaled down to at most PHOTO_MAX_SIDE. */
+/** Whether the page still links to photos rather than embedding them. */
+export function hasPhotoLinks(html: string): boolean {
+  return html.search(PHOTO_LINK) !== -1
+}
+
+/** The page with its photos embedded and scaled down to at most
+ * PHOTO_MAX_SIDE. A photo that can't be fetched keeps its link. */
 export async function compactDeckPhotos(html: string): Promise<string> {
   const sources = [...new Set(html.match(/data:image\/jpe?g;base64,[A-Za-z0-9+/=]+/g) ?? [])]
   let result = html
@@ -32,7 +40,22 @@ export async function compactDeckPhotos(html: string): Promise<string> {
     const smaller = await shrinkJpeg(src).catch(() => null)
     if (smaller && smaller.length < src.length) result = result.split(src).join(smaller)
   }
+  for (const link of new Set(html.match(PHOTO_LINK) ?? [])) {
+    const embedded = await embedPhoto(link).catch(() => null)
+    if (embedded) result = result.split(link).join(embedded)
+  }
   return result
+}
+
+async function embedPhoto(link: string): Promise<string> {
+  const response = await fetch(link)
+  if (!response.ok) throw new Error(`Photo fetch failed (${response.status})`)
+  const url = URL.createObjectURL(await response.blob())
+  try {
+    return await shrinkJpeg(url)
+  } finally {
+    URL.revokeObjectURL(url)
+  }
 }
 
 async function shrinkJpeg(src: string): Promise<string> {

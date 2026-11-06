@@ -5,8 +5,9 @@
 // function never uses a service-role key), asks Claude for a themed,
 // self-contained HTML page (a TL;DR, then chapters behind a sticky chapter
 // bar; interactive only where the talk showed data), substitutes
-// real photo data in place of the placeholders Claude is asked to emit, and
-// uploads the result to the private cc-decks bucket.
+// photo links in place of the placeholders Claude is asked to emit (the
+// phone embeds the photos later), and uploads the result to the private
+// cc-decks bucket.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
@@ -21,6 +22,12 @@ const PHOTOS_BUCKET = 'cc-photos'
 // plan stops a function at 150s; this leaves room to save and hand off).
 const ROUND_BUDGET_MS = 115_000
 const MAX_ROUNDS = 8
+// Past 20 images in one request the API applies a stricter size limit than
+// our photos meet, so Claude sees this many; the rest go by time and slide text.
+const MAX_PHOTOS_SHOWN = 20
+// How long the links in a new page last. The phone swaps them for embedded
+// photos the first time the page is opened or shared.
+const PHOTO_LINK_SECONDS = 365 * 24 * 60 * 60
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void }
 
@@ -39,6 +46,7 @@ Deno.serve(async (req) => {
   let authHeader: string
   let sessionId: string
   let part: number
+  let photoLinks: Record<string, string>
   try {
     authHeader = req.headers.get('Authorization') ?? ''
     if (!authHeader) throw new Error('Missing Authorization header')
@@ -53,6 +61,7 @@ Deno.serve(async (req) => {
     sessionId = body.sessionId
     if (!sessionId) throw new Error('Missing sessionId')
     part = Number.isInteger(body.part) ? body.part : 0
+    photoLinks = body.photoLinks ?? {}
   } catch (err) {
     return jsonResponse({ error: err instanceof Error ? err.message : 'Bad request' }, 400)
   }
@@ -79,7 +88,7 @@ Deno.serve(async (req) => {
   // The writing runs after the response, in rounds: the app polls the
   // session row for the outcome rather than waiting on this request.
   EdgeRuntime.waitUntil(
-    generateDeckPart(supabase, authHeader, sessionId, part, invokedAt).catch(recordError),
+    generateDeckPart(supabase, authHeader, sessionId, part, photoLinks, invokedAt).catch(recordError),
   )
   return jsonResponse({ started: true }, 202)
 })
@@ -98,7 +107,7 @@ async function markGenerating(supabase: ReturnType<typeof createClient>, session
   }
   const { error: updateError } = await supabase
     .from('cc_sessions')
-    .update({ deck_status: 'generating', deck_error: null })
+    .update({ deck_status: 'generating', deck_error: null, deck_heartbeat_at: new Date().toISOString() })
     .eq('id', sessionId)
   if (updateError) throw updateError
 }
@@ -112,8 +121,14 @@ async function generateDeckPart(
   authHeader: string,
   sessionId: string,
   part: number,
+  photoLinks: Record<string, string>,
   invokedAt: number,
 ): Promise<void> {
+  // The app takes silence as a crash, so each round says it's still going.
+  if (part > 0) {
+    await supabase.from('cc_sessions').update({ deck_heartbeat_at: new Date().toISOString() }).eq('id', sessionId)
+  }
+
   const { data: session, error: sessionError } = await supabase
     .from('cc_sessions')
     .select('id, title, owner_id, started_at')
@@ -148,24 +163,31 @@ async function generateDeckPart(
     }
   }
 
-  const photos: { placeholder: string; dataUrl: string; caption: string; slideText: string; elapsed: string; starred: boolean }[] = []
-  for (let i = 0; i < photoRows.length; i++) {
-    const row = photoRows[i]
-    const { data: blob, error: downloadError } = await supabase.storage
+  // Links, not the photos themselves: a function has too little memory to
+  // hold a session's worth of photos. Claude fetches them from the link, and
+  // every round reuses the same links so the prompt stays cached.
+  const missing = photoRows.map((r) => r.photo_path).filter((path) => !photoLinks[path])
+  if (missing.length > 0) {
+    const { data: signed, error: signError } = await supabase.storage
       .from(PHOTOS_BUCKET)
-      .download(row.photo_path)
-    if (downloadError) throw downloadError
-    const base64 = await blobToBase64(blob)
-    photos.push({
-      placeholder: `PHOTO_${i + 1}`,
-      dataUrl: `data:${blob.type || 'image/jpeg'};base64,${base64}`,
-      caption: row.caption ?? '',
-      // Read off the photo on the phone (SlideScanner); empty if none.
-      slideText: row.text ?? '',
-      elapsed: formatElapsed(session.started_at, row.item_timestamp),
-      starred: !!row.starred,
-    })
+      .createSignedUrls(missing, PHOTO_LINK_SECONDS)
+    if (signError) throw signError
+    for (const link of signed ?? []) {
+      if (link.error || !link.path || !link.signedUrl) throw new Error(link.error ?? "Couldn't link a photo")
+      photoLinks[link.path] = link.signedUrl
+    }
   }
+  const allPhotos: DeckPhoto[] = photoRows.map((row, i) => ({
+    placeholder: `PHOTO_${i + 1}`,
+    url: photoLinks[row.photo_path],
+    caption: row.caption ?? '',
+    // Read off the photo on the phone (SlideScanner); empty if none.
+    slideText: row.text ?? '',
+    elapsed: formatElapsed(session.started_at, row.item_timestamp),
+    starred: !!row.starred,
+    shown: false,
+  }))
+  const photos = markPhotosShown(allPhotos)
 
   const partialPath = `${session.owner_id}/${sessionId}/deck.partial.html`
   let written = ''
@@ -195,7 +217,7 @@ async function generateDeckPart(
         Authorization: authHeader,
         apikey: Deno.env.get('SUPABASE_ANON_KEY')!,
       },
-      body: JSON.stringify({ sessionId, part: part + 1 }),
+      body: JSON.stringify({ sessionId, part: part + 1, photoLinks }),
     })
     if (!next.ok) throw new Error(`Couldn't continue the presentation (${next.status})`)
     return
@@ -226,6 +248,27 @@ async function generateDeckPart(
   if (part > 0) await supabase.storage.from(DECKS_BUCKET).remove([partialPath])
 }
 
+interface DeckPhoto {
+  placeholder: string
+  url: string
+  caption: string
+  slideText: string
+  elapsed: string
+  starred: boolean
+  /** Whether Claude is sent the image, not just its details. */
+  shown: boolean
+}
+
+/** Picks which photos Claude sees: starred ones first, the rest spread
+ * evenly through the talk. */
+function markPhotosShown(photos: DeckPhoto[]): DeckPhoto[] {
+  const shown = new Set(photos.filter((p) => p.starred).slice(0, MAX_PHOTOS_SHOWN))
+  const others = photos.filter((p) => !shown.has(p))
+  const room = Math.min(MAX_PHOTOS_SHOWN - shown.size, others.length)
+  for (let i = 0; i < room; i++) shown.add(others[Math.floor((i * others.length) / room)])
+  return photos.map((p) => ({ ...p, shown: shown.has(p) }))
+}
+
 function formatElapsed(startedAtIso: string, itemIso: string): string {
   const totalSec = Math.max(0, Math.round((new Date(itemIso).getTime() - new Date(startedAtIso).getTime()) / 1000))
   const hours = Math.floor(totalSec / 3600)
@@ -233,17 +276,6 @@ function formatElapsed(startedAtIso: string, itemIso: string): string {
   const seconds = (totalSec % 60).toString().padStart(2, '0')
   // H:MM:SS past the hour (workshops, long sessions), else MM:SS.
   return hours > 0 ? `${hours}:${minutes.toString().padStart(2, '0')}:${seconds}` : `${minutes}:${seconds}`
-}
-
-async function blobToBase64(blob: Blob): Promise<string> {
-  const buffer = await blob.arrayBuffer()
-  const bytes = new Uint8Array(buffer)
-  let binary = ''
-  const chunkSize = 0x8000
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
-  }
-  return btoa(binary)
 }
 
 /** A photo's on-device text as one line for the prompt, capped so a dense
@@ -260,7 +292,7 @@ async function callClaude(
   notes: { text: string | null; item_timestamp: string; starred?: boolean }[],
   transcriptSegments: { text: string | null; item_timestamp: string; starred?: boolean }[],
   enrichmentRows: { subtype: string | null; payload: Record<string, unknown> | null }[],
-  photos: { placeholder: string; dataUrl: string; caption: string; slideText: string; elapsed: string; starred: boolean }[],
+  photos: DeckPhoto[],
   highlightsText: string,
   writtenSoFar: string,
   deadline: number,
@@ -274,7 +306,7 @@ async function callClaude(
     : '(No ambient transcript was captured for this talk.)'
 
   const photosText = photos.length > 0
-    ? photos.map((p) => `- ${p.placeholder} [${p.elapsed}]${p.starred ? ' ★' : ''}${p.caption ? ` -- caption: "${p.caption}"` : ''}${formatSlideText(p.slideText)}`).join('\n')
+    ? photos.map((p) => `- ${p.placeholder} [${p.elapsed}]${p.starred ? ' ★' : ''}${p.shown ? '' : ' (not shown)'}${p.caption ? ` -- caption: "${p.caption}"` : ''}${formatSlideText(p.slideText)}`).join('\n')
     : '(No photos were captured for this talk.)'
 
   const enrichmentText = formatEnrichment(enrichmentRows)
@@ -292,7 +324,7 @@ ${transcriptText}
 Extracted enrichment:
 ${enrichmentText}
 
-Photos available (shown to you below, in this order):
+Photos available (shown to you below, in this order, except those marked "not shown" -- there were too many to send them all, so place those by their elapsed time and text; use every photo all the same):
 ${photosText}
 
 Moments the attendee marked "Remember this" (tapped live, as it happened):
@@ -320,13 +352,9 @@ Requirements:
 - Let the page itself scroll: the document/window is the scroller. Don't put the content inside a fixed-height element with its own overflow scrolling, and don't set overflow: hidden on html or body.`
 
   const content: Record<string, unknown>[] = [{ type: 'text', text: instructions }]
-  for (const photo of photos) {
+  for (const photo of photos.filter((p) => p.shown)) {
     content.push({ type: 'text', text: `Here is ${photo.placeholder}:` })
-    const [, mediaType, base64] = photo.dataUrl.match(/^data:(.+);base64,(.+)$/) ?? []
-    content.push({
-      type: 'image',
-      source: { type: 'base64', media_type: mediaType ?? 'image/jpeg', data: base64 },
-    })
+    content.push({ type: 'image', source: { type: 'url', url: photo.url } })
   }
   // Every round re-sends this same prompt; caching it keeps later rounds cheap.
   content[content.length - 1].cache_control = { type: 'ephemeral' }
@@ -522,11 +550,11 @@ function stripCodeFence(text: string): string {
   return match ? match[1] : text
 }
 
-function substitutePhotos(html: string, photos: { placeholder: string; dataUrl: string }[]): string {
+function substitutePhotos(html: string, photos: { placeholder: string; url: string }[]): string {
   let result = html
   for (const photo of photos) {
-    result = result.split(`"${photo.placeholder}"`).join(`"${photo.dataUrl}"`)
-    result = result.split(`'${photo.placeholder}'`).join(`'${photo.dataUrl}'`)
+    result = result.split(`"${photo.placeholder}"`).join(`"${photo.url}"`)
+    result = result.split(`'${photo.placeholder}'`).join(`'${photo.url}'`)
   }
   return result
 }

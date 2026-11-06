@@ -6,7 +6,7 @@ import { ActionSheet, ActionSheetButtonStyle } from '@capacitor/action-sheet'
 import type { Session as AuthSession } from '@supabase/supabase-js'
 import type { PhotoItem, Session } from './types'
 import * as db from './db'
-import { compactDeckPhotos, hasShortVersion, shortDeckHtml } from './deck'
+import { compactDeckPhotos, hasPhotoLinks, hasShortVersion, shortDeckHtml } from './deck'
 import { supabase } from './supabaseClient'
 import { AuthGate } from './auth/AuthGate'
 import { HomeScreen } from './screens/HomeScreen'
@@ -167,7 +167,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     const html = await db.fetchDeckHtml(deckPath)
     const compacted = await compactDeckPhotos(html)
     // Skip the save while a rebuild runs: it would overwrite the new page.
-    if (compacted.length < html.length * 0.8) {
+    if (hasPhotoLinks(html) || compacted.length < html.length * 0.8) {
       const { deckStatus } = await db.fetchSessionDeckState(session.id).catch(() => ({ deckStatus: null }))
       if (deckStatus === 'ready') void db.replaceDeckHtml(deckPath, compacted).catch(() => {})
     }

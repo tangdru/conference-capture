@@ -7,8 +7,8 @@ import type { Session as AuthSession } from '@supabase/supabase-js'
 import type { PhotoItem, Session } from './types'
 import * as db from './db'
 import { compactDeckPhotos, hasPhotoLinks, hasShortVersion, shortDeckHtml } from './deck'
-import { supabase } from './supabaseClient'
-import { AuthGate } from './auth/AuthGate'
+import { AuthGate, signOut } from './auth/AuthGate'
+import { AddEmailSheet } from './auth/AddEmailSheet'
 import { HomeScreen } from './screens/HomeScreen'
 import { CaptureScreen } from './screens/CaptureScreen'
 import { DeckViewer } from './components/DeckViewer'
@@ -24,6 +24,7 @@ export default function App() {
 
 function AuthedApp({ authSession }: { authSession: AuthSession }) {
   const userId = authSession.user.id
+  const [addingEmail, setAddingEmail] = useState(false)
   const [sessions, setSessions] = useState<Session[] | null>(null)
   const [route, setRoute] = useState<Route>({ screen: 'home' })
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -316,11 +317,14 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
 
   return (
     <>
+    {addingEmail && <AddEmailSheet sessionCount={sessions.length} onClose={() => setAddingEmail(false)} />}
     <HomeScreen
       sessions={sessions}
       onOpenSession={openSession}
       onNewSession={startNewSession}
-      onSignOut={() => supabase.auth.signOut()}
+      onSignOut={signOut}
+      needsEmail={authSession.user.is_anonymous === true}
+      onAddEmail={() => setAddingEmail(true)}
       onGenerateDeck={generateDeckForSession}
       onViewDeck={viewDeck}
       onShareDeck={shareDeck}

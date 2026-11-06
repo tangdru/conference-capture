@@ -22,6 +22,8 @@ interface HomeScreenProps {
   onOpenSession: (id: string, itemId?: string) => void
   onNewSession: () => void
   onSignOut: () => void
+  needsEmail: boolean
+  onAddEmail: () => void
   onGenerateDeck: (id: string) => void
   onViewDeck: (id: string) => void
   onShareDeck: (id: string) => void
@@ -39,6 +41,8 @@ export function HomeScreen({
   onOpenSession,
   onNewSession,
   onSignOut,
+  needsEmail,
+  onAddEmail,
   onGenerateDeck,
   onViewDeck,
   onShareDeck,
@@ -121,8 +125,9 @@ export function HomeScreen({
       <header className="home-header">
         <div className="home-header__row">
           <h1 className="home-header__title">Conference Capture</h1>
-          <button className="home-header__sign-out" onClick={onSignOut}>
-            Sign out
+          {/* A no-email account can't be signed back in to, so it never gets Sign out. */}
+          <button className="home-header__sign-out" onClick={needsEmail ? onAddEmail : onSignOut}>
+            {needsEmail ? 'Add email' : 'Sign out'}
           </button>
         </div>
         {sessions.length > 0 && (

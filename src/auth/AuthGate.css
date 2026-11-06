@@ -68,16 +68,53 @@
   cursor: default;
 }
 
-.sign-in-screen__sent {
-  color: var(--text-secondary);
-  font-size: 15px;
-  text-align: center;
-  max-width: 320px;
-}
 
 .sign-in-screen__error {
   color: var(--semantic-error);
   font-size: 13px;
   margin: 0;
   text-align: center;
+}
+
+.sign-in-screen__input--code {
+  text-align: center;
+  letter-spacing: 0.2em;
+}
+
+.sign-in-screen__links {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.sign-in-screen__link {
+  min-height: 44px;
+  padding: 0 12px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.add-email-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  height: auto;
+}
+
+.add-email-sheet__close {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 8px);
+  right: 12px;
+  min-height: 44px;
+  padding: 0 12px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 15px;
+  cursor: pointer;
 }

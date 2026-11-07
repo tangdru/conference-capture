@@ -272,8 +272,14 @@ export function HomeScreen({
       </div>
 
       <div className={`home-footer${searchOpen ? ' home-footer--searching' : ''}`}>
-        {/* Shrinks to a round + while searching so the search field can take the row. */}
-        <button className="new-session-btn" onClick={onNewSession} aria-label="Start new session">
+        {/* Shrinks away while searching so the search field can take the whole row. */}
+        <button
+          className="new-session-btn"
+          onClick={onNewSession}
+          aria-label="Start new session"
+          aria-hidden={searchOpen}
+          tabIndex={searchOpen ? -1 : 0}
+        >
           <span className="new-session-btn__plus" aria-hidden="true">+</span>
           <span className="new-session-btn__label" aria-hidden="true">New Session</span>
         </button>

@@ -103,17 +103,30 @@ export function HomeScreen({
   useEffect(() => {
     const vv = window.visualViewport
     if (!vv) return
+    let settle = 0
     const measure = () => {
-      const covered = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
-      setKeyboardHeight(covered > 80 ? covered : 0)
       // iOS may nudge the page up to reveal the field; keep it pinned instead.
       if (window.scrollY !== 0) window.scrollTo(0, 0)
+      // The keyboard's height, whatever the page's scroll offset happens to be.
+      const covered = Math.max(0, window.innerHeight - vv.height)
+      setKeyboardHeight(covered > 80 ? covered : 0)
     }
-    vv.addEventListener('resize', measure)
-    vv.addEventListener('scroll', measure)
+    const onChange = () => {
+      measure()
+      // Measure again once the keyboard has finished sliding.
+      window.clearTimeout(settle)
+      settle = window.setTimeout(measure, 350)
+    }
+    vv.addEventListener('resize', onChange)
+    vv.addEventListener('scroll', onChange)
+    window.addEventListener('focusin', onChange)
+    window.addEventListener('focusout', onChange)
     return () => {
-      vv.removeEventListener('resize', measure)
-      vv.removeEventListener('scroll', measure)
+      window.clearTimeout(settle)
+      vv.removeEventListener('resize', onChange)
+      vv.removeEventListener('scroll', onChange)
+      window.removeEventListener('focusin', onChange)
+      window.removeEventListener('focusout', onChange)
     }
   }, [])
 
@@ -267,10 +280,6 @@ export function HomeScreen({
 
         {sessions.length > 0 && (
           <>
-            <div className="home-footer__sort" aria-hidden={searchOpen}>
-              {sessions.length > 1 && <SortMenu value={sort} onChange={changeSort} />}
-            </div>
-
             <div className="home-searchbox">
               {!searchOpen && <button className="home-searchbox__open" onClick={openSearch} aria-label="Search sessions" />}
               <svg className="home-searchbox__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -301,6 +310,11 @@ export function HomeScreen({
                   </svg>
                 </button>
               )}
+            </div>
+
+            {/* Tucks away to the right while searching, then grows back as the field shrinks. */}
+            <div className="home-footer__sort" aria-hidden={searchOpen}>
+              {sessions.length > 1 && <SortMenu value={sort} onChange={changeSort} />}
             </div>
           </>
         )}

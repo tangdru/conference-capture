@@ -201,23 +201,31 @@
   opacity: 0;
 }
 
-/* Pushes sort and search to the right edge until search opens. */
+/* Sort sits at the right edge. While searching it shrinks to nothing (the
+   negative margin cancels the row gap so the field reaches the edge); on
+   close it grows back into the space the shrinking field leaves. */
 .home-footer__sort {
-  margin-left: auto;
+  flex-shrink: 0;
   max-width: 44px;
-  transition: max-width var(--bar-time) var(--bar-ease), opacity 160ms ease;
+  transform-origin: center right;
+  transition: max-width var(--bar-time) var(--bar-ease), margin var(--bar-time) var(--bar-ease),
+    transform var(--bar-time) var(--bar-ease), opacity 200ms ease 80ms;
 }
 
 .home-footer--searching .home-footer__sort {
   max-width: 0;
+  margin-left: -10px;
   opacity: 0;
+  transform: scale(0.6);
   pointer-events: none;
-  overflow: hidden;
+  transition: max-width var(--bar-time) var(--bar-ease), margin var(--bar-time) var(--bar-ease),
+    transform var(--bar-time) var(--bar-ease), opacity 120ms ease;
 }
 
 /* Search: a round icon button that grows into a field filling the row. */
 .home-searchbox {
   position: relative;
+  margin-left: auto;
   flex: 1 1 auto;
   max-width: 44px;
   height: 44px;

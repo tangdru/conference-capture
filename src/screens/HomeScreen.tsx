@@ -84,6 +84,8 @@ export function HomeScreen({
   const [revealedId, setRevealedId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SessionSort>(savedSort)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const results = useMemo(() => searchSessions(sessions, query), [sessions, query])
   const searching = query.trim().length > 0
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -94,6 +96,39 @@ export function HomeScreen({
     const id = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(id)
   }, [])
+
+  // The app's web view doesn't shrink for the keyboard, so measure how much of
+  // the screen it covers and lift the bottom bar (and shorten the list) by that.
+  const [keyboardHeight, setKeyboardHeight] = useState(0)
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const measure = () => {
+      const covered = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
+      setKeyboardHeight(covered > 80 ? covered : 0)
+      // iOS may nudge the page up to reveal the field; keep it pinned instead.
+      if (window.scrollY !== 0) window.scrollTo(0, 0)
+    }
+    vv.addEventListener('resize', measure)
+    vv.addEventListener('scroll', measure)
+    return () => {
+      vv.removeEventListener('resize', measure)
+      vv.removeEventListener('scroll', measure)
+    }
+  }, [])
+
+  function openSearch() {
+    setSearchOpen(true)
+    // Focus inside the tap itself -- iOS only raises the keyboard for a focus
+    // that happens during the user's gesture.
+    searchInputRef.current?.focus()
+  }
+
+  function closeSearch() {
+    setQuery('')
+    setSearchOpen(false)
+    searchInputRef.current?.blur()
+  }
 
   function changeSort(next: SessionSort) {
     setSort(next)
@@ -159,7 +194,10 @@ export function HomeScreen({
   }
 
   return (
-    <div className="home-screen">
+    <div
+      className={`home-screen${keyboardHeight ? ' home-screen--keyboard' : ''}`}
+      style={keyboardHeight ? { height: `calc(100dvh - ${keyboardHeight}px)` } : undefined}
+    >
       <header className="home-header">
         <div className="home-header__row">
           <h1 className="home-header__title">Conference Capture</h1>
@@ -168,31 +206,6 @@ export function HomeScreen({
             {needsEmail ? 'Add email' : 'Sign out'}
           </button>
         </div>
-        {sessions.length > 0 && (
-          <div className="home-search">
-            <svg className="home-search__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" strokeWidth="2" />
-              <path d="M15.5 15.5L20 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-            <input
-              className="home-search__input"
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search notes, transcripts and slides"
-              aria-label="Search sessions"
-              enterKeyHint="search"
-              autoCorrect="off"
-            />
-            {searching ? (
-              <button className="home-search__clear" onClick={() => setQuery('')} aria-label="Clear search">
-                Cancel
-              </button>
-            ) : (
-              sessions.length > 1 && <SortMenu value={sort} onChange={changeSort} />
-            )}
-          </div>
-        )}
       </header>
 
       {error && (
@@ -245,10 +258,52 @@ export function HomeScreen({
         </div>
       </div>
 
-      <div className="home-footer">
+      <div className={`home-footer${searchOpen ? ' home-footer--searching' : ''}`}>
+        {/* Shrinks to a round + while searching so the search field can take the row. */}
         <button className="new-session-btn" onClick={onNewSession} aria-label="Start new session">
-          + New Session
+          <span className="new-session-btn__plus" aria-hidden="true">+</span>
+          <span className="new-session-btn__label" aria-hidden="true">New Session</span>
         </button>
+
+        {sessions.length > 0 && (
+          <>
+            <div className="home-footer__sort" aria-hidden={searchOpen}>
+              {sessions.length > 1 && <SortMenu value={sort} onChange={changeSort} />}
+            </div>
+
+            <div className="home-searchbox">
+              {!searchOpen && <button className="home-searchbox__open" onClick={openSearch} aria-label="Search sessions" />}
+              <svg className="home-searchbox__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" strokeWidth="2" />
+                <path d="M15.5 15.5L20 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+              <input
+                ref={searchInputRef}
+                className="home-searchbox__input"
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur()
+                  if (e.key === 'Escape') closeSearch()
+                }}
+                placeholder="Search sessions"
+                aria-label="Search sessions"
+                aria-hidden={!searchOpen}
+                tabIndex={searchOpen ? 0 : -1}
+                enterKeyHint="search"
+                autoCorrect="off"
+              />
+              {searchOpen && (
+                <button className="home-searchbox__close" onClick={closeSearch} aria-label="Close search">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

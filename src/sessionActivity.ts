@@ -6,7 +6,7 @@ import type { Session } from './types'
  * just fades out of the spotlight once nothing's happening. */
 const INACTIVITY_MS = 20 * 60 * 1000
 
-function lastActivityAt(session: Session): number {
+export function lastActivityAt(session: Session): number {
   const itemTimes = session.items.map((i) => i.timestamp)
   return Math.max(session.updatedAt, session.startedAt, ...itemTimes)
 }

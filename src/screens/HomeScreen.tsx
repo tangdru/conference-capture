@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Session } from '../types'
-import { isSessionActive } from '../sessionActivity'
+import { isSessionActive, lastActivityAt } from '../sessionActivity'
 import { hasContentSinceDeck } from '../deck'
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
 import { SessionCard } from '../components/SessionCard'
 import { SearchResults } from '../components/SearchResults'
 import { searchSessions } from '../search'
+import { SortMenu, SORT_OPTIONS, type SessionSort } from '../components/SortMenu'
 import {
   SwipeActions,
   type SwipeAction,
@@ -15,6 +16,29 @@ import {
   ShareIcon,
 } from '../components/SwipeActions'
 import './HomeScreen.css'
+
+const SORT_KEY = 'cc-session-sort'
+
+function savedSort(): SessionSort {
+  try {
+    const saved = localStorage.getItem(SORT_KEY)
+    if (SORT_OPTIONS.some((o) => o.value === saved)) return saved as SessionSort
+  } catch {
+    // Storage unavailable -- fall back to the default.
+  }
+  return 'started'
+}
+
+const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+
+function sortSessions(sessions: Session[], sort: SessionSort): Session[] {
+  const newest = (a: Session, b: Session) => b.startedAt - a.startedAt
+  const sorted = [...sessions]
+  if (sort === 'activity') sorted.sort((a, b) => lastActivityAt(b) - lastActivityAt(a) || newest(a, b))
+  else if (sort === 'name') sorted.sort((a, b) => byName.compare(a.title.trim(), b.title.trim()) || newest(a, b))
+  else sorted.sort(newest)
+  return sorted
+}
 
 interface HomeScreenProps {
   sessions: Session[]
@@ -55,6 +79,7 @@ export function HomeScreen({
   const [now, setNow] = useState(Date.now())
   const [revealedId, setRevealedId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<SessionSort>(savedSort)
   const results = useMemo(() => searchSessions(sessions, query), [sessions, query])
   const searching = query.trim().length > 0
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -66,10 +91,19 @@ export function HomeScreen({
     return () => window.clearInterval(id)
   }, [])
 
-  // Every live session on top, then the past ones -- each group newest first.
-  const newestFirst = [...sessions].sort((a, b) => b.startedAt - a.startedAt)
-  const live = newestFirst.filter((s) => isSessionActive(s, now))
-  const past = newestFirst.filter((s) => !isSessionActive(s, now))
+  function changeSort(next: SessionSort) {
+    setSort(next)
+    try {
+      localStorage.setItem(SORT_KEY, next)
+    } catch {
+      // Not remembered this time; the sort still applies.
+    }
+  }
+
+  // Live sessions stay on top, newest first, whatever the sort -- they're what
+  // you're in the middle of. The chosen sort orders everything else.
+  const live = sortSessions(sessions, 'started').filter((s) => isSessionActive(s, now))
+  const past = sortSessions(sessions, sort).filter((s) => !isSessionActive(s, now))
 
   function deckActions(session: Session): SwipeAction[] {
     switch (session.deckStatus) {
@@ -146,10 +180,12 @@ export function HomeScreen({
               enterKeyHint="search"
               autoCorrect="off"
             />
-            {searching && (
+            {searching ? (
               <button className="home-search__clear" onClick={() => setQuery('')} aria-label="Clear search">
                 Cancel
               </button>
+            ) : (
+              sessions.length > 1 && <SortMenu value={sort} onChange={changeSort} />
             )}
           </div>
         )}

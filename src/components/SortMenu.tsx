@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import './SortMenu.css'
 
-export type SessionSort = 'started' | 'activity' | 'name'
+export type SessionSort = 'started' | 'oldest' | 'activity' | 'name' | 'deck'
 
 export const SORT_OPTIONS: { value: SessionSort; label: string }[] = [
-  { value: 'started', label: 'Date started' },
+  { value: 'started', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
   { value: 'activity', label: 'Last activity' },
   { value: 'name', label: 'Name A–Z' },
+  { value: 'deck', label: 'Has presentation' },
 ]
 
 interface SortMenuProps {

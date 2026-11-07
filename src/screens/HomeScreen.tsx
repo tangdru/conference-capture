@@ -34,8 +34,12 @@ const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base'
 function sortSessions(sessions: Session[], sort: SessionSort): Session[] {
   const newest = (a: Session, b: Session) => b.startedAt - a.startedAt
   const sorted = [...sessions]
+  // Ready presentations first, then ones being built, then the rest.
+  const deckRank = (s: Session) => (s.deckStatus === 'ready' ? 0 : s.deckStatus === 'generating' ? 1 : 2)
   if (sort === 'activity') sorted.sort((a, b) => lastActivityAt(b) - lastActivityAt(a) || newest(a, b))
   else if (sort === 'name') sorted.sort((a, b) => byName.compare(a.title.trim(), b.title.trim()) || newest(a, b))
+  else if (sort === 'oldest') sorted.sort((a, b) => a.startedAt - b.startedAt)
+  else if (sort === 'deck') sorted.sort((a, b) => deckRank(a) - deckRank(b) || newest(a, b))
   else sorted.sort(newest)
   return sorted
 }

@@ -29,6 +29,14 @@ const SECTIONS: { key: BooleanKey; label: string; hint: string }[] = [
   { key: 'chapterTimes', label: 'Chapter times', hint: 'When each part started, like 12:40' },
 ]
 
+const SAVED: { key: BooleanKey; label: string; hint: string }[] = [
+  { key: 'saveSummary', label: 'Summary', hint: 'What the talk was about, at the top' },
+  { key: 'saveActionItems', label: 'Action items', hint: 'What the speaker said they’d do' },
+  { key: 'saveSpeakerBio', label: 'Speaker bio', hint: 'Who gave the talk, when they say' },
+  { key: 'saveAcronyms', label: 'Acronyms', hint: 'Terms the speaker didn’t explain' },
+  { key: 'saveReferences', label: 'References', hint: 'Papers, books and tools they named' },
+]
+
 // Saved to the account as they change, so they follow you to any phone.
 export function PresentationOptionsSheet({ userId, onBack }: PresentationOptionsSheetProps) {
   const [options, setOptions] = useState<PresentationOptions | null>(null)
@@ -94,25 +102,13 @@ export function PresentationOptionsSheet({ userId, onBack }: PresentationOptions
         {options && (
           <>
             <h2 className="app-menu__section-title">Sections</h2>
-            <ul className="app-menu__list">
-              {SECTIONS.map(({ key, label, hint }) => (
-                <li key={key}>
-                  <label className="app-menu__row">
-                    <span className="app-menu__label">
-                      {label}
-                      <span className="app-menu__hint">{hint}</span>
-                    </span>
-                    <input
-                      type="checkbox"
-                      role="switch"
-                      className="pres-options__switch"
-                      checked={options[key]}
-                      onChange={(e) => set(key, e.target.checked)}
-                    />
-                  </label>
-                </li>
-              ))}
-            </ul>
+            <Toggles rows={SECTIONS} options={options} onChange={set} />
+
+            <h2 className="app-menu__section-title">Save to the session</h2>
+            <p className="pres-options__section-hint">
+              Building a presentation also adds these to the session, so you can find them and Ask about them.
+            </p>
+            <Toggles rows={SAVED} options={options} onChange={set} />
 
             <h2 className="app-menu__section-title">Style</h2>
             <ul className="app-menu__list">
@@ -260,5 +256,37 @@ function Choice<T extends string>({
         </div>
       </div>
     </li>
+  )
+}
+
+function Toggles({
+  rows,
+  options,
+  onChange,
+}: {
+  rows: { key: BooleanKey; label: string; hint: string }[]
+  options: PresentationOptions
+  onChange: (key: BooleanKey, value: boolean) => void
+}) {
+  return (
+    <ul className="app-menu__list">
+      {rows.map(({ key, label, hint }) => (
+        <li key={key}>
+          <label className="app-menu__row">
+            <span className="app-menu__label">
+              {label}
+              <span className="app-menu__hint">{hint}</span>
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              className="pres-options__switch"
+              checked={options[key]}
+              onChange={(e) => onChange(key, e.target.checked)}
+            />
+          </label>
+        </li>
+      ))}
+    </ul>
   )
 }

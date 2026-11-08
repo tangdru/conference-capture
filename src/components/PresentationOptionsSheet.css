@@ -154,3 +154,10 @@
   font-size: 15px;
   cursor: pointer;
 }
+
+.pres-options__section-hint {
+  margin: -4px 4px 4px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}

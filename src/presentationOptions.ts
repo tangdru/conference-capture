@@ -28,6 +28,13 @@ export interface PresentationOptions {
   voice: Voice
   /** A language name, or 'auto' for the talk's own language. */
   language: string
+  // What Sparkle also saves into the session itself, as entries Ask and
+  // search can use.
+  saveSummary: boolean
+  saveActionItems: boolean
+  saveSpeakerBio: boolean
+  saveAcronyms: boolean
+  saveReferences: boolean
 }
 
 /** Today's presentation, as it was before these options existed. */
@@ -47,6 +54,11 @@ export const DEFAULT_PRESENTATION_OPTIONS: PresentationOptions = {
   photos: 'all',
   voice: 'neutral',
   language: 'auto',
+  saveSummary: true,
+  saveActionItems: true,
+  saveSpeakerBio: true,
+  saveAcronyms: true,
+  saveReferences: true,
 }
 
 export const ACCENT_SWATCHES = ['#00f0e0', '#4f7cff', '#a66bff', '#ff5c8a', '#ff8a3d', '#3ccf6e']

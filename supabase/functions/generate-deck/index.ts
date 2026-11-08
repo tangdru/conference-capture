@@ -49,6 +49,11 @@ interface PresentationOptions {
   photos: 'all' | 'starred' | 'none'
   voice: 'neutral' | 'first_person' | 'brief'
   language: string
+  saveSummary: boolean
+  saveActionItems: boolean
+  saveSpeakerBio: boolean
+  saveAcronyms: boolean
+  saveReferences: boolean
 }
 
 const DEFAULT_OPTIONS: PresentationOptions = {
@@ -67,6 +72,11 @@ const DEFAULT_OPTIONS: PresentationOptions = {
   photos: 'all',
   voice: 'neutral',
   language: 'auto',
+  saveSummary: true,
+  saveActionItems: true,
+  saveSpeakerBio: true,
+  saveAcronyms: true,
+  saveReferences: true,
 }
 
 const corsHeaders = {
@@ -181,7 +191,7 @@ async function generateDeckPart(
 
   const { data: allItemRows, error: itemsError } = await supabase
     .from('cc_timeline_items')
-    .select('type, subtype, payload, text, caption, photo_path, item_timestamp, excluded, starred')
+    .select('id, type, subtype, payload, text, caption, photo_path, item_timestamp, excluded, starred')
     .eq('session_id', sessionId)
     .order('position', { ascending: true, nullsFirst: false })
     .order('item_timestamp', { ascending: true })
@@ -194,20 +204,41 @@ async function generateDeckPart(
   const notes = itemRows.filter((r) => r.type === 'note' && r.text)
   const transcriptSegments = itemRows.filter((r) => r.type === 'transcript' && r.text)
   const photoRows = itemRows.filter((r) => r.type === 'photo' && r.photo_path)
-  const enrichmentRows = itemRows.filter((r) => r.type === 'enrichment' && r.payload)
+  let enrichmentRows = itemRows.filter((r) => r.type === 'enrichment' && r.payload)
   const highlightRows = itemRows.filter((r) => r.type === 'highlight')
 
   // A session the user never named gets one from its content, first, so the
   // card shows it while the deck builds and the deck itself uses it.
   let title: string = session.title
-  if (part === 0 && (!title.trim() || title.trim() === DEFAULT_TITLE)) {
-    const named = await nameSession(notes, transcriptSegments, photoRows, enrichmentRows).catch((err) => {
-      console.error('nameSession failed:', err)
-      return null
-    })
+  if (part === 0) {
+    const needsName = !title.trim() || title.trim() === DEFAULT_TITLE
+    // Both quick, so side by side: the name, and the entries saved into the
+    // session (summary, action items, speaker bio, acronyms, references).
+    const [named, saved] = await Promise.all([
+      needsName
+        ? nameSession(notes, transcriptSegments, photoRows, enrichmentRows).catch((err) => {
+          console.error('nameSession failed:', err)
+          return null
+        })
+        : Promise.resolve(null),
+      saveSessionEntries(supabase, session, notes, transcriptSegments, photoRows, allItemRows ?? [], options)
+        .catch((err) => {
+          // The presentation still gets built without them.
+          console.error('saveSessionEntries failed:', err)
+          return false
+        }),
+    ])
     if (named) {
       title = named
       await supabase.from('cc_sessions').update({ title }).eq('id', sessionId)
+    }
+    if (saved) {
+      const { data: fresh } = await supabase
+        .from('cc_timeline_items')
+        .select('subtype, payload, excluded')
+        .eq('session_id', sessionId)
+        .eq('type', 'enrichment')
+      enrichmentRows = (fresh ?? []).filter((r) => !r.excluded && r.payload) as typeof enrichmentRows
     }
   }
 
@@ -586,6 +617,151 @@ function formatEnrichment(rows: { subtype: string | null; payload: Record<string
     }
   }
   return lines.map((l) => `- ${l}`).join('\n')
+}
+
+type EntryKind = 'summary' | 'action_items' | 'speaker_bio' | 'acronyms' | 'references'
+
+/** Saves the session's summary, action items, speaker bio, acronyms and
+ * references into the session itself (as enrichment entries), so the
+ * timeline shows them and Ask and search can use them. Each kind replaces
+ * the one a previous build saved; one the user left out (excluded) is kept
+ * as it is. Returns whether anything changed. */
+async function saveSessionEntries(
+  supabase: ReturnType<typeof createClient>,
+  session: { id: string; owner_id: string; started_at: string },
+  notes: { text: string | null; item_timestamp: string }[],
+  transcriptSegments: { text: string | null; item_timestamp: string }[],
+  photoRows: { text: string | null; caption: string | null; item_timestamp: string }[],
+  allRows: { id: string; type: string; subtype: string | null; excluded: boolean }[],
+  options: PresentationOptions,
+): Promise<boolean> {
+  const wanted: Record<EntryKind, boolean> = {
+    summary: options.saveSummary,
+    action_items: options.saveActionItems,
+    speaker_bio: options.saveSpeakerBio,
+    acronyms: options.saveAcronyms,
+    references: options.saveReferences,
+  }
+  const existing = allRows.filter((r) => r.type === 'enrichment')
+  const kinds = (Object.keys(wanted) as EntryKind[]).filter((kind) =>
+    wanted[kind] && !existing.some((r) => r.subtype === kind && r.excluded))
+  if (kinds.length === 0) return false
+
+  const lines = [
+    ...notes.map((n) => ({ at: n.item_timestamp, line: `NOTE: ${n.text}` })),
+    ...transcriptSegments.map((t) => ({ at: t.item_timestamp, line: `SPEAKER: ${t.text}` })),
+    ...photoRows
+      .filter((p) => p.text || p.caption)
+      .map((p) => ({ at: p.item_timestamp, line: `SLIDE PHOTO${p.caption ? ` (caption: ${p.caption})` : ''}${formatSlideText(p.text ?? '')}` })),
+  ]
+    .sort((a, b) => a.at.localeCompare(b.at))
+    .map((l) => `[${formatElapsed(session.started_at, l.at)}] ${l.line}`)
+  if (lines.length === 0) return false
+  // About 40k tokens; past that, the start of the talk matters most.
+  const material = lines.join('\n').slice(0, 160_000)
+
+  const asks: Record<EntryKind, string> = {
+    summary: 'summary: 2 or 3 plain sentences on what the talk was actually about.',
+    action_items: 'actionItems: commitments or follow-ups the SPEAKER made (e.g. "I\'ll share the slides", "it ships in Q2"), not things the attendee should do. Each {text, context}: the commitment and brief surrounding context. [] if none.',
+    speaker_bio: 'speakerBio: only if the content shows who the speaker is (a self-introduction, or a title or intro slide): {name, role, org, description} with a one-line description; empty string for any part not stated. null if the speaker\'s identity isn\'t established -- never guess.',
+    acronyms: 'acronyms: acronyms or jargon used but not explained by the speaker (skip ones they define). Each {term, expansion}. [] if none.',
+    references: 'references: papers, books, tools, products or URLs the speaker or slides explicitly named. Each {title, source, description, url}: source is the author, publisher or site; description one line; url only if one was actually given, else null. [] if none.',
+  }
+  const keyFor: Record<EntryKind, string> = {
+    summary: 'summary', action_items: 'actionItems', speaker_bio: 'speakerBio', acronyms: 'acronyms', references: 'references',
+  }
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY!,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: NAMING_MODEL,
+      thinking: { type: 'between_tools' },
+      max_tokens: 4000,
+      messages: [{
+        role: 'user',
+        content: `Below is what an attendee captured during one conference talk, in order, each line tagged with its elapsed time: their NOTEs, the SPEAKER's words (transcribed on the phone, so some words may be wrong), and text read off SLIDE PHOTOs.
+
+${material}
+
+Extract the following, grounded strictly in what's above -- never invent, and never pad a list from filler or small talk:
+${kinds.map((k, i) => `${i + 1}. ${asks[k]}`).join('\n')}
+
+Return ONLY one JSON object with exactly these keys: ${kinds.map((k) => keyFor[k]).join(', ')}. No markdown fences, no commentary.`,
+      }],
+    }),
+  })
+  if (!response.ok) throw new Error(`Claude API ${response.status}: ${(await response.text()).slice(0, 300)}`)
+  const data: { content?: { type: string; text?: string }[] } = await response.json()
+  const raw = data.content?.find((b) => b.type === 'text')?.text?.trim() ?? ''
+  const json = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+  const result = JSON.parse(json) as Record<string, unknown>
+
+  const list = (key: string) => (Array.isArray(result[key]) ? (result[key] as Record<string, unknown>[]) : [])
+  const payloads: Partial<Record<EntryKind, Record<string, unknown> | null>> = {}
+  if (kinds.includes('summary')) {
+    payloads.summary = typeof result.summary === 'string' && result.summary.trim() ? { text: result.summary.trim() } : null
+  }
+  if (kinds.includes('action_items')) {
+    const items = list('actionItems').filter((i) => typeof i.text === 'string' && i.text)
+      .map((i) => ({ text: String(i.text), context: String(i.context ?? '') }))
+    payloads.action_items = items.length ? { items } : null
+  }
+  if (kinds.includes('speaker_bio')) {
+    const bio = result.speakerBio as Record<string, unknown> | null
+    payloads.speaker_bio = bio && typeof bio === 'object' && typeof bio.name === 'string' && bio.name.trim()
+      ? { name: String(bio.name), role: String(bio.role ?? ''), org: String(bio.org ?? ''), description: String(bio.description ?? '') }
+      : null
+  }
+  if (kinds.includes('acronyms')) {
+    const items = list('acronyms').filter((i) => typeof i.term === 'string' && typeof i.expansion === 'string')
+      .map((i) => ({ term: String(i.term), expansion: String(i.expansion) }))
+    payloads.acronyms = items.length ? { items } : null
+  }
+  if (kinds.includes('references')) {
+    const items = list('references').filter((i) => typeof i.title === 'string' && i.title)
+      .map((i) => ({
+        title: String(i.title),
+        source: String(i.source ?? ''),
+        description: String(i.description ?? ''),
+        url: typeof i.url === 'string' && i.url ? i.url : null,
+      }))
+    payloads.references = items.length ? { items } : null
+  }
+
+  // Replace what a previous build saved for these kinds.
+  const replaced = existing.filter((r) => kinds.includes(r.subtype as EntryKind)).map((r) => r.id)
+  if (replaced.length > 0) {
+    const { error } = await supabase.from('cc_timeline_items').delete().in('id', replaced)
+    if (error) throw error
+  }
+
+  // The summary sits just before the talk's first moment; the rest go at the
+  // end, a beat apart so they keep this order.
+  const end = Date.now()
+  const order: EntryKind[] = ['action_items', 'speaker_bio', 'acronyms', 'references']
+  const rows = (Object.entries(payloads) as [EntryKind, Record<string, unknown> | null][])
+    .filter(([, payload]) => payload)
+    .map(([kind, payload]) => ({
+      session_id: session.id,
+      owner_id: session.owner_id,
+      type: 'enrichment',
+      subtype: kind,
+      payload,
+      item_timestamp: kind === 'summary'
+        ? new Date(new Date(session.started_at).getTime() - 1000).toISOString()
+        : new Date(end + order.indexOf(kind) * 10).toISOString(),
+    }))
+  if (rows.length > 0) {
+    const { error } = await supabase.from('cc_timeline_items').insert(rows)
+    if (error) throw error
+  }
+  console.log(`saveSessionEntries: ${session.id} saved ${rows.map((r) => r.subtype).join(', ') || 'nothing'}`)
+  return replaced.length > 0 || rows.length > 0
 }
 
 /** A short title for the talk from what was captured, or null if there's too

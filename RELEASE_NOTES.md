@@ -14,6 +14,17 @@ changes.
 
 ---
 
+## Build 44 — internal
+
+New in build 44: a calmer, animated menu and the app logo
+
+- The home screen header shows the app icon's two rings instead of the
+  "Conference Capture" title.
+- The menu is now a simple list on black with dotted lines between items;
+  Sign out sits on its own at the bottom.
+- Opening the menu: the menu icon's lines spread apart and the list opens
+  out from the top. Tap the icon again to close it (there's no Done button).
+
 ## Build 43 — internal
 
 New in build 43: menu and presentation options

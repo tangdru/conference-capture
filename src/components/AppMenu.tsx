@@ -45,9 +45,6 @@ export function AppMenu({ email, onClose, onPresentationOptions, onAddEmail, onS
               <span className="app-menu__soon">Coming soon</span>
             </div>
           </li>
-        </ul>
-
-        <ul className="app-menu__list">
           <li>
             {email ? (
               <div className="app-menu__row app-menu__row--static">
@@ -83,7 +80,7 @@ export function AppMenu({ email, onClose, onPresentationOptions, onAddEmail, onS
 
         {/* A no-email account can't be signed back in to, so it never gets Sign out. */}
         {email && (
-          <ul className="app-menu__list">
+          <ul className="app-menu__list app-menu__list--apart">
             <li>
               <button className="app-menu__row app-menu__row--danger" onClick={onSignOut}>
                 <span className="app-menu__label">Sign out</span>

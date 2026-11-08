@@ -14,7 +14,12 @@ changes.
 
 ---
 
-## Build 47 — internal
+## Build 48 — internal
+
+Same as build 47, which opened to a blank screen (built the wrong way for
+the phone). Use build 48 instead; its notes are build 47's below.
+
+## Build 47 — internal (blank screen; replaced by 48)
 
 New in build 47: Sparkle fills in the session, and entries stay where you put them
 

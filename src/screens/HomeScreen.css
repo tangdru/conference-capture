@@ -241,14 +241,12 @@
   border: 1px solid var(--border);
   box-sizing: border-box;
   overflow: hidden;
-  transition: max-width var(--bar-time) var(--bar-ease), border-color 160ms ease;
+  transition: max-width var(--bar-time) var(--bar-ease), border-color var(--bar-time) var(--bar-ease);
 }
 
+/* The teal outline grows in with the bar, not when the keyboard arrives. */
 .home-footer--searching .home-searchbox {
   max-width: 100%;
-}
-
-.home-footer--searching .home-searchbox:focus-within {
   border-color: var(--accent);
 }
 

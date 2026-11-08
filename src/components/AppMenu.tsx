@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { Logo } from './Logo'
 import './AppMenu.css'
 
@@ -59,25 +59,25 @@ export function AppMenu({ email, instant = false, onClose, onPresentationOptions
 
       <div className="app-menu__body app-menu__slide">
         <ul className="app-menu__list">
-          <li>
+          <li style={{ '--i': 0 } as CSSProperties}>
             <button className="app-menu__row" onClick={onPresentationOptions}>
               <span className="app-menu__label">Presentation options</span>
               <Chevron />
             </button>
           </li>
-          <li>
+          <li style={{ '--i': 1 } as CSSProperties}>
             <div className="app-menu__row app-menu__row--soon">
               <span className="app-menu__label">Tutorial</span>
               <span className="app-menu__soon">Coming soon</span>
             </div>
           </li>
-          <li>
+          <li style={{ '--i': 2 } as CSSProperties}>
             <div className="app-menu__row app-menu__row--soon">
               <span className="app-menu__label">Claude API key</span>
               <span className="app-menu__soon">Coming soon</span>
             </div>
           </li>
-          <li>
+          <li style={{ '--i': 3 } as CSSProperties}>
             {email ? (
               <div className="app-menu__row app-menu__row--static">
                 <span className="app-menu__label">Account</span>
@@ -90,19 +90,19 @@ export function AppMenu({ email, instant = false, onClose, onPresentationOptions
               </button>
             )}
           </li>
-          <li>
+          <li style={{ '--i': 4 } as CSSProperties}>
             <a className="app-menu__row" href={feedbackHref}>
               <span className="app-menu__label">Send feedback</span>
               <Chevron />
             </a>
           </li>
-          <li>
+          <li style={{ '--i': 5 } as CSSProperties}>
             <div className="app-menu__row app-menu__row--soon">
               <span className="app-menu__label">Privacy policy</span>
               <span className="app-menu__soon">Coming soon</span>
             </div>
           </li>
-          <li>
+          <li style={{ '--i': 6 } as CSSProperties}>
             <div className="app-menu__row app-menu__row--soon">
               <span className="app-menu__label">Delete account</span>
               <span className="app-menu__soon">Coming soon</span>
@@ -113,7 +113,7 @@ export function AppMenu({ email, instant = false, onClose, onPresentationOptions
         {/* A no-email account can't be signed back in to, so it never gets Sign out. */}
         {email && (
           <ul className="app-menu__list app-menu__list--apart">
-            <li>
+            <li style={{ '--i': 7 } as CSSProperties}>
               <button className="app-menu__row app-menu__row--danger" onClick={onSignOut}>
                 <span className="app-menu__label">Sign out</span>
               </button>
@@ -121,7 +121,7 @@ export function AppMenu({ email, instant = false, onClose, onPresentationOptions
           </ul>
         )}
 
-        <p className="app-menu__build">{build}</p>
+        <p className="app-menu__build" style={{ '--i': 8 } as CSSProperties}>{build}</p>
       </div>
     </div>
   )

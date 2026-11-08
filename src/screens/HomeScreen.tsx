@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Capacitor } from '@capacitor/core'
 import type { Session } from '../types'
 import { isSessionActive, lastActivityAt } from '../sessionActivity'
 import { hasContentSinceDeck } from '../deck'
@@ -88,7 +87,6 @@ export function HomeScreen({
   const [sort, setSort] = useState<SessionSort>(savedSort)
   const [searchOpen, setSearchOpen] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
-  const focusTimer = useRef<number | undefined>(undefined)
   const results = useMemo(() => searchSessions(sessions, query), [sessions, query])
   const searching = query.trim().length > 0
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -105,19 +103,12 @@ export function HomeScreen({
 
   function openSearch() {
     setSearchOpen(true)
-    if (Capacitor.isNativePlatform()) {
-      // Let the bar finish growing (320ms), then bring up the keyboard so it
-      // lifts the finished bar. The app allows focus outside a tap.
-      window.clearTimeout(focusTimer.current)
-      focusTimer.current = window.setTimeout(() => searchInputRef.current?.focus(), 400)
-    } else {
-      // Mobile Safari only raises the keyboard for a focus inside the tap.
-      searchInputRef.current?.focus()
-    }
+    // Raise the keyboard right away so the bar grows while the keyboard
+    // slides up -- the same feel as closing.
+    searchInputRef.current?.focus()
   }
 
   function closeSearch() {
-    window.clearTimeout(focusTimer.current)
     setQuery('')
     setSearchOpen(false)
     searchInputRef.current?.blur()

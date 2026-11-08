@@ -14,6 +14,13 @@ changes.
 
 ---
 
+## Build 41 — internal
+
+New in build 41: search outline
+
+- When you tap search, the teal outline now fades in as the search bar grows,
+  instead of appearing only when the keyboard arrives.
+
 ## Build 40 — internal
 
 New in build 40: the keyboard pushes things up smoothly

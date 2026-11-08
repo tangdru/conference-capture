@@ -28,6 +28,8 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   const userId = authSession.user.id
   const [addingEmail, setAddingEmail] = useState(false)
   const [menu, setMenu] = useState<'menu' | 'presentation' | null>(null)
+  // Coming back to the menu from a screen it opened: no opening animation.
+  const [menuReturning, setMenuReturning] = useState(false)
   const [sessions, setSessions] = useState<Session[] | null>(null)
   const [route, setRoute] = useState<Route>({ screen: 'home' })
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -323,6 +325,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     {menu === 'menu' && (
       <AppMenu
         email={authSession.user.is_anonymous ? null : authSession.user.email ?? null}
+        instant={menuReturning}
         onClose={() => setMenu(null)}
         onPresentationOptions={() => setMenu('presentation')}
         onAddEmail={() => setAddingEmail(true)}
@@ -333,14 +336,23 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       />
     )}
     {menu === 'presentation' && (
-      <PresentationOptionsSheet userId={authSession.user.id} onBack={() => setMenu('menu')} />
+      <PresentationOptionsSheet
+        userId={authSession.user.id}
+        onBack={() => {
+          setMenuReturning(true)
+          setMenu('menu')
+        }}
+      />
     )}
     {addingEmail && <AddEmailSheet sessionCount={sessions.length} onClose={() => setAddingEmail(false)} />}
     <HomeScreen
       sessions={sessions}
       onOpenSession={openSession}
       onNewSession={startNewSession}
-      onOpenMenu={() => setMenu('menu')}
+      onOpenMenu={() => {
+        setMenuReturning(false)
+        setMenu('menu')
+      }}
       onGenerateDeck={generateDeckForSession}
       onViewDeck={viewDeck}
       onShareDeck={shareDeck}

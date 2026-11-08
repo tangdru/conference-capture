@@ -1,8 +1,11 @@
+import { useState } from 'react'
 import './AppMenu.css'
 
 interface AppMenuProps {
   /** The account's email, or null for a no-email account. */
   email: string | null
+  /** Skip the opening animation (coming back from a screen the menu opened). */
+  instant?: boolean
   onClose: () => void
   onPresentationOptions: () => void
   onAddEmail: () => void
@@ -13,19 +16,43 @@ const FEEDBACK_ADDRESS = 'tangdru@gmail.com'
 
 // The app's one menu. Items not built yet show "Coming soon" so the list is
 // already in its final order.
-export function AppMenu({ email, onClose, onPresentationOptions, onAddEmail, onSignOut }: AppMenuProps) {
+export function AppMenu({ email, instant = false, onClose, onPresentationOptions, onAddEmail, onSignOut }: AppMenuProps) {
+  const [closing, setClosing] = useState(false)
+
+  // Play the opening in reverse, then close.
+  function close() {
+    if (closing) return
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduce) return onClose()
+    setClosing(true)
+    window.setTimeout(onClose, 260)
+  }
+
   const build = `Version 2 (build ${__APP_BUILD__})`
   const feedbackHref =
     `mailto:${FEEDBACK_ADDRESS}?subject=${encodeURIComponent(`Conference Capture feedback – ${build}`)}`
 
   return (
-    <div className="app-menu" role="dialog" aria-modal="true" aria-label="Menu">
-      <header className="app-menu__header">
-        <h1 className="app-menu__title">Menu</h1>
-        <button className="app-menu__done" onClick={onClose}>Done</button>
+    <div
+      className={`app-menu app-menu--home${instant ? ' app-menu--instant' : ''}${closing ? ' app-menu--closing' : ''}`}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Menu"
+    >
+      {/* The home screen's own header, so only the icon moves: it turns a
+          quarter clockwise while the menu is open, and closes it. */}
+      <header className="home-header">
+        <div className="home-header__row">
+          <p className="home-header__title" aria-hidden="true">Conference Capture</p>
+          <button className="home-header__menu app-menu__toggle" onClick={close} aria-label="Close menu">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
       </header>
 
-      <div className="app-menu__body">
+      <div className="app-menu__body app-menu__slide">
         <ul className="app-menu__list">
           <li>
             <button className="app-menu__row" onClick={onPresentationOptions}>

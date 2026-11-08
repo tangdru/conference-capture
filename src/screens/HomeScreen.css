@@ -43,9 +43,10 @@
   display: block;
   width: 32px;
   height: 33px;
-  /* The drawing has room around the rings for their line width; pull it
-     back so the rings line up with the page margin. */
-  margin-left: -1.5px;
+  /* The drawing leaves room for the rings' line width: the magenta ring's
+     outer edge sits 0.3px in, so this puts it on the session cards' left
+     border. */
+  margin-left: -0.3px;
 }
 
 .home-header__menu {

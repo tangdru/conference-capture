@@ -39,15 +39,17 @@ export function AppMenu({ email, instant = false, onClose, onPresentationOptions
       aria-modal="true"
       aria-label="Menu"
     >
-      {/* The home screen's own header, so only the icon moves: it turns a
-          quarter clockwise while the menu is open, and closes it. */}
+      {/* The home screen's own header, so only the icon moves: its lines
+          spread apart while the menu is open, and it closes the menu. */}
       <header className="home-header">
         <div className="home-header__row">
           <p className="home-header__title" aria-hidden="true">Conference Capture</p>
           <button className="home-header__menu app-menu__toggle" onClick={close} aria-label="Close menu">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
+            <span className="menu-icon" aria-hidden="true">
+              <span className="menu-icon__bar app-menu__line app-menu__line--top" />
+              <span className="menu-icon__bar" />
+              <span className="menu-icon__bar app-menu__line app-menu__line--bottom" />
+            </span>
           </button>
         </div>
       </header>

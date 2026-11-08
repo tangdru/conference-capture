@@ -52,9 +52,20 @@
   cursor: pointer;
 }
 
-.home-header__menu svg {
-  width: 24px;
-  height: 24px;
+/* Three bars, drawn as elements so the menu can spread them apart. */
+.menu-icon {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3.2px;
+  width: 16px;
+}
+
+.menu-icon__bar {
+  display: block;
+  height: 1.8px;
+  border-radius: 1px;
+  background: currentColor;
 }
 
 .home-error {

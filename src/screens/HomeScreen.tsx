@@ -182,9 +182,11 @@ export function HomeScreen({
         <div className="home-header__row">
           <h1 className="home-header__title">Conference Capture</h1>
           <button className="home-header__menu" onClick={onOpenMenu} aria-label="Menu">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
+            <span className="menu-icon" aria-hidden="true">
+              <span className="menu-icon__bar" />
+              <span className="menu-icon__bar" />
+              <span className="menu-icon__bar" />
+            </span>
           </button>
         </div>
       </header>

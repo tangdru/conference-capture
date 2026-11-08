@@ -14,6 +14,21 @@ changes.
 
 ---
 
+## Build 47 — internal
+
+New in build 47: Sparkle fills in the session, and entries stay where you put them
+
+- Building a presentation saves a summary, action items, speaker bio,
+  acronyms and references into the session, so you can find them and Ask
+  about them. Rebuilding replaces them, except any you've left out.
+- Menu → Presentation options has a new "Save to the session" group with a
+  switch for each of those five, and the other options are regrouped: In the
+  presentation, Layout and style, Writing.
+- Building a presentation also moves notes and photos you haven't placed to
+  the spot in the talk they're about.
+- Dragging a note or photo puts it at that moment in the talk, and it stays
+  there: Sparkle never moves an entry you've placed.
+
 ## Build 46 — internal
 
 New in build 46: delete account, privacy policy, simpler codes

@@ -4,7 +4,7 @@ import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
 import { ActionSheet, ActionSheetButtonStyle } from '@capacitor/action-sheet'
 import type { Session as AuthSession } from '@supabase/supabase-js'
-import type { PhotoItem, Session } from './types'
+import type { PhotoItem, Session, TimelineItemData } from './types'
 import * as db from './db'
 import { compactDeckPhotos, hasPhotoLinks, hasShortVersion, shortDeckHtml } from './deck'
 import { AuthGate, signOut } from './auth/AuthGate'
@@ -123,7 +123,9 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     return loaded.map((s) => {
       const ids = new Set(s.items.map((i) => i.id))
       const waiting = [...(photos.get(s.id) ?? []), ...(items.get(s.id) ?? [])].filter((p) => !ids.has(p.id))
-      return waiting.length ? { ...s, items: [...s.items, ...waiting].sort((a, b) => a.timestamp - b.timestamp) } : s
+      return waiting.length ? { ...s, items: [...s.items, ...waiting].sort(
+        (a, b) => positionOf(a) - positionOf(b) || a.timestamp - b.timestamp,
+      ) } : s
     })
   }
 
@@ -407,4 +409,9 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     )}
     </>
   )
+}
+
+/** Where an older build placed an entry; entries with none go after. */
+function positionOf(item: TimelineItemData): number {
+  return 'position' in item && item.position !== undefined ? item.position : Infinity
 }

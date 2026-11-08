@@ -36,7 +36,8 @@ interface TimelineProps {
   onToggleStarred: (item: TimelineItemData) => void
   /** Saves a photo to the phone's album. Absent where there's no album to save to. */
   onSavePhoto?: (item: PhotoItem) => void
-  onReorder: (orderedIds: string[]) => void
+  /** The new order, and the entry the user dragged. */
+  onReorder: (orderedIds: string[], movedId: string) => void
   /** While listening: the words heard so far ('' before any). null when not listening. */
   liveTranscript: string | null
   /** Photos still being straightened and read on-device. */
@@ -152,7 +153,7 @@ export function Timeline({
 
   function endDrag() {
     setDragState((prev) => {
-      if (prev) onReorder(prev.order)
+      if (prev) onReorder(prev.order, prev.draggedId)
       return null
     })
     // Close the swipe panel now that the reorder is committed -- it was

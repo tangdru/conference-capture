@@ -343,19 +343,37 @@ export async function setItemExcluded(itemId: string, excluded: boolean): Promis
   if (error) throw error
 }
 
-/** Persists a full drag-reorder: every item in the session gets stamped with
- * its index in `orderedIds` (not just the dragged ones), so items that were
- * never touched keep their place relative to the ones that moved instead of
- * all falling back to raw timestamp order, which would bunch them together. */
-export async function reorderItems(orderedIds: string[]): Promise<void> {
+/** The user dragged a note or photo to a new spot. A timeline is in time
+ * order, so the entry moves to that moment in the talk, and is marked as
+ * placed by the user: Sparkle never moves it again. */
+export async function placeItem(itemId: string, timestamp: number): Promise<void> {
+  const { error } = await supabase
+    .from('cc_timeline_items')
+    .update({ item_timestamp: new Date(timestamp).toISOString(), placement_locked: true })
+    .eq('id', itemId)
+  if (error) throw error
+}
+
+/** A session last arranged by an older build, which saved a position on
+ * every entry, switches to time order the first time it's dragged here:
+ * entries take the given times (just enough to keep the order shown), its
+ * notes and photos count as placed by the user, and the positions go. */
+export async function convertToTimeOrder(sessionId: string, times: Map<string, number>): Promise<void> {
   const results = await Promise.all(
-    orderedIds
-      .map((id, index) => ({ id, index }))
-      .filter(({ id, index }) => !patchQueuedRow(id, { position: index }))
-      .map(({ id, index }) => supabase.from('cc_timeline_items').update({ position: index }).eq('id', id)),
+    [...times].map(([id, t]) =>
+      supabase.from('cc_timeline_items').update({ item_timestamp: new Date(t).toISOString() }).eq('id', id),
+    ),
   )
   const firstError = results.find((r) => r.error)?.error
   if (firstError) throw firstError
+  const locked = await supabase
+    .from('cc_timeline_items')
+    .update({ placement_locked: true })
+    .eq('session_id', sessionId)
+    .in('type', ['note', 'photo'])
+  if (locked.error) throw locked.error
+  const cleared = await supabase.from('cc_timeline_items').update({ position: null }).eq('session_id', sessionId)
+  if (cleared.error) throw cleared.error
 }
 
 export async function deleteTimelineItem(item: TimelineItemData): Promise<void> {

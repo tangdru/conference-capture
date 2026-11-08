@@ -193,14 +193,51 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
     }
   }
 
-  async function reorderItems(orderedIds: string[]) {
-    const positionById = new Map(orderedIds.map((id, index) => [id, index]))
+  /** A dragged entry takes the moment between its new neighbours. */
+  async function placeItem(orderedIds: string[], movedId: string) {
+    const byId = new Map(session.items.map((i) => [i.id, i]))
+    // Arranged by an older build (a position on every entry): first give the
+    // entries times that keep the order shown, nudging only those out of step.
+    const converting = session.items.some((i) => 'position' in i && i.position !== undefined)
+    const time = new Map(session.items.map((i) => [i.id, i.timestamp]))
+    const nudged = new Map<string, number>()
+    if (converting) {
+      let prev: number | undefined
+      for (const id of orderedIds) {
+        if (id === movedId) continue
+        let t = time.get(id)!
+        if (prev !== undefined && t <= prev) {
+          t = prev + 10
+          nudged.set(id, t)
+          time.set(id, t)
+        }
+        prev = t
+      }
+    }
+    const index = orderedIds.indexOf(movedId)
+    const before = time.get(orderedIds[index - 1])
+    const after = time.get(orderedIds[index + 1])
+    const own = byId.get(movedId)?.timestamp
+    const timestamp = Math.round(
+      before !== undefined && after !== undefined ? before + (after - before) / 2
+      : before !== undefined ? before + 1000
+      : after !== undefined ? after - 1000
+      : own ?? 0,
+    )
+    if (own === undefined || (!converting && timestamp === own)) return
+    time.set(movedId, timestamp)
     onUpdateLocal((s) => ({
       ...s,
-      items: [...s.items].sort((a, b) => (positionById.get(a.id) ?? 0) - (positionById.get(b.id) ?? 0)),
+      items: s.items
+        .map((i) => {
+          const t = time.get(i.id) ?? i.timestamp
+          return converting ? { ...i, timestamp: t, ...('position' in i ? { position: undefined } : {}) } : i.id === movedId ? { ...i, timestamp: t } : i
+        })
+        .sort((a, b) => a.timestamp - b.timestamp),
     }))
     try {
-      await db.reorderItems(orderedIds)
+      if (converting) await db.convertToTimeOrder(session.id, nudged)
+      await db.placeItem(movedId, timestamp)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save order')
     }
@@ -494,7 +531,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
         onToggleExcluded={toggleExcluded}
         onToggleStarred={toggleStarred}
         onSavePhoto={Capacitor.isNativePlatform() ? saveToAlbum : undefined}
-        onReorder={reorderItems}
+        onReorder={placeItem}
         liveTranscript={session.status === 'recording' ? liveText : null}
         processingPhotoIds={processingPhotoIds}
         focusId={focusItemId}

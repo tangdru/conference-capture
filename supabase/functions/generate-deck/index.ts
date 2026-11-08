@@ -189,58 +189,58 @@ async function generateDeckPart(
     .single()
   if (sessionError) throw sessionError
 
-  const { data: allItemRows, error: itemsError } = await supabase
-    .from('cc_timeline_items')
-    .select('id, type, subtype, payload, text, caption, photo_path, item_timestamp, excluded, starred')
-    .eq('session_id', sessionId)
-    .order('position', { ascending: true, nullsFirst: false })
-    .order('item_timestamp', { ascending: true })
-  if (itemsError) throw itemsError
-
-  const itemRows = (allItemRows ?? []).filter((r) => !r.excluded)
+  const loadItems = async () => {
+    const { data, error } = await supabase
+      .from('cc_timeline_items')
+      .select('id, type, subtype, payload, text, caption, photo_path, item_timestamp, excluded, starred, position, placement_locked')
+      .eq('session_id', sessionId)
+      .order('item_timestamp', { ascending: true })
+    if (error) throw error
+    return data ?? []
+  }
+  let allItemRows = await loadItems()
 
   const options: PresentationOptions = givenOptions ?? await loadOptions(supabase, session.owner_id)
 
-  const notes = itemRows.filter((r) => r.type === 'note' && r.text)
-  const transcriptSegments = itemRows.filter((r) => r.type === 'transcript' && r.text)
-  const photoRows = itemRows.filter((r) => r.type === 'photo' && r.photo_path)
-  let enrichmentRows = itemRows.filter((r) => r.type === 'enrichment' && r.payload)
-  const highlightRows = itemRows.filter((r) => r.type === 'highlight')
-
   // A session the user never named gets one from its content, first, so the
-  // card shows it while the deck builds and the deck itself uses it.
+  // card shows it while the deck builds and the deck itself uses it. Side by
+  // side with it: the entries saved into the session, and moving notes and
+  // photos the user hasn't placed to the moment they're about.
   let title: string = session.title
   if (part === 0) {
+    const live = allItemRows.filter((r) => !r.excluded)
     const needsName = !title.trim() || title.trim() === DEFAULT_TITLE
-    // Both quick, so side by side: the name, and the entries saved into the
-    // session (summary, action items, speaker bio, acronyms, references).
-    const [named, saved] = await Promise.all([
+    const [named, changed] = await Promise.all([
       needsName
-        ? nameSession(notes, transcriptSegments, photoRows, enrichmentRows).catch((err) => {
+        ? nameSession(
+          live.filter((r) => r.type === 'note' && r.text),
+          live.filter((r) => r.type === 'transcript' && r.text),
+          live.filter((r) => r.type === 'photo' && r.photo_path),
+          live.filter((r) => r.type === 'enrichment' && r.payload),
+        ).catch((err) => {
           console.error('nameSession failed:', err)
           return null
         })
         : Promise.resolve(null),
-      saveSessionEntries(supabase, session, notes, transcriptSegments, photoRows, allItemRows ?? [], options)
-        .catch((err) => {
-          // The presentation still gets built without them.
-          console.error('saveSessionEntries failed:', err)
-          return false
-        }),
+      organizeSession(supabase, session, allItemRows, options).catch((err) => {
+        // The presentation still gets built without it.
+        console.error('organizeSession failed:', err)
+        return false
+      }),
     ])
     if (named) {
       title = named
       await supabase.from('cc_sessions').update({ title }).eq('id', sessionId)
     }
-    if (saved) {
-      const { data: fresh } = await supabase
-        .from('cc_timeline_items')
-        .select('subtype, payload, excluded')
-        .eq('session_id', sessionId)
-        .eq('type', 'enrichment')
-      enrichmentRows = (fresh ?? []).filter((r) => !r.excluded && r.payload) as typeof enrichmentRows
-    }
+    if (changed) allItemRows = await loadItems()
   }
+
+  const itemRows = allItemRows.filter((r) => !r.excluded)
+  const notes = itemRows.filter((r) => r.type === 'note' && r.text)
+  const transcriptSegments = itemRows.filter((r) => r.type === 'transcript' && r.text)
+  const photoRows = itemRows.filter((r) => r.type === 'photo' && r.photo_path)
+  const enrichmentRows = itemRows.filter((r) => r.type === 'enrichment' && r.payload)
+  const highlightRows = itemRows.filter((r) => r.type === 'highlight')
 
   // Links, not the photos themselves: a function has too little memory to
   // hold a session's worth of photos. Claude fetches them from the link, and
@@ -621,18 +621,31 @@ function formatEnrichment(rows: { subtype: string | null; payload: Record<string
 
 type EntryKind = 'summary' | 'action_items' | 'speaker_bio' | 'acronyms' | 'references'
 
-/** Saves the session's summary, action items, speaker bio, acronyms and
- * references into the session itself (as enrichment entries), so the
- * timeline shows them and Ask and search can use them. Each kind replaces
- * the one a previous build saved; one the user left out (excluded) is kept
- * as it is. Returns whether anything changed. */
-async function saveSessionEntries(
+interface SessionRow {
+  id: string
+  type: string
+  subtype: string | null
+  text: string | null
+  caption: string | null
+  item_timestamp: string
+  excluded: boolean
+  position: number | null
+  placement_locked: boolean
+}
+
+/** One quick Claude call that, while the presentation is built:
+ *  - saves the summary, action items, speaker bio, acronyms and references
+ *    into the session as entries (each kind the options ask for; one the
+ *    user left out is kept as it is, otherwise it replaces the last build's);
+ *  - moves each note and photo the user hasn't placed to just after the
+ *    spoken line it's about (a note is often typed a little after). Entries
+ *    the user dragged (placement_locked, or a position from an older app)
+ *    and the transcript never move.
+ * Returns whether the session changed. */
+async function organizeSession(
   supabase: ReturnType<typeof createClient>,
   session: { id: string; owner_id: string; started_at: string },
-  notes: { text: string | null; item_timestamp: string }[],
-  transcriptSegments: { text: string | null; item_timestamp: string }[],
-  photoRows: { text: string | null; caption: string | null; item_timestamp: string }[],
-  allRows: { id: string; type: string; subtype: string | null; excluded: boolean }[],
+  allRows: SessionRow[],
   options: PresentationOptions,
 ): Promise<boolean> {
   const wanted: Record<EntryKind, boolean> = {
@@ -645,17 +658,27 @@ async function saveSessionEntries(
   const existing = allRows.filter((r) => r.type === 'enrichment')
   const kinds = (Object.keys(wanted) as EntryKind[]).filter((kind) =>
     wanted[kind] && !existing.some((r) => r.subtype === kind && r.excluded))
-  if (kinds.length === 0) return false
 
-  const lines = [
-    ...notes.map((n) => ({ at: n.item_timestamp, line: `NOTE: ${n.text}` })),
-    ...transcriptSegments.map((t) => ({ at: t.item_timestamp, line: `SPEAKER: ${t.text}` })),
-    ...photoRows
-      .filter((p) => p.text || p.caption)
-      .map((p) => ({ at: p.item_timestamp, line: `SLIDE PHOTO${p.caption ? ` (caption: ${p.caption})` : ''}${formatSlideText(p.text ?? '')}` })),
-  ]
-    .sort((a, b) => a.at.localeCompare(b.at))
-    .map((l) => `[${formatElapsed(session.started_at, l.at)}] ${l.line}`)
+  const rows = allRows.filter((r) => !r.excluded)
+  const spoken = rows.filter((r) => r.type === 'transcript' && r.text)
+  const movable = rows.filter((r) =>
+    (r.type === 'note' ? !!r.text : r.type === 'photo' && !!(r.text || r.caption)) &&
+    !r.placement_locked && r.position === null)
+  if (kinds.length === 0 && (movable.length === 0 || spoken.length === 0)) return false
+
+  // Every line tagged with its elapsed time; spoken lines numbered (L1, L2...)
+  // so a placement can name one, and movable notes and photos carry an id.
+  const lineNumber = new Map(spoken.map((r, i) => [r.id, i + 1]))
+  const movableIds = new Set(movable.map((r) => r.id))
+  const lines = rows
+    .filter((r) => (r.type === 'note' && r.text) || (r.type === 'transcript' && r.text) || (r.type === 'photo' && (r.text || r.caption)))
+    .map((r) => {
+      const at = `[${formatElapsed(session.started_at, r.item_timestamp)}]`
+      const tag = movableIds.has(r.id) ? ` id=${r.id}` : ''
+      if (r.type === 'transcript') return `${at} L${lineNumber.get(r.id)} SPEAKER: ${r.text}`
+      if (r.type === 'note') return `${at} NOTE${tag}: ${r.text}`
+      return `${at} SLIDE PHOTO${tag}${r.caption ? ` (caption: ${r.caption})` : ''}${formatSlideText(r.text ?? '')}`
+    })
   if (lines.length === 0) return false
   // About 40k tokens; past that, the start of the talk matters most.
   const material = lines.join('\n').slice(0, 160_000)
@@ -670,6 +693,13 @@ async function saveSessionEntries(
   const keyFor: Record<EntryKind, string> = {
     summary: 'summary', action_items: 'actionItems', speaker_bio: 'speakerBio', acronyms: 'acronyms', references: 'references',
   }
+  const tasks = kinds.map((k) => asks[k])
+  const keys = kinds.map((k) => keyFor[k])
+  const placing = movable.length > 0 && spoken.length > 0
+  if (placing) {
+    tasks.push('placements: for EVERY note and slide photo that has an id=, the spoken line (L number) it is about. A note is often typed, and a photo taken, a little after the moment it refers to, so look for the line whose subject matches rather than trusting its time. Each {id, after}: after is that line\'s number (e.g. 12), or null if no line is a better match than where it already is.')
+    keys.push('placements')
+  }
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -681,17 +711,17 @@ async function saveSessionEntries(
     body: JSON.stringify({
       model: NAMING_MODEL,
       thinking: { type: 'between_tools' },
-      max_tokens: 4000,
+      max_tokens: 6000,
       messages: [{
         role: 'user',
-        content: `Below is what an attendee captured during one conference talk, in order, each line tagged with its elapsed time: their NOTEs, the SPEAKER's words (transcribed on the phone, so some words may be wrong), and text read off SLIDE PHOTOs.
+        content: `Below is what an attendee captured during one conference talk, in order, each line tagged with its elapsed time: their NOTEs, the SPEAKER's words (transcribed on the phone, so some words may be wrong; numbered L1, L2...), and text read off SLIDE PHOTOs.
 
 ${material}
 
-Extract the following, grounded strictly in what's above -- never invent, and never pad a list from filler or small talk:
-${kinds.map((k, i) => `${i + 1}. ${asks[k]}`).join('\n')}
+Do the following, grounded strictly in what's above -- never invent, and never pad a list from filler or small talk:
+${tasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
 
-Return ONLY one JSON object with exactly these keys: ${kinds.map((k) => keyFor[k]).join(', ')}. No markdown fences, no commentary.`,
+Return ONLY one JSON object with exactly these keys: ${keys.join(', ')}. No markdown fences, no commentary.`,
       }],
     }),
   })
@@ -700,6 +730,45 @@ Return ONLY one JSON object with exactly these keys: ${kinds.map((k) => keyFor[k
   const raw = data.content?.find((b) => b.type === 'text')?.text?.trim() ?? ''
   const json = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
   const result = JSON.parse(json) as Record<string, unknown>
+  let changed = false
+
+  // Placements: just after the named line, a millisecond apart when several
+  // land on the same line, in the order they were captured.
+  if (placing && Array.isArray(result.placements)) {
+    const spokenByNumber = new Map(spoken.map((r, i) => [i + 1, r]))
+    const nextSpoken = new Map(spoken.map((r, i) => [r.id, spoken[i + 1]]))
+    const perLine = new Map<number, SessionRow[]>()
+    for (const p of result.placements as { id?: unknown; after?: unknown }[]) {
+      const row = movable.find((r) => r.id === p.id)
+      const line = typeof p.after === 'number' ? spokenByNumber.get(p.after) : undefined
+      if (!row || !line) continue
+      const list = perLine.get(p.after as number) ?? []
+      list.push(row)
+      perLine.set(p.after as number, list)
+    }
+    const updates: { id: string; at: string }[] = []
+    for (const [n, list] of perLine) {
+      const line = spokenByNumber.get(n)!
+      const base = new Date(line.item_timestamp).getTime()
+      const next = nextSpoken.get(line.id)
+      const room = next ? new Date(next.item_timestamp).getTime() - base : Infinity
+      list.sort((a, b) => a.item_timestamp.localeCompare(b.item_timestamp))
+      list.forEach((row, i) => {
+        // Inside the gap before the next spoken line, so it reads right after.
+        const offset = Math.min(1 + i, Math.max(0, room - 1) * ((i + 1) / (list.length + 1)))
+        const at = new Date(base + Math.max(offset, 0.001)).toISOString()
+        if (at !== new Date(row.item_timestamp).toISOString()) updates.push({ id: row.id, at })
+      })
+    }
+    for (const u of updates) {
+      const { error } = await supabase.from('cc_timeline_items').update({ item_timestamp: u.at }).eq('id', u.id)
+      if (error) throw error
+    }
+    if (updates.length) changed = true
+    console.log(`organizeSession: ${session.id} moved ${updates.length} of ${movable.length} notes/photos`)
+  }
+
+  if (kinds.length === 0) return changed
 
   const list = (key: string) => (Array.isArray(result[key]) ? (result[key] as Record<string, unknown>[]) : [])
   const payloads: Partial<Record<EntryKind, Record<string, unknown> | null>> = {}
@@ -744,7 +813,7 @@ Return ONLY one JSON object with exactly these keys: ${kinds.map((k) => keyFor[k
   // end, a beat apart so they keep this order.
   const end = Date.now()
   const order: EntryKind[] = ['action_items', 'speaker_bio', 'acronyms', 'references']
-  const rows = (Object.entries(payloads) as [EntryKind, Record<string, unknown> | null][])
+  const newRows = (Object.entries(payloads) as [EntryKind, Record<string, unknown> | null][])
     .filter(([, payload]) => payload)
     .map(([kind, payload]) => ({
       session_id: session.id,
@@ -756,12 +825,12 @@ Return ONLY one JSON object with exactly these keys: ${kinds.map((k) => keyFor[k
         ? new Date(new Date(session.started_at).getTime() - 1000).toISOString()
         : new Date(end + order.indexOf(kind) * 10).toISOString(),
     }))
-  if (rows.length > 0) {
-    const { error } = await supabase.from('cc_timeline_items').insert(rows)
+  if (newRows.length > 0) {
+    const { error } = await supabase.from('cc_timeline_items').insert(newRows)
     if (error) throw error
   }
-  console.log(`saveSessionEntries: ${session.id} saved ${rows.map((r) => r.subtype).join(', ') || 'nothing'}`)
-  return replaced.length > 0 || rows.length > 0
+  console.log(`organizeSession: ${session.id} saved ${newRows.map((r) => r.subtype).join(', ') || 'nothing'}`)
+  return changed || replaced.length > 0 || newRows.length > 0
 }
 
 /** A short title for the talk from what was captured, or null if there's too

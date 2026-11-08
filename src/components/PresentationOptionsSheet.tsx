@@ -19,20 +19,25 @@ type BooleanKey = {
   [K in keyof PresentationOptions]: PresentationOptions[K] extends boolean ? K : never
 }[keyof PresentationOptions]
 
-const SECTIONS: { key: BooleanKey; label: string; hint: string }[] = [
+// What the page includes; the same kinds, in the same order, as SAVED.
+const INCLUDED: { key: BooleanKey; label: string; hint: string }[] = [
   { key: 'tldr', label: 'TL;DR', hint: 'The key takeaways at the top' },
-  { key: 'quotes', label: 'Speaker quotes', hint: 'Their best lines, set apart' },
-  { key: 'actionItems', label: 'Action items', hint: 'Things to do after the talk' },
-  { key: 'references', label: 'References', hint: 'Links and follow-ups at the end' },
-  { key: 'chapterBar', label: 'Chapter bar', hint: 'Sticks to the top as you scroll' },
   { key: 'speakerBio', label: 'Speaker bio', hint: 'Who gave the talk' },
+  { key: 'quotes', label: 'Speaker quotes', hint: 'Their best lines, set apart' },
+  { key: 'actionItems', label: 'Action items', hint: 'What the speaker said they’d do' },
+  { key: 'references', label: 'References', hint: 'Links and follow-ups at the end' },
+]
+
+const LAYOUT: { key: BooleanKey; label: string; hint: string }[] = [
+  { key: 'chapterBar', label: 'Chapter bar', hint: 'Sticks to the top as you scroll' },
   { key: 'chapterTimes', label: 'Chapter times', hint: 'When each part started, like 12:40' },
 ]
 
+// Entries Sparkle adds to the session itself.
 const SAVED: { key: BooleanKey; label: string; hint: string }[] = [
   { key: 'saveSummary', label: 'Summary', hint: 'What the talk was about, at the top' },
-  { key: 'saveActionItems', label: 'Action items', hint: 'What the speaker said they’d do' },
   { key: 'saveSpeakerBio', label: 'Speaker bio', hint: 'Who gave the talk, when they say' },
+  { key: 'saveActionItems', label: 'Action items', hint: 'What the speaker said they’d do' },
   { key: 'saveAcronyms', label: 'Acronyms', hint: 'Terms the speaker didn’t explain' },
   { key: 'saveReferences', label: 'References', hint: 'Papers, books and tools they named' },
 ]
@@ -101,17 +106,21 @@ export function PresentationOptionsSheet({ userId, onBack }: PresentationOptions
 
         {options && (
           <>
-            <h2 className="app-menu__section-title">Sections</h2>
-            <Toggles rows={SECTIONS} options={options} onChange={set} />
-
-            <h2 className="app-menu__section-title">Save to the session</h2>
-            <p className="pres-options__section-hint">
-              Building a presentation also adds these to the session, so you can find them and Ask about them.
-            </p>
-            <Toggles rows={SAVED} options={options} onChange={set} />
-
-            <h2 className="app-menu__section-title">Style</h2>
+            <h2 className="app-menu__section-title">In the presentation</h2>
             <ul className="app-menu__list">
+              <ToggleRows rows={INCLUDED} options={options} onChange={set} />
+              <Choice
+                label="Photos"
+                hint={options.photos === 'starred' ? 'Only photos you starred' : options.photos === 'none' ? 'Text only' : 'Every photo you took'}
+                value={options.photos}
+                choices={[['all', 'All'], ['starred', 'Starred'], ['none', 'None']]}
+                onChange={(v) => set('photos', v)}
+              />
+            </ul>
+
+            <h2 className="app-menu__section-title">Layout and style</h2>
+            <ul className="app-menu__list">
+              <ToggleRows rows={LAYOUT} options={options} onChange={set} />
               <Choice
                 label="Motion"
                 hint={options.motion === 'scrolly' ? 'Content animates in as you scroll' : 'A simple article; only charts move'}
@@ -160,7 +169,7 @@ export function PresentationOptionsSheet({ userId, onBack }: PresentationOptions
               </li>
             </ul>
 
-            <h2 className="app-menu__section-title">Content</h2>
+            <h2 className="app-menu__section-title">Writing</h2>
             <ul className="app-menu__list">
               <Choice
                 label="Length"
@@ -168,12 +177,6 @@ export function PresentationOptionsSheet({ userId, onBack }: PresentationOptions
                 value={options.length}
                 choices={[['full', 'Full'], ['short', 'Short']]}
                 onChange={(v) => set('length', v)}
-              />
-              <Choice
-                label="Photos"
-                value={options.photos}
-                choices={[['all', 'All'], ['starred', 'Starred'], ['none', 'None']]}
-                onChange={(v) => set('photos', v)}
               />
               <Choice
                 label="Voice"
@@ -203,6 +206,14 @@ export function PresentationOptionsSheet({ userId, onBack }: PresentationOptions
                   </select>
                 </label>
               </li>
+            </ul>
+
+            <h2 className="app-menu__section-title">Save to the session</h2>
+            <p className="pres-options__section-hint">
+              Building a presentation also adds these to the session, so you can find them and Ask about them.
+            </p>
+            <ul className="app-menu__list">
+              <ToggleRows rows={SAVED} options={options} onChange={set} />
             </ul>
 
             <button
@@ -259,7 +270,7 @@ function Choice<T extends string>({
   )
 }
 
-function Toggles({
+function ToggleRows({
   rows,
   options,
   onChange,
@@ -269,7 +280,7 @@ function Toggles({
   onChange: (key: BooleanKey, value: boolean) => void
 }) {
   return (
-    <ul className="app-menu__list">
+    <>
       {rows.map(({ key, label, hint }) => (
         <li key={key}>
           <label className="app-menu__row">
@@ -287,6 +298,6 @@ function Toggles({
           </label>
         </li>
       ))}
-    </ul>
+    </>
   )
 }

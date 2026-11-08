@@ -14,6 +14,18 @@ changes.
 
 ---
 
+## Build 45 — internal
+
+New in build 45: a guided tutorial
+
+- Menu → Tutorial walks you around the home screen: New Session, your
+  sessions, what's behind a swipe (build, view, share or rebuild the
+  presentation; delete), search, sort and the menu.
+- Open a session afterwards and a second tour shows record, camera, notes,
+  what's behind a swipe on an item (save to Photos, star, leave out, delete,
+  drag to reorder), Remember this and Ask.
+- A brand-new account sees the tutorial by itself the first time.
+
 ## Build 44 — internal, Friends
 
 Friends got this build with the combined notes below (their What to Test,

@@ -156,7 +156,10 @@ async function generateDeckPart(
   // card shows it while the deck builds and the deck itself uses it.
   let title: string = session.title
   if (part === 0 && (!title.trim() || title.trim() === DEFAULT_TITLE)) {
-    const named = await nameSession(notes, transcriptSegments, photoRows, enrichmentRows).catch(() => null)
+    const named = await nameSession(notes, transcriptSegments, photoRows, enrichmentRows).catch((err) => {
+      console.error('nameSession failed:', err)
+      return null
+    })
     if (named) {
       title = named
       await supabase.from('cc_sessions').update({ title }).eq('id', sessionId)
@@ -510,17 +513,26 @@ async function nameSession(
     },
     body: JSON.stringify({
       model: NAMING_MODEL,
-      max_tokens: 60,
+      // Sonnet 5.5 thinks before answering unless told not to, and the
+      // thinking alone used up a small token cap, leaving no title.
+      thinking: { type: 'between_tools' },
+      max_tokens: 200,
       messages: [{
         role: 'user',
         content: `Here is what an attendee captured during one conference talk. Give the talk a title for their list of sessions: what it was about, 2 to 7 words, Title Case, no quotes or trailing punctuation. Use the talk's own title if a slide shows it. If there isn't enough here to tell what it was about, reply with exactly NONE.\n\n${material}`,
       }],
     }),
   })
-  if (!response.ok) return null
-  const data: { content?: { type: string; text?: string }[] } = await response.json()
+  if (!response.ok) {
+    console.error(`nameSession: Claude API ${response.status}: ${(await response.text()).slice(0, 300)}`)
+    return null
+  }
+  const data: { content?: { type: string; text?: string }[]; stop_reason?: string } = await response.json()
   const text = data.content?.find((b) => b.type === 'text')?.text?.trim().replace(/^["'“]|["'”.]$/g, '').trim()
-  if (!text || text === 'NONE' || text.length > 80) return null
+  if (!text || text === 'NONE' || text.length > 80) {
+    console.error(`nameSession: no title (stop_reason ${data.stop_reason}, reply ${JSON.stringify(text ?? null)})`)
+    return null
+  }
   return text
 }
 

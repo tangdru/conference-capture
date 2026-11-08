@@ -25,8 +25,8 @@ New in build 38: a simpler session screen
 - The note and photo counts are gone from the top; the session card on the
   home screen still shows them.
 - The timer is shorter: 7:12 instead of 00:07:12.
-- The ⌃ ⌄ ✓ bar above the keyboard is gone. Use Return, Search, × or the
-  note's own ✓ to finish typing.
+- The bar with arrows and a check mark above the keyboard is gone. Use
+  Return, Search, × or the note's own check mark to finish typing.
 
 ## Build 37 — internal
 

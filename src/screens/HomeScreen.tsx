@@ -50,9 +50,7 @@ interface HomeScreenProps {
   /** `itemId`: open scrolled to that item (from a search hit). */
   onOpenSession: (id: string, itemId?: string) => void
   onNewSession: () => void
-  onSignOut: () => void
-  needsEmail: boolean
-  onAddEmail: () => void
+  onOpenMenu: () => void
   onGenerateDeck: (id: string) => void
   onViewDeck: (id: string) => void
   onShareDeck: (id: string) => void
@@ -69,9 +67,7 @@ export function HomeScreen({
   sessions,
   onOpenSession,
   onNewSession,
-  onSignOut,
-  needsEmail,
-  onAddEmail,
+  onOpenMenu,
   onGenerateDeck,
   onViewDeck,
   onShareDeck,
@@ -185,9 +181,10 @@ export function HomeScreen({
       <header className="home-header">
         <div className="home-header__row">
           <h1 className="home-header__title">Conference Capture</h1>
-          {/* A no-email account can't be signed back in to, so it never gets Sign out. */}
-          <button className="home-header__sign-out" onClick={needsEmail ? onAddEmail : onSignOut}>
-            {needsEmail ? 'Add email' : 'Sign out'}
+          <button className="home-header__menu" onClick={onOpenMenu} aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
           </button>
         </div>
       </header>

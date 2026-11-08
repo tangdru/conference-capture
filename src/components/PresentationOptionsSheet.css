@@ -1,0 +1,156 @@
+.pres-options__intro {
+  margin: 0 4px 4px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.pres-options__error {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255, 107, 107, 0.12);
+  color: var(--semantic-error);
+  font-size: 14px;
+}
+
+/* A row whose control sits under its label (segmented choices, swatches). */
+.pres-options__stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding-top: 12px;
+  padding-bottom: 14px;
+}
+
+/* iOS-style switch drawn on a native checkbox, so it stays keyboard and
+   screen-reader friendly. */
+.pres-options__switch {
+  appearance: none;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+  position: relative;
+  width: 51px;
+  height: 31px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: background var(--duration-base) var(--easing-base);
+}
+
+.pres-options__switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  transition: transform var(--duration-base) var(--easing-base);
+}
+
+.pres-options__switch:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.pres-options__switch:checked::after {
+  transform: translateX(20px);
+  background: #0f0f0d;
+}
+
+.pres-options__switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pres-options__segmented {
+  display: flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--bg-elevated);
+}
+
+.pres-options__segment {
+  flex: 1;
+  min-height: 36px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--easing-base), color var(--duration-fast) var(--easing-base);
+}
+
+.pres-options__segment.is-selected {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.pres-options__swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pres-options__swatch {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  box-shadow: 0 0 0 1px var(--border);
+  cursor: pointer;
+}
+
+.pres-options__swatch.is-selected {
+  border-color: var(--bg-base);
+  box-shadow: 0 0 0 2px var(--text-primary);
+}
+
+.pres-options__swatch--auto {
+  width: auto;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.pres-options__swatch--auto.is-selected {
+  color: var(--text-primary);
+}
+
+.pres-options__select {
+  max-width: 55%;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 15px;
+}
+
+.pres-options__reset {
+  display: block;
+  margin: 4px auto 0;
+  min-height: 44px;
+  padding: 0 16px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}

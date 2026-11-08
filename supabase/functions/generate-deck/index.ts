@@ -31,6 +31,44 @@ const PHOTO_LINK_SECONDS = 365 * 24 * 60 * 60
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void }
 
+/** The account's Presentation options (cc_user_settings.presentation). Keep
+ * in step with src/presentationOptions.ts in the app. */
+interface PresentationOptions {
+  tldr: boolean
+  quotes: boolean
+  actionItems: boolean
+  references: boolean
+  chapterBar: boolean
+  speakerBio: boolean
+  chapterTimes: boolean
+  motion: 'still' | 'scrolly'
+  charts: 'interactive' | 'photo'
+  theme: 'auto' | 'light' | 'dark'
+  accent: string
+  length: 'full' | 'short'
+  photos: 'all' | 'starred' | 'none'
+  voice: 'neutral' | 'first_person' | 'brief'
+  language: string
+}
+
+const DEFAULT_OPTIONS: PresentationOptions = {
+  tldr: true,
+  quotes: true,
+  actionItems: true,
+  references: true,
+  chapterBar: true,
+  speakerBio: true,
+  chapterTimes: true,
+  motion: 'still',
+  charts: 'interactive',
+  theme: 'auto',
+  accent: 'auto',
+  length: 'full',
+  photos: 'all',
+  voice: 'neutral',
+  language: 'auto',
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -47,6 +85,7 @@ Deno.serve(async (req) => {
   let sessionId: string
   let part: number
   let photoLinks: Record<string, string>
+  let options: PresentationOptions | null
   try {
     authHeader = req.headers.get('Authorization') ?? ''
     if (!authHeader) throw new Error('Missing Authorization header')
@@ -62,6 +101,9 @@ Deno.serve(async (req) => {
     if (!sessionId) throw new Error('Missing sessionId')
     part = Number.isInteger(body.part) ? body.part : 0
     photoLinks = body.photoLinks ?? {}
+    // Later rounds carry the options the first round read, so a change made
+    // mid-build can't split one page between two sets of options.
+    options = body.options ?? null
   } catch (err) {
     return jsonResponse({ error: err instanceof Error ? err.message : 'Bad request' }, 400)
   }
@@ -88,7 +130,7 @@ Deno.serve(async (req) => {
   // The writing runs after the response, in rounds: the app polls the
   // session row for the outcome rather than waiting on this request.
   EdgeRuntime.waitUntil(
-    generateDeckPart(supabase, authHeader, sessionId, part, photoLinks, invokedAt).catch(recordError),
+    generateDeckPart(supabase, authHeader, sessionId, part, photoLinks, options, invokedAt).catch(recordError),
   )
   return jsonResponse({ started: true }, 202)
 })
@@ -122,6 +164,7 @@ async function generateDeckPart(
   sessionId: string,
   part: number,
   photoLinks: Record<string, string>,
+  givenOptions: PresentationOptions | null,
   invokedAt: number,
 ): Promise<void> {
   // The app takes silence as a crash, so each round says it's still going.
@@ -146,6 +189,8 @@ async function generateDeckPart(
 
   const itemRows = (allItemRows ?? []).filter((r) => !r.excluded)
 
+  const options: PresentationOptions = givenOptions ?? await loadOptions(supabase, session.owner_id)
+
   const notes = itemRows.filter((r) => r.type === 'note' && r.text)
   const transcriptSegments = itemRows.filter((r) => r.type === 'transcript' && r.text)
   const photoRows = itemRows.filter((r) => r.type === 'photo' && r.photo_path)
@@ -169,7 +214,10 @@ async function generateDeckPart(
   // Links, not the photos themselves: a function has too little memory to
   // hold a session's worth of photos. Claude fetches them from the link, and
   // every round reuses the same links so the prompt stays cached.
-  const missing = photoRows.map((r) => r.photo_path).filter((path) => !photoLinks[path])
+  const missing = (options.photos === 'none' ? [] : photoRows)
+    .filter((r) => options.photos !== 'starred' || r.starred)
+    .map((r) => r.photo_path)
+    .filter((path) => !photoLinks[path])
   if (missing.length > 0) {
     const { data: signed, error: signError } = await supabase.storage
       .from(PHOTOS_BUCKET)
@@ -180,7 +228,10 @@ async function generateDeckPart(
       photoLinks[link.path] = link.signedUrl
     }
   }
-  const allPhotos: DeckPhoto[] = photoRows.map((row, i) => ({
+  const deckPhotoRows = options.photos === 'none'
+    ? []
+    : options.photos === 'starred' ? photoRows.filter((r) => r.starred) : photoRows
+  const allPhotos: DeckPhoto[] = deckPhotoRows.map((row, i) => ({
     placeholder: `PHOTO_${i + 1}`,
     url: photoLinks[row.photo_path],
     caption: row.caption ?? '',
@@ -203,7 +254,7 @@ async function generateDeckPart(
   const highlightsText = formatHighlights(session.started_at, highlightRows, transcriptSegments, notes)
   const { text, finished } = await callClaude(
     title, session.started_at, notes, transcriptSegments, enrichmentRows, photos, highlightsText,
-    written, invokedAt + ROUND_BUDGET_MS,
+    written, invokedAt + ROUND_BUDGET_MS, options,
   )
   written += text
 
@@ -220,7 +271,7 @@ async function generateDeckPart(
         Authorization: authHeader,
         apikey: Deno.env.get('SUPABASE_ANON_KEY')!,
       },
-      body: JSON.stringify({ sessionId, part: part + 1, photoLinks }),
+      body: JSON.stringify({ sessionId, part: part + 1, photoLinks, options }),
     })
     if (!next.ok) throw new Error(`Couldn't continue the presentation (${next.status})`)
     return
@@ -249,6 +300,16 @@ async function generateDeckPart(
     .eq('id', sessionId)
 
   if (part > 0) await supabase.storage.from(DECKS_BUCKET).remove([partialPath])
+}
+
+/** The account's Presentation options, with defaults for anything unset. */
+async function loadOptions(supabase: ReturnType<typeof createClient>, ownerId: string): Promise<PresentationOptions> {
+  const { data: settings } = await supabase
+    .from('cc_user_settings')
+    .select('presentation')
+    .eq('user_id', ownerId)
+    .maybeSingle()
+  return { ...DEFAULT_OPTIONS, ...((settings?.presentation as Partial<PresentationOptions>) ?? {}) }
 }
 
 interface DeckPhoto {
@@ -299,6 +360,7 @@ async function callClaude(
   highlightsText: string,
   writtenSoFar: string,
   deadline: number,
+  o: PresentationOptions,
 ): Promise<{ text: string; finished: boolean }> {
   const notesText = notes.length > 0
     ? notes.map((n) => `- [${formatElapsed(startedAt, n.item_timestamp)}]${n.starred ? ' ★' : ''} ${n.text}`).join('\n')
@@ -310,7 +372,9 @@ async function callClaude(
 
   const photosText = photos.length > 0
     ? photos.map((p) => `- ${p.placeholder} [${p.elapsed}]${p.starred ? ' ★' : ''}${p.shown ? '' : ' (not shown)'}${p.caption ? ` -- caption: "${p.caption}"` : ''}${formatSlideText(p.slideText)}`).join('\n')
-    : '(No photos were captured for this talk.)'
+    : o.photos === 'all'
+      ? '(No photos were captured for this talk.)'
+      : '(Photos are left out of this presentation -- use no images or photo placeholders.)'
 
   const enrichmentText = formatEnrichment(enrichmentRows)
 
@@ -334,25 +398,7 @@ Moments the attendee marked "Remember this" (tapped live, as it happened):
 ${highlightsText}
 
 Requirements:
-- Return ONLY a single complete HTML document -- no markdown fences, no commentary before or after.
-- The document must be fully self-contained: all CSS and JavaScript inline in the file, no external resources except Google Fonts if you want them.
-- Page structure, in this order:
-  1. Title block: the talk title, the speaker (from the speaker bio, if present) and a one-sentence intro of what the talk was about. Compact -- not a full-screen hero.
-  2. TL;DR: the 3 to 6 takeaways someone should leave with, each one or two sentences, so a reader who stops here has the whole point. Build it from the extracted summary if present, and make sure the key moments (below) are in it. Then 2 or 3 of the speaker's strongest lines from the transcript as quotes (no times), tidied only where the transcription garbled a word. Put the action items here too, as a short list, if there are any.
-  3. Chapter bar: a header that sticks to the top of the screen once the reader scrolls past the TL;DR, linking to each chapter by anchor (#id). One row: on a narrow screen it scrolls sideways rather than wrapping. Short chapter names, and the chapter's elapsed time (e.g. "12:40") beside each. With JavaScript, highlight the chapter currently being read; without it, the links still work. Give each chapter heading scroll-margin-top so the bar doesn't cover it after a jump.
-  4. Chapters: the talk divided into 3 to 8 chapters in the order it actually unfolded, each with a heading and its starting elapsed time. Synthesize and organize the notes and transcript into clear prose -- don't dump either source verbatim. Use the transcript to fill gaps the notes left out and to surface direct quotes worth calling out, but let the notes drive what the attendee found important. Open each chapter with its heading and one paragraph that sums the chapter up on its own; wrap everything after that paragraph (further paragraphs, photos, quotes, charts) in a single <div class="cc-more">. The app removes those divs to make a short version for quick sharing, so the page must read well without them, and nothing outside them may point into them.
-  5. A short closing section with the references (as links where there's a URL) and anything else worth following up on.
-- Text never overlaps a photo or chart: no text on top of images, no sticky or pinned backgrounds that text scrolls over, no full-bleed image with a caption laid across it. Every photo and chart sits in the flow of the page with its caption below it.
-- Quotes: set the speaker's own words apart wherever they appear -- in the TL;DR and as pull quotes in the chapters -- with a distinct, consistent style that fits the theme (larger or contrasting type, an accent rule or oversized quotation mark, the speaker's name beneath when known). Never put a time on a quote. Keep each one short: a sentence or two.
-- No decorative motion: no fade-ins or slide-ins as things scroll into view, no parallax, no scroll progress bar. Everything is simply there when the reader arrives.
-- The one place for interaction: when the talk presented a data visualization (a chart, graph or diagram of data on a slide, or one the speaker described), rebuild it in the page as an interactive inline-SVG chart using the real numbers shown -- hover or tap to read exact values, and toggles, filters or a short animated build where that helps explain what the speaker was showing. Put it next to the photo of that slide, and note under it that it's a recreation from the talk. Never invent numbers: if the values on the slide can't be read, show the photo alone. If the talk had no data visualizations, the page has no interactive charts.
-- The "Remember this" moments are the attendee's own signal of what mattered most. Each one belongs in the TL;DR and gets a callout in its chapter, built from what was being said and shown at that point (a tap usually lands just after the thing it marks, so the transcript just before it is usually what it's about). Don't label them with the phrase "Remember this"; just let them read as the key moments. If there are none, ignore this.
-- Notes, transcript lines and photos marked ★ were starred by the attendee afterwards as entries that mattered most. Give them the same weight as the "Remember this" moments: in the TL;DR and called out in their chapter. Don't show the ★ itself or call them "starred".
-- Place each photo in the chapter that matches its elapsed time (not an appendix dumped at the end), full width of the text column, never cropped so a slide's content is cut off. Reference EACH photo using an <img> tag whose src is EXACTLY its placeholder token, e.g. <img src="PHOTO_1">. Do not invent placeholder names and do not attempt to embed real image data yourself.
-- Work acronym expansions into the text where each term first appears, not as a list.
-- Pick a visual theme (color palette, type) that fits the subject matter of the talk. Keep it tasteful and readable: a comfortable text column (about 65 characters wide), generous spacing, legibility over spectacle.
-- The file gets shared and opened in many places -- Safari, Chrome, email attachments, and the iOS Files/Messages quick-look preview, which does NOT run JavaScript. The page must be fully readable with JavaScript disabled: all text, photos, charts and chapter links visible and working. JavaScript only adds the interactive charts and the current-chapter highlight; draw every chart as static SVG markup in the HTML so it shows without scripts, and let script add the interaction on top.
-- Let the page itself scroll: the document/window is the scroller. Don't put the content inside a fixed-height element with its own overflow scrolling, and don't set overflow: hidden on html or body.`
+${presentationRequirements(o)}`
 
   const content: Record<string, unknown>[] = [{ type: 'text', text: instructions }]
   for (const photo of photos.filter((p) => p.shown)) {
@@ -403,6 +449,62 @@ Requirements:
   }
 
   return { text, finished: !cutOff && stopReason !== 'max_tokens' }
+}
+
+/** The prompt's requirements, shaped by the account's Presentation options.
+ * With the defaults this is the original page: TL;DR, chapter bar, chapters,
+ * references; still, with interactive charts only. */
+function presentationRequirements(o: PresentationOptions): string {
+  const times = o.chapterTimes
+  const structure: string[] = []
+  structure.push(`Title block: the talk title${o.speakerBio ? ', the speaker (from the speaker bio, if present)' : ''} and a one-sentence intro of what the talk was about. Compact -- not a full-screen hero.${o.speakerBio ? '' : ' Leave out who the speaker is and their bio.'}`)
+  if (o.tldr) {
+    structure.push(`TL;DR: the 3 to 6 takeaways someone should leave with, each one or two sentences, so a reader who stops here has the whole point. Build it from the extracted summary if present, and make sure the key moments (below) are in it.${o.quotes ? " Then 2 or 3 of the speaker's strongest lines from the transcript as quotes (no times), tidied only where the transcription garbled a word." : ''}${o.actionItems ? ' Put the action items here too, as a short list, if there are any.' : ''}`)
+  }
+  if (o.chapterBar) {
+    structure.push(`Chapter bar: a header that sticks to the top of the screen once the reader scrolls past the ${o.tldr ? 'TL;DR' : 'title block'}, linking to each chapter by anchor (#id). One row: on a narrow screen it scrolls sideways rather than wrapping. Short chapter names${times ? ', and the chapter\'s elapsed time (e.g. "12:40") beside each' : ''}. With JavaScript, highlight the chapter currently being read; without it, the links still work. Give each chapter heading scroll-margin-top so the bar doesn't cover it after a jump.`)
+  }
+  const chapterBody = o.length === 'short'
+    ? 'Keep it short: each chapter is its heading and one paragraph that sums the chapter up, plus at most one photo or chart if it is essential. No further detail.'
+    : 'Open each chapter with its heading and one paragraph that sums the chapter up on its own; wrap everything after that paragraph (further paragraphs, photos, quotes, charts) in a single <div class="cc-more">. The app removes those divs to make a short version for quick sharing, so the page must read well without them, and nothing outside them may point into them.'
+  structure.push(`Chapters: the talk divided into 3 to 8 chapters in the order it actually unfolded, each with a heading${times ? ' and its starting elapsed time' : ''}. Synthesize and organize the notes and transcript into clear prose -- don't dump either source verbatim. Use the transcript to fill gaps the notes left out${o.quotes ? ' and to surface direct quotes worth calling out' : ''}, but let the notes drive what the attendee found important. ${chapterBody}`)
+  const closing: string[] = []
+  if (o.actionItems && !o.tldr) closing.push('the action items, as a short list, if there are any')
+  if (o.references) closing.push('the references (as links where there\'s a URL) and anything else worth following up on')
+  if (closing.length) structure.push(`A short closing section with ${closing.join(', then ')}.`)
+
+  const keyMomentsWhere = o.tldr ? 'belongs in the TL;DR and gets a callout in its chapter' : 'gets a callout in its chapter'
+  const rules: string[] = [
+    'Return ONLY a single complete HTML document -- no markdown fences, no commentary before or after.',
+    'The document must be fully self-contained: all CSS and JavaScript inline in the file, no external resources except Google Fonts if you want them.',
+    `Page structure, in this order:\n${structure.map((item, i) => `  ${i + 1}. ${item}`).join('\n')}`,
+    'Text never overlaps a photo or chart: no text on top of images, no sticky or pinned backgrounds that text scrolls over, no full-bleed image with a caption laid across it. Every photo and chart sits in the flow of the page with its caption below it.',
+    o.quotes
+      ? `Quotes: set the speaker's own words apart wherever they appear -- ${o.tldr ? 'in the TL;DR and ' : ''}as pull quotes in the chapters -- with a distinct, consistent style that fits the theme (larger or contrasting type, an accent rule or oversized quotation mark${o.speakerBio ? ', the speaker\'s name beneath when known' : ''}). Never put a time on a quote. Keep each one short: a sentence or two.`
+      : "No quote callouts: don't set the speaker's words apart as pull quotes; work their points into the prose.",
+    o.motion === 'scrolly'
+      ? 'Scrollytelling: as the reader scrolls, each chapter\'s heading, paragraphs, photos, quotes and charts ease into place (short, gentle fades and slides, each triggered once as it enters the screen, using IntersectionObserver). Charts may build as they come into view. The page must still be complete without JavaScript and with prefers-reduced-motion: reduce -- add the hidden starting state from script, never from CSS alone, so nothing is invisible if the script doesn\'t run. No parallax and no scroll-jacking: the page scrolls normally.'
+      : 'No decorative motion: no fade-ins or slide-ins as things scroll into view, no parallax, no scroll progress bar. Everything is simply there when the reader arrives.',
+    o.charts === 'interactive'
+      ? 'Charts: when the talk presented a data visualization (a chart, graph or diagram of data on a slide, or one the speaker described), rebuild it in the page as an interactive inline-SVG chart using the real numbers shown -- hover or tap to read exact values, and toggles, filters or a short animated build where that helps explain what the speaker was showing. Put it next to the photo of that slide, and note under it that it\'s a recreation from the talk. Never invent numbers: if the values on the slide can\'t be read, show the photo alone. If the talk had no data visualizations, the page has no interactive charts.'
+      : 'Charts: don\'t rebuild charts or make anything interactive; show the photo of the slide and describe what it showed in the text.',
+    `The "Remember this" moments are the attendee's own signal of what mattered most. Each one ${keyMomentsWhere}, built from what was being said and shown at that point (a tap usually lands just after the thing it marks, so the transcript just before it is usually what it's about). Don't label them with the phrase "Remember this"; just let them read as the key moments. If there are none, ignore this.`,
+    `Notes, transcript lines and photos marked ★ were starred by the attendee afterwards as entries that mattered most. Give them the same weight as the "Remember this" moments: ${o.tldr ? 'in the TL;DR and ' : ''}called out in their chapter. Don't show the ★ itself or call them "starred".`,
+    'Place each photo in the chapter that matches its elapsed time (not an appendix dumped at the end), full width of the text column, never cropped so a slide\'s content is cut off. Reference EACH photo using an <img> tag whose src is EXACTLY its placeholder token, e.g. <img src="PHOTO_1">. Do not invent placeholder names and do not attempt to embed real image data yourself.',
+    'Work acronym expansions into the text where each term first appears, not as a list.',
+    `${o.theme === 'auto' ? 'Pick a visual theme (color palette, type) that fits the subject matter of the talk.' : `Use a ${o.theme} theme (${o.theme === 'dark' ? 'dark background, light text' : 'light background, dark text'}), with type that fits the subject of the talk.`}${/^#[0-9a-fA-F]{6}$/.test(o.accent) ? ` Use ${o.accent} as the accent color (links, rules, highlights, chart emphasis), adjusted only if needed for readable contrast.` : ''} Keep it tasteful and readable: a comfortable text column (about 65 characters wide), generous spacing, legibility over spectacle.`,
+  ]
+  if (!times) rules.push("Don't show elapsed times (like 12:40) anywhere on the page.")
+  if (o.voice === 'first_person') rules.push("Voice: write as the attendee's own notes, in the first person (\"I came away with...\", \"The speaker showed us...\").")
+  if (o.voice === 'brief') rules.push('Voice: write for a busy reader -- short sentences, plain words, bullet points where they help, no flourishes.')
+  rules.push(o.language === 'auto'
+    ? 'Write in the language the talk was given in.'
+    : `Write the whole page in ${o.language}, including headings, the chapter bar and captions. Translate quotes too, and note once near the top that quotes are translated.`)
+  rules.push(
+    `The file gets shared and opened in many places -- Safari, Chrome, email attachments, and the iOS Files/Messages quick-look preview, which does NOT run JavaScript. The page must be fully readable with JavaScript disabled: all text, photos, charts and chapter links visible and working.${o.charts === 'interactive' ? ' Draw every chart as static SVG markup in the HTML so it shows without scripts, and let script add the interaction on top.' : ''}`,
+    "Let the page itself scroll: the document/window is the scroller. Don't put the content inside a fixed-height element with its own overflow scrolling, and don't set overflow: hidden on html or body.",
+  )
+  return rules.map((r) => `- ${r}`).join('\n')
 }
 
 /** Collects the text and stop reason from a streamed Messages API response

@@ -8,3 +8,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+/** The iOS build number, from the Xcode project (see vite.config.ts). */
+declare const __APP_BUILD__: string

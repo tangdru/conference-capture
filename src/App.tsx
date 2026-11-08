@@ -13,6 +13,8 @@ import { HomeScreen } from './screens/HomeScreen'
 import { CaptureScreen } from './screens/CaptureScreen'
 import { DeckViewer } from './components/DeckViewer'
 import { AskSheet, type AskTurn } from './components/AskSheet'
+import { AppMenu } from './components/AppMenu'
+import { PresentationOptionsSheet } from './components/PresentationOptionsSheet'
 import { onPhotoUploaded, pendingPhotos, syncPhotoUploadAuth } from './photoUploads'
 import { startOutbox } from './itemOutbox'
 
@@ -25,6 +27,7 @@ export default function App() {
 function AuthedApp({ authSession }: { authSession: AuthSession }) {
   const userId = authSession.user.id
   const [addingEmail, setAddingEmail] = useState(false)
+  const [menu, setMenu] = useState<'menu' | 'presentation' | null>(null)
   const [sessions, setSessions] = useState<Session[] | null>(null)
   const [route, setRoute] = useState<Route>({ screen: 'home' })
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -317,14 +320,27 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
 
   return (
     <>
+    {menu === 'menu' && (
+      <AppMenu
+        email={authSession.user.is_anonymous ? null : authSession.user.email ?? null}
+        onClose={() => setMenu(null)}
+        onPresentationOptions={() => setMenu('presentation')}
+        onAddEmail={() => setAddingEmail(true)}
+        onSignOut={() => {
+          setMenu(null)
+          signOut()
+        }}
+      />
+    )}
+    {menu === 'presentation' && (
+      <PresentationOptionsSheet userId={authSession.user.id} onBack={() => setMenu('menu')} />
+    )}
     {addingEmail && <AddEmailSheet sessionCount={sessions.length} onClose={() => setAddingEmail(false)} />}
     <HomeScreen
       sessions={sessions}
       onOpenSession={openSession}
       onNewSession={startNewSession}
-      onSignOut={signOut}
-      needsEmail={authSession.user.is_anonymous === true}
-      onAddEmail={() => setAddingEmail(true)}
+      onOpenMenu={() => setMenu('menu')}
       onGenerateDeck={generateDeckForSession}
       onViewDeck={viewDeck}
       onShareDeck={shareDeck}

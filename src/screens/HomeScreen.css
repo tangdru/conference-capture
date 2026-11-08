@@ -38,12 +38,23 @@
   color: var(--text-primary);
 }
 
-.home-header__sign-out {
+.home-header__menu {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-right: -10px;
+  padding: 0;
   background: none;
   border: none;
-  color: var(--text-muted);
-  font-size: 13px;
+  color: var(--text-secondary);
   cursor: pointer;
+}
+
+.home-header__menu svg {
+  width: 24px;
+  height: 24px;
 }
 
 .home-error {

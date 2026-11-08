@@ -125,8 +125,9 @@ export function startHomeTour() {
       {
         element: '.home-searchbox',
         popover: {
-          title: 'Search',
-          description: 'Find anything you captured: titles, notes, transcripts and text on slides.',
+          title: 'Search and ask',
+          description:
+            'Find anything you captured: titles, notes, transcripts and text on slides. Or type a question and tap Ask Claude at the top of the results to get an answer from all your sessions.',
           side: 'top',
           align: 'end',
         },

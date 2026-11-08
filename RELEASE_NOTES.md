@@ -14,6 +14,15 @@ changes.
 
 ---
 
+## Build 40 — internal
+
+New in build 40: the keyboard pushes things up smoothly
+
+- Search: the search bar stays on screen and slides up with the keyboard,
+  instead of vanishing and reappearing.
+- Adding a note: the note field stays on screen and slides up with the
+  keyboard the same way.
+
 ## Build 39 — internal
 
 New in build 39: smoother typing and search

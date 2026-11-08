@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'
+import { Keyboard } from '@capacitor/keyboard'
 import { PHOTOS_DENIED_MESSAGE, saveToPhotoLibrary } from '../native/photoLibrary'
 import type { PhotoItem, Session, TimelineItemData, VideoItem } from '../types'
 import { formatShortElapsed, formatSessionSubtitle, formatDurationCompact } from '../format'
@@ -311,6 +312,33 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
     return () => window.removeEventListener('online', handleOnline)
   }, [])
 
+  // Hide the bottom action row while typing (a note or the title) so the
+  // keyboard has the room.
+  const [typing, setTyping] = useState(false)
+  useEffect(() => {
+    // In the app, follow the keyboard itself: a note editor can unmount while
+    // focused, which fires no focusout.
+    if (Capacitor.isNativePlatform()) {
+      const show = Keyboard.addListener('keyboardWillShow', () => setTyping(true))
+      const hide = Keyboard.addListener('keyboardWillHide', () => setTyping(false))
+      return () => {
+        show.then((h) => h.remove())
+        hide.then((h) => h.remove())
+      }
+    }
+    const isField = (el: Element | null) =>
+      el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement
+    const check = () => setTimeout(() => setTyping(isField(document.activeElement)), 0)
+    document.addEventListener('focusin', check)
+    document.addEventListener('focusout', check)
+    document.addEventListener('click', check)
+    return () => {
+      document.removeEventListener('focusin', check)
+      document.removeEventListener('focusout', check)
+      document.removeEventListener('click', check)
+    }
+  }, [])
+
   async function commitTranscriptSegment(text: string, startedAt: number, durationMs: number) {
     // duration_ms is an integer column -- round in case a capture source
     // reports fractional milliseconds.
@@ -469,7 +497,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
 
       {/* Camera sits in the middle, where the viewfinder's shutter is, so a
           thumb doesn't move between opening the camera and taking the shot. */}
-      <div className="capture-actions">
+      <div className="capture-actions" hidden={typing}>
         <div className="capture-actions__start">
           {isLive && (
             // Record/pause and the running time in one pill: a blinking dot
@@ -529,8 +557,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
                   strokeWidth="1.8"
                   strokeLinejoin="round"
                 />
-              </svg>{' '}
-              Ask
+              </svg>
             </button>
           )}
         </div>

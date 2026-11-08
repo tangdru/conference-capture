@@ -5,6 +5,8 @@
      header and the "+ New Session" button stay pinned in place and only
      the session list scrolls between them. */
   height: 100dvh;
+  /* Shrinks as the keyboard rises (inline height), in step with it. */
+  transition: height var(--keyboard-time, 300ms) cubic-bezier(0.2, 0.8, 0.2, 1);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -325,3 +327,9 @@
 }
 
 
+
+@media (prefers-reduced-motion: reduce) {
+  .home-screen {
+    transition: none;
+  }
+}

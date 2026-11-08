@@ -3,6 +3,8 @@
      natively when the on-screen keyboard opens or closes, so this shell
      always matches the actually-visible area with no JS involved. */
   height: 100dvh;
+  /* Shrinks as the keyboard rises (inline height), in step with it. */
+  transition: height 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
   overflow: hidden;
   background: var(--bg-base);
   display: flex;
@@ -387,4 +389,11 @@
   background: var(--bg-elevated);
   color: var(--text-primary);
   font-size: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-screen,
+  .capture-screen {
+    transition: none;
+  }
 }

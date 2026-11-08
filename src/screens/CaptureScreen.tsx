@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'
 import { Keyboard } from '@capacitor/keyboard'
+import { useKeyboardHeight } from '../hooks/useKeyboardHeight'
 import { PHOTOS_DENIED_MESSAGE, saveToPhotoLibrary } from '../native/photoLibrary'
 import type { PhotoItem, Session, TimelineItemData, VideoItem } from '../types'
 import { formatShortElapsed, formatSessionSubtitle, formatDurationCompact } from '../format'
@@ -315,6 +316,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
   // Hide the bottom action row while typing (a note or the title) so the
   // keyboard has the room.
   const [typing, setTyping] = useState(false)
+  const keyboardHeight = useKeyboardHeight()
   useEffect(() => {
     // In the app, follow the keyboard itself: a note editor can unmount while
     // focused, which fires no focusout.
@@ -409,7 +411,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
   }
 
   return (
-    <div className="capture-screen">
+    <div className="capture-screen" style={{ height: `calc(100dvh - ${keyboardHeight}px)` }}>
       <header className="capture-header">
         <div className="capture-header__row1">
           <button className="capture-header__back" onClick={onBack} aria-label="Back to home">

@@ -4,6 +4,7 @@ import type { Session } from '../types'
 import { isSessionActive, lastActivityAt } from '../sessionActivity'
 import { hasContentSinceDeck } from '../deck'
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
+import { useKeyboardHeight } from '../hooks/useKeyboardHeight'
 import { SessionCard } from '../components/SessionCard'
 import { SearchResults } from '../components/SearchResults'
 import { searchSessions } from '../search'
@@ -99,38 +100,8 @@ export function HomeScreen({
     return () => window.clearInterval(id)
   }, [])
 
-  // The app's web view doesn't shrink for the keyboard, so measure how much of
-  // the screen it covers and lift the bottom bar (and shorten the list) by that.
-  const [keyboardHeight, setKeyboardHeight] = useState(0)
-  useEffect(() => {
-    const vv = window.visualViewport
-    if (!vv) return
-    let settle = 0
-    const measure = () => {
-      // iOS may nudge the page up to reveal the field; keep it pinned instead.
-      if (window.scrollY !== 0) window.scrollTo(0, 0)
-      // The keyboard's height, whatever the page's scroll offset happens to be.
-      const covered = Math.max(0, window.innerHeight - vv.height)
-      setKeyboardHeight(covered > 80 ? covered : 0)
-    }
-    const onChange = () => {
-      measure()
-      // Measure again once the keyboard has finished sliding.
-      window.clearTimeout(settle)
-      settle = window.setTimeout(measure, 350)
-    }
-    vv.addEventListener('resize', onChange)
-    vv.addEventListener('scroll', onChange)
-    window.addEventListener('focusin', onChange)
-    window.addEventListener('focusout', onChange)
-    return () => {
-      window.clearTimeout(settle)
-      vv.removeEventListener('resize', onChange)
-      vv.removeEventListener('scroll', onChange)
-      window.removeEventListener('focusin', onChange)
-      window.removeEventListener('focusout', onChange)
-    }
-  }, [])
+  // Lift the bottom bar (and shorten the list) by the keyboard's height.
+  const keyboardHeight = useKeyboardHeight()
 
   function openSearch() {
     setSearchOpen(true)
@@ -218,7 +189,7 @@ export function HomeScreen({
   return (
     <div
       className={`home-screen${keyboardHeight ? ' home-screen--keyboard' : ''}`}
-      style={keyboardHeight ? { height: `calc(100dvh - ${keyboardHeight}px)` } : undefined}
+      style={{ height: `calc(100dvh - ${keyboardHeight}px)` }}
     >
       <header className="home-header">
         <div className="home-header__row">

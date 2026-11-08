@@ -111,3 +111,16 @@ textarea {
   flex-shrink: 0;
   vertical-align: baseline;
 }
+
+/* Text for screen readers only, e.g. the app name behind the logo. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

@@ -16,6 +16,7 @@ import {
   ViewIcon,
   ShareIcon,
 } from '../components/SwipeActions'
+import { Logo } from '../components/Logo'
 import './HomeScreen.css'
 
 const SORT_KEY = 'cc-session-sort'
@@ -180,7 +181,10 @@ export function HomeScreen({
     >
       <header className="home-header">
         <div className="home-header__row">
-          <h1 className="home-header__title">Conference Capture</h1>
+          <h1 className="home-header__title">
+            <Logo className="home-header__logo" />
+            <span className="visually-hidden">Conference Capture</span>
+          </h1>
           <button className="home-header__menu" onClick={onOpenMenu} aria-label="Menu">
             <span className="menu-icon" aria-hidden="true">
               <span className="menu-icon__bar" />

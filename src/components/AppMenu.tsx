@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Logo } from './Logo'
 import './AppMenu.css'
 
 interface AppMenuProps {
@@ -43,7 +44,9 @@ export function AppMenu({ email, instant = false, onClose, onPresentationOptions
           spread apart while the menu is open, and it closes the menu. */}
       <header className="home-header">
         <div className="home-header__row">
-          <p className="home-header__title" aria-hidden="true">Conference Capture</p>
+          <p className="home-header__title" aria-hidden="true">
+            <Logo className="home-header__logo" />
+          </p>
           <button className="home-header__menu app-menu__toggle" onClick={close} aria-label="Close menu">
             <span className="menu-icon" aria-hidden="true">
               <span className="menu-icon__bar app-menu__line app-menu__line--top" />

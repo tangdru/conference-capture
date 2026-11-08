@@ -32,10 +32,20 @@
 }
 
 .home-header__title {
-  font-size: 24px;
-  font-weight: 600;
+  display: flex;
+  align-items: center;
   margin: 0;
-  color: var(--text-primary);
+  /* Same height the text title had, so nothing below moves. */
+  min-height: 44px;
+}
+
+.home-header__logo {
+  display: block;
+  width: 40px;
+  height: 41px;
+  /* The drawing has room around the rings for their line width; pull it
+     back so the rings line up with the page margin. */
+  margin-left: -2px;
 }
 
 .home-header__menu {

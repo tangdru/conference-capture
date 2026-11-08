@@ -14,6 +14,20 @@ changes.
 
 ---
 
+## Build 38 — internal
+
+New in build 38: a simpler session screen
+
+- Record/pause, camera and Ask are now in one row at the bottom. The camera
+  is in the middle, where the shutter is. Record and the timer are on the
+  left; Ask is on the right.
+- The star (Remember this) shows next to Ask while recording.
+- The note and photo counts are gone from the top; the session card on the
+  home screen still shows them.
+- The timer is shorter: 7:12 instead of 00:07:12.
+- The ⌃ ⌄ ✓ bar above the keyboard is gone. Use Return, Search, × or the
+  note's own ✓ to finish typing.
+
 ## Build 37 — internal
 
 New in build 37: a new bottom bar and sorting

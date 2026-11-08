@@ -14,6 +14,21 @@ changes.
 
 ---
 
+## Build 46 — internal
+
+New in build 46: delete account, privacy policy, simpler codes
+
+- Menu → Delete account: shows what will be deleted, then permanently
+  deletes your account, sessions, photos, videos, presentations and settings,
+  and clears the app on this phone. Please don't try it on your real account;
+  try it after Start without an account instead.
+- Menu → Privacy policy opens the policy in Safari.
+- Sign-in codes are now 6 digits, typed into six boxes, one per digit.
+  Pasting or tapping the code iOS suggests fills them all, and it signs you
+  in by itself.
+- Tutorial: the search step mentions Ask Claude for questions across all
+  your sessions.
+
 ## Build 45 — internal
 
 New in build 45: a guided tutorial

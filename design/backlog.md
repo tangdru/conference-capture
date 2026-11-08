@@ -51,3 +51,19 @@ and starring any entry (2026-11-01). Rough order of value.
   question and sparkle really costs.
 
 - **Export a written summary** to Notes, email or Notion, alongside the deck.
+
+## Storage and cost
+
+Considered 2026-11-08, not decided. Supabase holds the main copy of
+everything; the phone only queues items until they upload, plus Remember this
+clips. Usage then: about 110 MB (photos 86 MB at ~0.9 MB each, presentations
+13 MB, database 12 MB). The free plan has 1 GB of files; one busy conference
+day is roughly 150-200 MB per person; Pro is $25/month for 100 GB.
+
+- **Smaller photos.** Compress slide photos harder (about half the size);
+  Claude still reads the text fine. Cheapest win, do first if storage grows.
+- **Watch usage** and move to Supabase Pro only near 1 GB.
+- **Phone-first with iCloud** (as Apple Notes and Day One do): no server
+  storage cost, but a large rewrite, since presentations, enrichment, Ask and
+  titles run on the server and need the data there, as do the web version
+  and moving to a new phone. Only worth it if the app goes public at scale.

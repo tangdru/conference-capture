@@ -15,6 +15,7 @@ import { SwipeActions, DeleteIcon, ExcludeIcon, IncludeIcon, SaveIcon, StarActio
 import { CheckIcon, PauseIcon, PlayIcon, StarIcon } from './InlineIcons'
 import { seekClip, togglePlay, useClip, usePlayback } from '../clips'
 import type { ClipInfo } from '../native/clips'
+import { TOUR_REVEAL_EVENT, type TourRevealTarget } from '../tour'
 import './Timeline.css'
 
 /** 'new' means composing a brand-new note at the end of the list; a string is an existing item's id being edited; null means nothing is active. */
@@ -108,6 +109,19 @@ export function Timeline({
     : items
 
   const isEmpty = items.length === 0
+
+  // The tutorial opens the first row's swipe panel to show what's in it.
+  const firstItemId = useRef<string | null>(null)
+  firstItemId.current = displayItems[0]?.id ?? null
+  useEffect(() => {
+    const onTour = (e: Event) => {
+      const target = (e as CustomEvent<TourRevealTarget | null>).detail
+      if (target === 'timeline-item') setRevealedId(firstItemId.current)
+      else if (target === null) setRevealedId(null)
+    }
+    window.addEventListener(TOUR_REVEAL_EVENT, onTour)
+    return () => window.removeEventListener(TOUR_REVEAL_EVENT, onTour)
+  }, [])
 
   function startDrag(id: string, clientY: number) {
     setDragState({ draggedId: id, order: items.map((i) => i.id) })

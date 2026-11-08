@@ -17,6 +17,7 @@ import {
   ShareIcon,
 } from '../components/SwipeActions'
 import { Logo } from '../components/Logo'
+import { TOUR_REVEAL_EVENT, type TourRevealTarget } from '../tour'
 import './HomeScreen.css'
 
 const SORT_KEY = 'cc-session-sort'
@@ -124,6 +125,19 @@ export function HomeScreen({
   // you're in the middle of. The chosen sort orders everything else.
   const live = sortSessions(sessions, 'started').filter((s) => isSessionActive(s, now))
   const past = sortSessions(sessions, sort).filter((s) => !isSessionActive(s, now))
+
+  // The tutorial opens the first card's swipe panel to show what's in it.
+  const firstCardId = useRef<string | null>(null)
+  firstCardId.current = (live[0] ?? past[0])?.id ?? null
+  useEffect(() => {
+    const onTour = (e: Event) => {
+      const target = (e as CustomEvent<TourRevealTarget | null>).detail
+      if (target === 'session-card') setRevealedId(firstCardId.current)
+      else if (target === null) setRevealedId(null)
+    }
+    window.addEventListener(TOUR_REVEAL_EVENT, onTour)
+    return () => window.removeEventListener(TOUR_REVEAL_EVENT, onTour)
+  }, [])
 
   function deckActions(session: Session): SwipeAction[] {
     switch (session.deckStatus) {

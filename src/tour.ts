@@ -7,6 +7,25 @@ import { driver, type DriveStep } from 'driver.js'
 import 'driver.js/dist/driver.css'
 import './tour.css'
 
+/** Asks the screen to open (or close, with null) the swipe panel on its
+ * first row, so a step can show what's behind a swipe. */
+export const TOUR_REVEAL_EVENT = 'cc-tour-reveal'
+export type TourRevealTarget = 'session-card' | 'timeline-item'
+
+function reveal(target: TourRevealTarget | null) {
+  window.dispatchEvent(new CustomEvent<TourRevealTarget | null>(TOUR_REVEAL_EVENT, { detail: target }))
+}
+
+/** A step that opens the first row's swipe panel while it's showing. */
+function swipeStep(target: TourRevealTarget, element: string, title: string, description: string): DriveStep {
+  return {
+    element,
+    onHighlightStarted: () => reveal(target),
+    onDeselected: () => reveal(null),
+    popover: { title, description, side: 'bottom', align: 'end' },
+  }
+}
+
 const HOME_SEEN_KEY = 'cc-tour-home-seen'
 const SESSION_PENDING_KEY = 'cc-tour-session-pending'
 
@@ -57,7 +76,10 @@ function run(steps: DriveStep[], onFinish?: () => void) {
     smoothScroll: true,
     // Taps on the highlighted control would leave the tour mid-step.
     disableActiveInteraction: true,
-    onDestroyed: () => onFinish?.(),
+    onDestroyed: () => {
+      reveal(null)
+      onFinish?.()
+    },
   })
   tour.drive()
 }
@@ -89,11 +111,17 @@ export function startHomeTour() {
         element: '.session-card',
         popover: {
           title: 'Your sessions',
-          description: 'Tap one to open it. Swipe left to build, view or share its presentation, or delete it.',
+          description: 'Tap one to open it. Swipe left on it for more.',
           side: 'bottom',
           align: 'start',
         },
       },
+      swipeStep(
+        'session-card',
+        '.home-screen .swipe-actions',
+        'Swipe left on a session',
+        'Build its presentation. Once it’s ready: view it, share it, or rebuild it after you add more. The last button deletes the session.',
+      ),
       {
         element: '.home-searchbox',
         popover: {
@@ -163,6 +191,12 @@ export function maybeStartSessionTour() {
         align: 'start',
       },
     },
+    swipeStep(
+      'timeline-item',
+      '.capture-screen .swipe-actions',
+      'Swipe left on anything here',
+      'Save a photo to your phone. Star what mattered most and the presentation features it. Leave something out of the presentation and exports. Delete it. Or hold the handle and drag to move it.',
+    ),
     {
       element: '.remember-btn',
       popover: {

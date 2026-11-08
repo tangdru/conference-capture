@@ -10,13 +10,34 @@ changes.
   review. When sending a build to Friends, combine the notes of every build
   since the last one Friends got (marked below).
 
-**Last build sent to Friends: 44** (sent 2026-11-08)
+**Last build sent to Friends: 48** (sent 2026-11-08)
 
 ---
 
-## Build 48 — internal
+## Build 48 — internal, Friends
 
-Same as build 47, which opened to a blank screen (built the wrong way for
+Friends got these notes (builds 45, 46 and 47 combined):
+
+New since your last build (44):
+
+Sparkle fills in the session
+- Building a presentation saves a summary, action items, speaker bio, acronyms and references into the session, so you can find them and Ask about them. Rebuilding replaces them, except any you've left out.
+- Menu → Presentation options has a new "Save to the session" group with a switch for each of those five, and the other options are regrouped: In the presentation, Layout and style, Writing.
+- Building a presentation also moves notes and photos you haven't placed to the spot in the talk they're about.
+
+Entries stay where you put them
+- Dragging a note or photo puts it at that moment in the talk, and it stays there: Sparkle never moves an entry you've placed.
+
+A guided tutorial
+- Menu → Tutorial walks you around the home screen: New Session, your sessions, what's behind a swipe (build, view, share or rebuild the presentation; delete), search, sort and the menu.
+- Open a session afterwards and a second tour shows record, camera, notes, what's behind a swipe on an item (save to Photos, star, leave out, delete, drag to reorder), Remember this and Ask.
+
+Account and sign-in
+- Sign-in codes are now 6 digits, typed into six boxes. Pasting or tapping the code iOS suggests fills them all, and it signs you in by itself.
+- Menu → Privacy policy opens the policy in Safari.
+- Menu → Delete account permanently deletes your account and everything in it, after showing what will go. Please don't try it on your real account.
+
+Internally: same as build 47, which opened to a blank screen (built the wrong way for
 the phone). Use build 48 instead; its notes are build 47's below.
 
 ## Build 47 — internal (blank screen; replaced by 48)

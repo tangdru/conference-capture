@@ -3,7 +3,7 @@ import { Capacitor } from '@capacitor/core'
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'
 import { PHOTOS_DENIED_MESSAGE, saveToPhotoLibrary } from '../native/photoLibrary'
 import type { PhotoItem, Session, TimelineItemData, VideoItem } from '../types'
-import { formatElapsed, formatSessionSubtitle, formatDurationCompact } from '../format'
+import { formatShortElapsed, formatSessionSubtitle, formatDurationCompact } from '../format'
 import { Timeline } from '../components/Timeline'
 import { CheckIcon, StarIcon, WarningIcon } from '../components/InlineIcons'
 import { CameraViewfinder } from '../components/CameraViewfinder'
@@ -479,8 +479,8 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
               onClick={session.status === 'recording' ? stop : resume}
               aria-label={
                 session.status === 'recording'
-                  ? `Pause recording, ${formatElapsed(elapsedMs)} elapsed`
-                  : `Resume recording, ${formatElapsed(elapsedMs)} recorded`
+                  ? `Pause recording, ${formatShortElapsed(elapsedMs)} elapsed`
+                  : `Resume recording, ${formatShortElapsed(elapsedMs)} recorded`
               }
             >
               {session.status === 'recording' ? (
@@ -489,7 +489,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
                 <span className="rec-toggle__pause" aria-hidden="true" />
               )}
               <span className="rec-pill__time mono-timestamp" aria-hidden="true">
-                {formatElapsed(elapsedMs)}
+                {formatShortElapsed(elapsedMs)}
               </span>
             </button>
           )}

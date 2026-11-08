@@ -10,11 +10,53 @@ changes.
   review. When sending a build to Friends, combine the notes of every build
   since the last one Friends got (marked below).
 
-**Last build sent to Friends: 35**
+**Last build sent to Friends: 44** (sent 2026-11-08)
 
 ---
 
-## Build 44 — internal
+## Build 44 — internal, Friends
+
+Friends got this build with the combined notes below (their What to Test,
+covering builds 37–44). The internal-only notes for 44 follow.
+
+**Friends notes**
+
+What's new since build 36
+
+Home screen
+- The app logo replaces the title at the top.
+- Search and sort are round buttons at the bottom, next to New Session. Tap
+  search and it grows into a search field, with the keyboard sliding up
+  alongside it.
+- Sort your sessions: Newest first, Oldest first, Last activity, Name A-Z, or
+  Has presentation. Sessions you're recording in stay at the top.
+
+Menu (top right)
+- Presentation options: choose what your presentations include and how they
+  look. Turn the TL;DR, quotes, action items, references, chapter bar, speaker
+  bio and chapter times on or off; pick still or scrollytelling, interactive
+  charts or photos only, theme and accent color, full or short,
+  all/starred/no photos, the voice, and the language. Saved to your account
+  and used for presentations you build from now on.
+- Your account email (or Add email), Send feedback, and Sign out. Tutorial,
+  Claude API key, Privacy policy and Delete account are coming soon.
+
+Session screen
+- Record/pause, camera, star and Ask sit in one simple row at the bottom; the
+  camera is where the shutter is.
+- The row hides while you type a note, and the note field slides up with the
+  keyboard.
+- The timer is shorter (7:12 instead of 00:07:12), and the note and photo
+  counts moved off the top (they're on the session card).
+- The bar with arrows and a check mark above the keyboard is gone.
+
+Presentations
+- Sessions you haven't named get a title when you build their presentation.
+
+Please try Presentation options and rebuild a presentation to see the
+difference. Use Send feedback in the menu to tell us what you think.
+
+**Internal notes**
 
 New in build 44: a calmer, animated menu and the app logo
 
@@ -101,7 +143,7 @@ New in build 37: a new bottom bar and sorting
   Has presentation. The app remembers your choice. Sessions you're recording
   in stay at the top.
 
-## Build 36 — internal
+## Build 36 — internal, Friends
 
 New in build 36: sign in with your email
 

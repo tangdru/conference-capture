@@ -5,7 +5,7 @@ import { PHOTOS_DENIED_MESSAGE, saveToPhotoLibrary } from '../native/photoLibrar
 import type { PhotoItem, Session, TimelineItemData, VideoItem } from '../types'
 import { formatElapsed, formatSessionSubtitle, formatDurationCompact } from '../format'
 import { Timeline } from '../components/Timeline'
-import { CheckIcon, NoteIcon, PhotoIcon, StarIcon, WarningIcon } from '../components/InlineIcons'
+import { CheckIcon, StarIcon, WarningIcon } from '../components/InlineIcons'
 import { CameraViewfinder } from '../components/CameraViewfinder'
 import { PhotoViewer } from '../components/PhotoViewer'
 import { VideoViewer } from '../components/VideoViewer'
@@ -90,8 +90,6 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
     (i): i is VideoItem => i.type === 'video' && i.id === viewingVideoId,
   )
   const isLive = session.status === 'recording' || session.status === 'suspended'
-  const noteCount = session.items.filter((i) => i.type === 'note').length
-  const photoCount = session.items.filter((i) => i.type === 'photo').length
   const canEnhance = !enhancing && session.items.some(
     (i) => i.type === 'transcript' && i.timestamp > (session.lastEnrichedAt ?? -Infinity),
   )
@@ -390,68 +388,19 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
             ‹
           </button>
           <EditableTitle title={session.title} onCommit={commitTitle} />
-          {session.items.some((i) => i.type === 'transcript' || i.type === 'note' || i.type === 'photo') && (
-            <button className="ask-btn" onClick={() => setAskOpen(true)} aria-label="Ask about this session">
-              <svg className="inline-icon" viewBox="2.2 2.7 19.6 18.6" fill="none" aria-hidden="true">
-                <path
-                  d="M4 5.5A2 2 0 016 3.5h12a2 2 0 012 2v9a2 2 0 01-2 2h-7l-4.5 4v-4H6a2 2 0 01-2-2v-9z"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinejoin="round"
-                />
-              </svg>{' '}
-              Ask
-            </button>
-          )}
         </div>
 
+        {(!isLive || (SHOW_ENHANCE_BUTTON && (canEnhance || enhancing))) && (
         <div className="capture-header__row2">
-          <div className="capture-header__primary">
-            {isLive ? (
-              // The record indicator is also the pause/resume control: a
-              // blinking dot while recording, a pause glyph while paused.
-              <button
-                className="rec-toggle"
-                onClick={session.status === 'recording' ? stop : resume}
-                aria-label={session.status === 'recording' ? 'Pause recording' : 'Resume recording'}
-              >
-                {session.status === 'recording' ? (
-                  <span className="rec-dot rec-dot--live" aria-hidden="true" />
-                ) : (
-                  <span className="rec-toggle__pause" aria-hidden="true" />
-                )}
-              </button>
-            ) : (
+          {!isLive && (
+            <div className="capture-header__primary">
               <span className="rec-dot rec-dot--done" aria-hidden="true" />
-            )}
-            {isLive ? (
-              <span
-                className="capture-header__timer mono-timestamp"
-                role="status"
-                aria-label={
-                  session.status === 'recording'
-                    ? `Recording active, ${formatElapsed(elapsedMs)} elapsed`
-                    : `Recording paused, ${formatElapsed(elapsedMs)} recorded`
-                }
-              >
-                {formatElapsed(elapsedMs)}
-              </span>
-            ) : (
               <span className="capture-header__subtitle">
                 {formatSessionSubtitle(session.startedAt)}
                 {session.accumulatedMs > 0 && ` · ${formatDurationCompact(session.accumulatedMs)}`}
               </span>
-            )}
-          </div>
-
-          <div className="capture-header__stats">
-            <span className="capture-header__stat">
-              <NoteIcon /> {noteCount}
-            </span>
-            <span className="capture-header__stat">
-              <PhotoIcon /> {photoCount}
-            </span>
-          </div>
+            </div>
+          )}
 
           <div className="capture-header__controls">
             {SHOW_ENHANCE_BUTTON && (canEnhance || enhancing) && (
@@ -479,6 +428,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
             )}
           </div>
         </div>
+        )}
       </header>
 
       {saveError && (
@@ -517,7 +467,34 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
         {savedPhotoNotice && <span>Saved to Photos</span>}
       </div>
 
+      {/* Camera sits in the middle, where the viewfinder's shutter is, so a
+          thumb doesn't move between opening the camera and taking the shot. */}
       <div className="capture-actions">
+        <div className="capture-actions__start">
+          {isLive && (
+            // Record/pause and the running time in one pill: a blinking dot
+            // while recording, a pause glyph while paused.
+            <button
+              className={`rec-pill${session.status === 'recording' ? ' rec-pill--live' : ''}`}
+              onClick={session.status === 'recording' ? stop : resume}
+              aria-label={
+                session.status === 'recording'
+                  ? `Pause recording, ${formatElapsed(elapsedMs)} elapsed`
+                  : `Resume recording, ${formatElapsed(elapsedMs)} recorded`
+              }
+            >
+              {session.status === 'recording' ? (
+                <span className="rec-dot rec-dot--live" aria-hidden="true" />
+              ) : (
+                <span className="rec-toggle__pause" aria-hidden="true" />
+              )}
+              <span className="rec-pill__time mono-timestamp" aria-hidden="true">
+                {formatElapsed(elapsedMs)}
+              </span>
+            </button>
+          )}
+        </div>
+
         <button
           className="camera-trigger"
           onClick={() => setCameraOpen(true)}
@@ -532,15 +509,31 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
             <circle cx="12" cy="13" r="3.2" stroke="var(--accent)" strokeWidth="1.6" />
           </svg>
         </button>
-        {session.status === 'recording' && (
-          <button
-            className={`remember-btn${remembered ? ' remember-btn--done' : ''}`}
-            onClick={rememberThis}
-            aria-label={remembered ? 'Remembered' : 'Remember this moment'}
-          >
-            <StarIcon filled={remembered} />
-          </button>
-        )}
+
+        <div className="capture-actions__end">
+          {session.status === 'recording' && (
+            <button
+              className={`remember-btn${remembered ? ' remember-btn--done' : ''}`}
+              onClick={rememberThis}
+              aria-label={remembered ? 'Remembered' : 'Remember this moment'}
+            >
+              <StarIcon filled={remembered} />
+            </button>
+          )}
+          {session.items.some((i) => i.type === 'transcript' || i.type === 'note' || i.type === 'photo') && (
+            <button className="ask-btn" onClick={() => setAskOpen(true)} aria-label="Ask about this session">
+              <svg className="inline-icon" viewBox="2.2 2.7 19.6 18.6" fill="none" aria-hidden="true">
+                <path
+                  d="M4 5.5A2 2 0 016 3.5h12a2 2 0 012 2v9a2 2 0 01-2 2h-7l-4.5 4v-4H6a2 2 0 01-2-2v-9z"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinejoin="round"
+                />
+              </svg>{' '}
+              Ask
+            </button>
+          )}
+        </div>
       </div>
 
       {viewingPhoto && (

@@ -3,6 +3,9 @@ import { supabase } from '../supabaseClient'
 
 export type CodeType = 'email' | 'email_change'
 
+/** Digits in the emailed code (Supabase Auth's OTP length). */
+const CODE_LENGTH = 8
+
 interface EmailCodeFormProps {
   hint: string
   // Sends the code and says which kind it was. Throws with a message to show.
@@ -26,6 +29,7 @@ export function EmailCodeForm({ hint, send, onDone }: EmailCodeFormProps) {
   const [codeType, setCodeType] = useState<CodeType | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [codeFocused, setCodeFocused] = useState(false)
 
   async function sendCode() {
     setBusy(true)
@@ -40,12 +44,11 @@ export function EmailCodeForm({ hint, send, onDone }: EmailCodeFormProps) {
     }
   }
 
-  async function verify(e: React.FormEvent) {
-    e.preventDefault()
-    if (!codeType) return
+  async function verify(token: string) {
+    if (!codeType || busy) return
     setBusy(true)
     setError('')
-    const { error } = await supabase.auth.verifyOtp({ email: email.trim(), token: code, type: codeType })
+    const { error } = await supabase.auth.verifyOtp({ email: email.trim(), token, type: codeType })
     setBusy(false)
     if (error) {
       setError(readable(error))
@@ -56,22 +59,51 @@ export function EmailCodeForm({ hint, send, onDone }: EmailCodeFormProps) {
 
   if (codeType) {
     return (
-      <form className="sign-in-screen__form" onSubmit={verify}>
+      <form
+        className="sign-in-screen__form"
+        onSubmit={(e) => {
+          e.preventDefault()
+          void verify(code)
+        }}
+      >
         <p className="sign-in-screen__hint">
           Enter the code we emailed to <strong>{email.trim()}</strong>.
         </p>
-        <input
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          required
-          placeholder="Code"
-          aria-label="Code from your email"
-          maxLength={10}
-          value={code}
-          onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-          className="sign-in-screen__input sign-in-screen__input--code"
-        />
-        <button type="submit" className="sign-in-screen__submit" disabled={busy || !code}>
+        {/* One real input (so paste and iOS's code autofill work) under a
+            row of boxes, one per digit. */}
+        <div className="code-boxes">
+          <input
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            autoFocus
+            required
+            aria-label={`${CODE_LENGTH}-digit code from your email`}
+            maxLength={CODE_LENGTH}
+            value={code}
+            disabled={busy}
+            onFocus={() => setCodeFocused(true)}
+            onBlur={() => setCodeFocused(false)}
+            onChange={(e) => {
+              const digits = e.target.value.replace(/\D/g, '').slice(0, CODE_LENGTH)
+              setCode(digits)
+              if (digits.length === CODE_LENGTH) void verify(digits)
+            }}
+            className="code-boxes__input"
+          />
+          {Array.from({ length: CODE_LENGTH }, (_, i) => {
+            const active = codeFocused && i === Math.min(code.length, CODE_LENGTH - 1)
+            return (
+              <span
+                key={i}
+                aria-hidden="true"
+                className={`code-boxes__box${code[i] ? ' code-boxes__box--filled' : ''}${active ? ' code-boxes__box--active' : ''}`}
+              >
+                {code[i] ?? ''}
+              </span>
+            )
+          })}
+        </div>
+        <button type="submit" className="sign-in-screen__submit" disabled={busy || code.length < CODE_LENGTH}>
           {busy ? 'Checking…' : 'Continue'}
         </button>
         {error && <p className="sign-in-screen__error">{error}</p>}

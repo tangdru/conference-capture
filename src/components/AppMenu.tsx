@@ -9,6 +9,7 @@ interface AppMenuProps {
   instant?: boolean
   onClose: () => void
   onPresentationOptions: () => void
+  onTutorial: () => void
   onAddEmail: () => void
   onSignOut: () => void
 }
@@ -17,7 +18,7 @@ const FEEDBACK_ADDRESS = 'tangdru@gmail.com'
 
 // The app's one menu. Items not built yet show "Coming soon" so the list is
 // already in its final order.
-export function AppMenu({ email, instant = false, onClose, onPresentationOptions, onAddEmail, onSignOut }: AppMenuProps) {
+export function AppMenu({ email, instant = false, onClose, onPresentationOptions, onTutorial, onAddEmail, onSignOut }: AppMenuProps) {
   const [closing, setClosing] = useState(false)
 
   // Play the opening in reverse, then close.
@@ -66,10 +67,10 @@ export function AppMenu({ email, instant = false, onClose, onPresentationOptions
             </button>
           </li>
           <li style={{ '--i': 1 } as CSSProperties}>
-            <div className="app-menu__row app-menu__row--soon">
+            <button className="app-menu__row" onClick={onTutorial}>
               <span className="app-menu__label">Tutorial</span>
-              <span className="app-menu__soon">Coming soon</span>
-            </div>
+              <Chevron />
+            </button>
           </li>
           <li style={{ '--i': 2 } as CSSProperties}>
             <div className="app-menu__row app-menu__row--soon">

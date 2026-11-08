@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
@@ -15,6 +15,7 @@ import { DeckViewer } from './components/DeckViewer'
 import { AskSheet, type AskTurn } from './components/AskSheet'
 import { AppMenu } from './components/AppMenu'
 import { PresentationOptionsSheet } from './components/PresentationOptionsSheet'
+import { shouldAutoStartHomeTour, startHomeTour } from './tour'
 import { onPhotoUploaded, pendingPhotos, syncPhotoUploadAuth } from './photoUploads'
 import { startOutbox } from './itemOutbox'
 
@@ -276,6 +277,14 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     }
   }
 
+  // A brand-new account with nothing yet gets the home tour once.
+  const homeTourChecked = useRef(false)
+  useEffect(() => {
+    if (sessions === null || homeTourChecked.current || route.screen !== 'home') return
+    homeTourChecked.current = true
+    if (shouldAutoStartHomeTour(sessions.length)) window.setTimeout(startHomeTour, 700)
+  }, [sessions, route.screen])
+
   if (sessions === null) {
     return loadError ? (
       <div className="load-error">Couldn't load your sessions: {loadError}</div>
@@ -328,6 +337,10 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         instant={menuReturning}
         onClose={() => setMenu(null)}
         onPresentationOptions={() => setMenu('presentation')}
+        onTutorial={() => {
+          setMenu(null)
+          window.setTimeout(startHomeTour, 300)
+        }}
         onAddEmail={() => setAddingEmail(true)}
         onSignOut={() => {
           setMenu(null)

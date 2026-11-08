@@ -14,6 +14,16 @@ changes.
 
 ---
 
+## Build 39 — internal
+
+New in build 39: smoother typing and search
+
+- While you type a note, the bottom row (record, camera, star, Ask) hides so
+  the keyboard has room. It comes back when the keyboard closes.
+- Ask is now just the speech-bubble icon.
+- Tapping search grows the search bar first, then the keyboard slides up and
+  lifts it. Tell us if the timing feels too slow or too fast.
+
 ## Build 38 — internal
 
 New in build 38: a simpler session screen

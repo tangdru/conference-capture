@@ -41,11 +41,11 @@
 
 .home-header__logo {
   display: block;
-  width: 40px;
-  height: 41px;
+  width: 32px;
+  height: 33px;
   /* The drawing has room around the rings for their line width; pull it
      back so the rings line up with the page margin. */
-  margin-left: -2px;
+  margin-left: -1.5px;
 }
 
 .home-header__menu {

@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient'
 export type CodeType = 'email' | 'email_change'
 
 /** Digits in the emailed code (Supabase Auth's OTP length). */
-const CODE_LENGTH = 8
+const CODE_LENGTH = 6
 
 interface EmailCodeFormProps {
   hint: string

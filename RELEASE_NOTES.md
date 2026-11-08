@@ -14,6 +14,13 @@ changes.
 
 ---
 
+## Build 42 — internal
+
+New in build 42: search opens in one motion
+
+- Tapping search now brings up the keyboard right away, so the search bar
+  grows and slides up with the keyboard at the same time, just like closing.
+
 ## Build 41 — internal
 
 New in build 41: search outline

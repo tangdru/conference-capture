@@ -15,6 +15,7 @@ import { DeckViewer } from './components/DeckViewer'
 import { AskSheet, type AskTurn } from './components/AskSheet'
 import { AppMenu } from './components/AppMenu'
 import { PresentationOptionsSheet } from './components/PresentationOptionsSheet'
+import { DeleteAccountSheet } from './components/DeleteAccountSheet'
 import { shouldAutoStartHomeTour, startHomeTour } from './tour'
 import { onPhotoUploaded, pendingPhotos, syncPhotoUploadAuth } from './photoUploads'
 import { startOutbox } from './itemOutbox'
@@ -28,7 +29,7 @@ export default function App() {
 function AuthedApp({ authSession }: { authSession: AuthSession }) {
   const userId = authSession.user.id
   const [addingEmail, setAddingEmail] = useState(false)
-  const [menu, setMenu] = useState<'menu' | 'presentation' | null>(null)
+  const [menu, setMenu] = useState<'menu' | 'presentation' | 'delete-account' | null>(null)
   // Coming back to the menu from a screen it opened: no opening animation.
   const [menuReturning, setMenuReturning] = useState(false)
   const [sessions, setSessions] = useState<Session[] | null>(null)
@@ -337,6 +338,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         instant={menuReturning}
         onClose={() => setMenu(null)}
         onPresentationOptions={() => setMenu('presentation')}
+        onDeleteAccount={() => setMenu('delete-account')}
         onTutorial={() => {
           setMenu(null)
           window.setTimeout(startHomeTour, 300)
@@ -345,6 +347,20 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         onSignOut={() => {
           setMenu(null)
           signOut()
+        }}
+      />
+    )}
+    {menu === 'delete-account' && (
+      <DeleteAccountSheet
+        email={authSession.user.is_anonymous ? null : authSession.user.email ?? null}
+        sessionCount={sessions.length}
+        onBack={() => {
+          setMenuReturning(true)
+          setMenu('menu')
+        }}
+        onDelete={async () => {
+          await db.deleteAccount(sessions.map((s) => s.id))
+          setMenu(null)
         }}
       />
     )}

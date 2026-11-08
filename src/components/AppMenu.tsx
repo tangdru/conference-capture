@@ -9,16 +9,20 @@ interface AppMenuProps {
   instant?: boolean
   onClose: () => void
   onPresentationOptions: () => void
+  onDeleteAccount: () => void
   onTutorial: () => void
   onAddEmail: () => void
   onSignOut: () => void
 }
 
 const FEEDBACK_ADDRESS = 'tangdru@gmail.com'
+// Hosted with the web version (public/privacy.html); the App Store listing
+// links here too.
+const PRIVACY_URL = 'https://tangdru.github.io/conference-capture/privacy.html'
 
 // The app's one menu. Items not built yet show "Coming soon" so the list is
 // already in its final order.
-export function AppMenu({ email, instant = false, onClose, onPresentationOptions, onTutorial, onAddEmail, onSignOut }: AppMenuProps) {
+export function AppMenu({ email, instant = false, onClose, onPresentationOptions, onDeleteAccount, onTutorial, onAddEmail, onSignOut }: AppMenuProps) {
   const [closing, setClosing] = useState(false)
 
   // Play the opening in reverse, then close.
@@ -98,16 +102,16 @@ export function AppMenu({ email, instant = false, onClose, onPresentationOptions
             </a>
           </li>
           <li style={{ '--i': 5 } as CSSProperties}>
-            <div className="app-menu__row app-menu__row--soon">
+            <a className="app-menu__row" href={PRIVACY_URL} target="_blank" rel="noopener">
               <span className="app-menu__label">Privacy policy</span>
-              <span className="app-menu__soon">Coming soon</span>
-            </div>
+              <Chevron />
+            </a>
           </li>
           <li style={{ '--i': 6 } as CSSProperties}>
-            <div className="app-menu__row app-menu__row--soon">
+            <button className="app-menu__row" onClick={onDeleteAccount}>
               <span className="app-menu__label">Delete account</span>
-              <span className="app-menu__soon">Coming soon</span>
-            </div>
+              <Chevron />
+            </button>
           </li>
         </ul>
 

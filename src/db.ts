@@ -259,6 +259,28 @@ export async function updateSession(
   if (error) throw error
 }
 
+/** Permanently deletes the signed-in account and everything in it, on the
+ * server and on this phone, then signs out. */
+export async function deleteAccount(sessionIds: string[]): Promise<void> {
+  // Stop anything still uploading first, so nothing lands after the delete.
+  for (const id of sessionIds) {
+    await cancelPhotoUploads({ sessionId: id })
+    dropQueuedSession(id)
+  }
+  const { error } = await supabase.functions.invoke('delete-account', { body: {} })
+  if (error) throw error
+  for (const id of sessionIds) await removeSessionClips(id)
+  // Remembered sort order, tours and the like belong to the old account.
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith('cc-')) localStorage.removeItem(key)
+    }
+  } catch {
+    // Storage off: nothing to clear.
+  }
+  await supabase.auth.signOut({ scope: 'local' })
+}
+
 export async function deleteSession(session: Session): Promise<void> {
   await cancelPhotoUploads({ sessionId: session.id })
   dropQueuedSession(session.id)

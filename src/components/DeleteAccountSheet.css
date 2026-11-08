@@ -1,0 +1,73 @@
+.delete-account {
+  display: flex;
+  flex-direction: column;
+  padding-top: 20px;
+}
+
+.delete-account__lead,
+.delete-account__hint,
+.delete-account__warning {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--text-primary);
+}
+
+.delete-account__list {
+  margin: 12px 0 20px;
+  padding-left: 20px;
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.delete-account__list li + li {
+  margin-top: 6px;
+}
+
+.delete-account__warning {
+  font-weight: 600;
+  color: var(--semantic-error);
+}
+
+.delete-account__hint {
+  margin-top: 8px;
+  color: var(--text-secondary);
+}
+
+.delete-account__error {
+  margin: 20px 0 0;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--semantic-error);
+}
+
+.delete-account__button,
+.delete-account__cancel {
+  min-height: 48px;
+  border-radius: var(--radius-full);
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.delete-account__button {
+  margin-top: 32px;
+  border: 1px solid var(--semantic-error);
+  background: none;
+  color: var(--semantic-error);
+  font-weight: 600;
+}
+
+.delete-account__cancel {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-secondary);
+}
+
+.delete-account__button:disabled,
+.delete-account__cancel:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

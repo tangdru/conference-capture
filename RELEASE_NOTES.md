@@ -14,6 +14,24 @@ changes.
 
 ---
 
+## Build 43 — internal
+
+New in build 43: menu and presentation options
+
+- A menu button (☰) replaces Sign out at the top of the home screen.
+- Presentation options: choose what your presentations include and how they
+  look. Turn the TL;DR, quotes, action items, references, chapter bar,
+  speaker bio and chapter times on or off; pick still or scrollytelling,
+  interactive charts or photos only, theme and accent color, full or short,
+  which photos, the voice and the language. Saved to your account, and used
+  for presentations you build from now on.
+- Also in the menu: your account email (or Add email), Send feedback, Sign
+  out, and the build number. Tutorial, Claude API key, Privacy policy and
+  Delete account are coming soon.
+- New presentations of untitled sessions now get a generated title again.
+
+Please try a few options and rebuild a presentation to see the difference.
+
 ## Build 42 — internal
 
 New in build 42: search opens in one motion

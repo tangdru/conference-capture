@@ -48,3 +48,11 @@ export function formatShortElapsed(ms: number): string {
   const pad = (n: number) => n.toString().padStart(2, '0')
   return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`
 }
+
+/** A session's recorded length for a card: "42m", "1h 05m", or "<1m". */
+export function formatDuration(ms: number): string {
+  const minutes = Math.round(ms / 60_000)
+  if (minutes < 1) return '<1m'
+  const hours = Math.floor(minutes / 60)
+  return hours > 0 ? `${hours}h ${(minutes % 60).toString().padStart(2, '0')}m` : `${minutes}m`
+}

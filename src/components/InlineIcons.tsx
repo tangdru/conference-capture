@@ -19,6 +19,15 @@ export function NoteIcon() {
   )
 }
 
+export function ClockIcon() {
+  return (
+    <svg className="inline-icon" viewBox="1.3 1.8 14.9 14.9" fill="none" aria-hidden="true">
+      <circle cx="8.75" cy="9.25" r="6.6" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M8.75 5.6v3.9l2.6 1.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 export function PhotoIcon() {
   return (
     <svg className="inline-icon" viewBox="3.25 4.25 17.5 15.5" fill="none" aria-hidden="true">

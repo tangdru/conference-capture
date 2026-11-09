@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
 import type { Session } from '../types'
-import { formatElapsed, formatSessionSubtitle } from '../format'
+import { formatDuration, formatElapsed, formatSessionSubtitle } from '../format'
 import { isSessionActive } from '../sessionActivity'
-import { ErrorIcon, NoteIcon, PhotoIcon, PresentationIcon, SparkleIcon } from './InlineIcons'
+import { ClockIcon, ErrorIcon, NoteIcon, PhotoIcon, PresentationIcon, SparkleIcon } from './InlineIcons'
 import { isReadyToGenerate } from '../deck'
 import './SessionCard.css'
 
@@ -45,7 +45,8 @@ export function SessionCard({ session, now, onTap, onViewDeck, onGenerateDeck }:
 
 /** The status line, in one order on every card -- left to right, whichever
  * apply: the recording time (live sessions), the presentation's action icon,
- * note/photo counts, and the start date and time aligned right (past
+ * note/photo counts, how long it was recorded (past sessions), and the start
+ * date and time aligned right (past
  * sessions; wraps under the rest on a narrow screen). */
 function StatusLine({
   session,
@@ -62,7 +63,8 @@ function StatusLine({
 }) {
   const notes = session.items.filter((i) => i.type === 'note').length
   const photos = session.items.filter((i) => i.type === 'photo').length
-  const elapsed = formatElapsed(elapsedFor(session, now))
+  const recordedMs = elapsedFor(session, now)
+  const elapsed = formatElapsed(recordedMs)
   const recording = session.status === 'recording'
 
   return (
@@ -84,6 +86,12 @@ function StatusLine({
         <span className="session-card__stat" aria-label={`${photos} photos`}>
           <PhotoIcon /> {photos}
         </span>
+        {/* How long it was recorded; a live card already shows it in full. */}
+        {!live && recordedMs > 0 && (
+          <span className="session-card__stat" aria-label={`${formatDuration(recordedMs)} recorded`}>
+            <ClockIcon /> {formatDuration(recordedMs)}
+          </span>
+        )}
       </span>
       {!live && <span className="session-card__subtitle">{formatSessionSubtitle(session.startedAt)}</span>}
     </div>

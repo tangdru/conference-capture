@@ -174,6 +174,24 @@ function itemFromRow(row: ItemRow): TimelineItemData | null {
   }
 }
 
+// Supabase returns at most this many rows per request, without saying it
+// stopped short; a busy conference day passes it.
+const PAGE_ROWS = 1000
+
+/** Every row of a query, a page at a time. `page` builds the query for rows
+ * from..to (inclusive), ordered so pages don't overlap. */
+async function allPages<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+): Promise<{ data: T[]; error: unknown }> {
+  const rows: T[] = []
+  for (let from = 0; ; from += PAGE_ROWS) {
+    const { data, error } = await page(from, from + PAGE_ROWS - 1)
+    if (error) return { data: rows, error }
+    rows.push(...(data ?? []))
+    if (!data || data.length < PAGE_ROWS) return { data: rows, error: null }
+  }
+}
+
 export async function fetchSessions(userId: string): Promise<Session[]> {
   const [{ data: sessionRows, error: sessionsError }, { data: itemRows, error: itemsError }] = await Promise.all([
     supabase
@@ -181,12 +199,14 @@ export async function fetchSessions(userId: string): Promise<Session[]> {
       .select(SESSION_COLUMNS)
       .eq('owner_id', userId)
       .order('started_at', { ascending: false }),
-    supabase
+    allPages<ItemRow>((from, to) => supabase
       .from('cc_timeline_items')
       .select(ITEM_COLUMNS)
       .eq('owner_id', userId)
       .order('position', { ascending: true, nullsFirst: false })
-      .order('item_timestamp', { ascending: true }),
+      .order('item_timestamp', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to)),
   ])
 
   if (sessionsError) throw sessionsError
@@ -580,12 +600,14 @@ export async function enrichSession(sessionId: string): Promise<number> {
 /** Re-fetches a session's items -- used after enrich-session inserts new
  * rows server-side, so the local timeline picks them up without a full reload. */
 export async function fetchSessionItems(sessionId: string): Promise<TimelineItemData[]> {
-  const { data, error } = await supabase
+  const { data, error } = await allPages<ItemRow>((from, to) => supabase
     .from('cc_timeline_items')
     .select(ITEM_COLUMNS)
     .eq('session_id', sessionId)
     .order('position', { ascending: true, nullsFirst: false })
     .order('item_timestamp', { ascending: true })
+    .order('id', { ascending: true })
+    .range(from, to))
   if (error) throw error
 
   const items: TimelineItemData[] = []

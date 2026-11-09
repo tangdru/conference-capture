@@ -17,6 +17,9 @@ const MAX_HISTORY = 12
 // (~150k tokens). Past this, the sessions that look most relevant go in
 // whole and the rest only by title and summary.
 const ALL_SESSIONS_BUDGET_CHARS = 600_000
+// Supabase returns at most this many rows per request, without saying it
+// stopped short; one busy conference day passes it.
+const PAGE_ROWS = 1000
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -105,14 +108,15 @@ async function answerInSession(
     .single()
   if (sessionError) throw sessionError
 
-  const { data: rows, error: itemsError } = await supabase
+  const rows = await allPages((from, to) => supabase
     .from('cc_timeline_items')
     .select('session_id, type, subtype, payload, text, caption, item_timestamp, starred')
     .eq('session_id', sessionId)
     .order('item_timestamp', { ascending: true })
-  if (itemsError) throw itemsError
+    .order('id', { ascending: true })
+    .range(from, to))
 
-  const material = describeSession(session.started_at, (rows ?? []) as ItemRow[])
+  const material = describeSession(session.started_at, rows)
   if (!material) {
     return 'Nothing has been captured in this session yet, so there’s nothing to answer from.'
   }
@@ -142,14 +146,15 @@ async function answerAcrossSessions(
     .order('started_at', { ascending: true })
   if (sessionsError) throw sessionsError
 
-  const { data: itemRows, error: itemsError } = await supabase
+  const itemRows = await allPages((from, to) => supabase
     .from('cc_timeline_items')
     .select('session_id, type, subtype, payload, text, caption, item_timestamp, starred')
     .order('item_timestamp', { ascending: true })
-  if (itemsError) throw itemsError
+    .order('id', { ascending: true })
+    .range(from, to))
 
   const itemsBySession = new Map<string, ItemRow[]>()
-  for (const row of (itemRows ?? []) as ItemRow[]) {
+  for (const row of itemRows) {
     itemsBySession.set(row.session_id, [...(itemsBySession.get(row.session_id) ?? []), row])
   }
 
@@ -200,6 +205,19 @@ Captured talks:
 ${blocks.join('\n\n')}`
 
   return { answer: await callClaude(system, history, question), sessions: labels }
+}
+
+/** Every row of a query, a page at a time; `page` asks for rows from..to. */
+async function allPages(
+  page: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: unknown }>,
+): Promise<ItemRow[]> {
+  const rows: ItemRow[] = []
+  for (let from = 0; ; from += PAGE_ROWS) {
+    const { data, error } = await page(from, from + PAGE_ROWS - 1)
+    if (error) throw error
+    rows.push(...((data ?? []) as ItemRow[]))
+    if (!data || data.length < PAGE_ROWS) return rows
+  }
 }
 
 async function callClaude(system: string, history: Turn[], question: string): Promise<string> {

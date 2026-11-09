@@ -14,6 +14,14 @@ changes.
 
 ---
 
+## Build 49 — internal
+
+New in build 49: Remember this from the camera
+
+- While a session is recording, the camera has a star to the left of the
+  shutter. Tap it to Remember this without leaving the camera: same as the
+  star on the session screen (marks the moment and saves a short clip).
+
 ## Build 48 — internal, Friends
 
 Friends got these notes (builds 45, 46 and 47 combined):

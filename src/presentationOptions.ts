@@ -25,6 +25,9 @@ export interface PresentationOptions {
   accent: string
   length: Length
   photos: Photos
+  /** Leave out photos of a slide that only repeat another photo of it (a
+   * slide that builds up step by step, photographed at each step). */
+  skipRepeatSlides: boolean
   voice: Voice
   /** A language name, or 'auto' for the talk's own language. */
   language: string
@@ -52,6 +55,7 @@ export const DEFAULT_PRESENTATION_OPTIONS: PresentationOptions = {
   accent: 'auto',
   length: 'full',
   photos: 'all',
+  skipRepeatSlides: true,
   voice: 'neutral',
   language: 'auto',
   saveSummary: true,

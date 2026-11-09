@@ -28,6 +28,13 @@ const MAX_PHOTOS_SHOWN = 20
 // How long the links in a new page last. The phone swaps them for embedded
 // photos the first time the page is opened or shared.
 const PHOTO_LINK_SECONDS = 365 * 24 * 60 * 60
+// Photos taken this close together whose slide text mostly matches may be
+// one slide building up step by step (see groupSlideRuns).
+const SAME_SLIDE_GAP_MS = 3 * 60 * 1000
+const SAME_SLIDE_OVERLAP = 0.5
+// Choosing between them runs beside the first round's other work; past this,
+// every photo goes in rather than hold up the presentation.
+const PICK_PHOTOS_MS = 75_000
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void }
 
@@ -47,6 +54,7 @@ interface PresentationOptions {
   accent: string
   length: 'full' | 'short'
   photos: 'all' | 'starred' | 'none'
+  skipRepeatSlides: boolean
   voice: 'neutral' | 'first_person' | 'brief'
   language: string
   saveSummary: boolean
@@ -70,6 +78,7 @@ const DEFAULT_OPTIONS: PresentationOptions = {
   accent: 'auto',
   length: 'full',
   photos: 'all',
+  skipRepeatSlides: true,
   voice: 'neutral',
   language: 'auto',
   saveSummary: true,
@@ -96,6 +105,7 @@ Deno.serve(async (req) => {
   let part: number
   let photoLinks: Record<string, string>
   let options: PresentationOptions | null
+  let skippedPhotos: string[] | null
   try {
     authHeader = req.headers.get('Authorization') ?? ''
     if (!authHeader) throw new Error('Missing Authorization header')
@@ -114,6 +124,9 @@ Deno.serve(async (req) => {
     // Later rounds carry the options the first round read, so a change made
     // mid-build can't split one page between two sets of options.
     options = body.options ?? null
+    // And the photos it left out as repeats of the same slide, so every round
+    // numbers the photos the same way.
+    skippedPhotos = Array.isArray(body.skippedPhotos) ? body.skippedPhotos : null
   } catch (err) {
     return jsonResponse({ error: err instanceof Error ? err.message : 'Bad request' }, 400)
   }
@@ -140,7 +153,7 @@ Deno.serve(async (req) => {
   // The writing runs after the response, in rounds: the app polls the
   // session row for the outcome rather than waiting on this request.
   EdgeRuntime.waitUntil(
-    generateDeckPart(supabase, authHeader, sessionId, part, photoLinks, options, invokedAt).catch(recordError),
+    generateDeckPart(supabase, authHeader, sessionId, part, photoLinks, options, skippedPhotos, invokedAt).catch(recordError),
   )
   return jsonResponse({ started: true }, 202)
 })
@@ -175,6 +188,7 @@ async function generateDeckPart(
   part: number,
   photoLinks: Record<string, string>,
   givenOptions: PresentationOptions | null,
+  givenSkipped: string[] | null,
   invokedAt: number,
 ): Promise<void> {
   // The app takes silence as a crash, so each round says it's still going.
@@ -207,10 +221,16 @@ async function generateDeckPart(
   // side with it: the entries saved into the session, and moving notes and
   // photos the user hasn't placed to the moment they're about.
   let title: string = session.title
+  let skipped: string[] = givenSkipped ?? []
   if (part === 0) {
     const live = allItemRows.filter((r) => !r.excluded)
     const needsName = !title.trim() || title.trim() === DEFAULT_TITLE
-    const [named, changed] = await Promise.all([
+    // A slide that builds up step by step, photographed at each step, goes in
+    // once: Claude keeps the photos that show something the others don't.
+    const candidates = choosePhotos(live.filter((r) => r.type === 'photo' && r.photo_path), options)
+    const picking = options.skipRepeatSlides && candidates.length > 1
+    if (picking) await linkPhotos(supabase, candidates, photoLinks)
+    const [named, changed, picked] = await Promise.all([
       needsName
         ? nameSession(
           live.filter((r) => r.type === 'note' && r.text),
@@ -227,7 +247,18 @@ async function generateDeckPart(
         console.error('organizeSession failed:', err)
         return false
       }),
+      picking
+        ? withTimeout(
+          pickSlidePhotos(candidates.map((r) => ({ ...r, url: photoLinks[r.photo_path] })), session.started_at),
+          PICK_PHOTOS_MS,
+        ).catch((err) => {
+          // Every photo goes in, as before.
+          console.error('pickSlidePhotos failed:', err)
+          return [] as string[]
+        })
+        : Promise.resolve([] as string[]),
     ])
+    skipped = picked
     if (named) {
       title = named
       await supabase.from('cc_sessions').update({ title }).eq('id', sessionId)
@@ -245,23 +276,10 @@ async function generateDeckPart(
   // Links, not the photos themselves: a function has too little memory to
   // hold a session's worth of photos. Claude fetches them from the link, and
   // every round reuses the same links so the prompt stays cached.
-  const missing = (options.photos === 'none' ? [] : photoRows)
-    .filter((r) => options.photos !== 'starred' || r.starred)
-    .map((r) => r.photo_path)
-    .filter((path) => !photoLinks[path])
-  if (missing.length > 0) {
-    const { data: signed, error: signError } = await supabase.storage
-      .from(PHOTOS_BUCKET)
-      .createSignedUrls(missing, PHOTO_LINK_SECONDS)
-    if (signError) throw signError
-    for (const link of signed ?? []) {
-      if (link.error || !link.path || !link.signedUrl) throw new Error(link.error ?? "Couldn't link a photo")
-      photoLinks[link.path] = link.signedUrl
-    }
-  }
-  const deckPhotoRows = options.photos === 'none'
-    ? []
-    : options.photos === 'starred' ? photoRows.filter((r) => r.starred) : photoRows
+  const chosenPhotoRows = choosePhotos(photoRows, options)
+  await linkPhotos(supabase, chosenPhotoRows, photoLinks)
+  const skippedSet = new Set(skipped)
+  const deckPhotoRows = chosenPhotoRows.filter((r) => !skippedSet.has(r.id))
   const allPhotos: DeckPhoto[] = deckPhotoRows.map((row, i) => ({
     placeholder: `PHOTO_${i + 1}`,
     url: photoLinks[row.photo_path],
@@ -302,7 +320,7 @@ async function generateDeckPart(
         Authorization: authHeader,
         apikey: Deno.env.get('SUPABASE_ANON_KEY')!,
       },
-      body: JSON.stringify({ sessionId, part: part + 1, photoLinks, options }),
+      body: JSON.stringify({ sessionId, part: part + 1, photoLinks, options, skippedPhotos: skipped }),
     })
     if (!next.ok) throw new Error(`Couldn't continue the presentation (${next.status})`)
     return
@@ -333,6 +351,36 @@ async function generateDeckPart(
   if (part > 0) await supabase.storage.from(DECKS_BUCKET).remove([partialPath])
 }
 
+/** The photos the options put in the presentation: all, starred, or none. */
+function choosePhotos<T extends { starred: boolean | null }>(rows: T[], options: PresentationOptions): T[] {
+  if (options.photos === 'none') return []
+  return options.photos === 'starred' ? rows.filter((r) => r.starred) : rows
+}
+
+/** Adds a link to `photoLinks` for each photo that doesn't have one yet. */
+async function linkPhotos(
+  supabase: ReturnType<typeof createClient>,
+  rows: { photo_path: string }[],
+  photoLinks: Record<string, string>,
+): Promise<void> {
+  const missing = [...new Set(rows.map((r) => r.photo_path).filter((path) => !photoLinks[path]))]
+  if (missing.length === 0) return
+  const { data: signed, error } = await supabase.storage.from(PHOTOS_BUCKET).createSignedUrls(missing, PHOTO_LINK_SECONDS)
+  if (error) throw error
+  for (const link of signed ?? []) {
+    if (link.error || !link.path || !link.signedUrl) throw new Error(link.error ?? "Couldn't link a photo")
+    photoLinks[link.path] = link.signedUrl
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: number | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Gave up after ${ms / 1000}s`)), ms)
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+}
+
 /** The account's Presentation options, with defaults for anything unset. */
 async function loadOptions(supabase: ReturnType<typeof createClient>, ownerId: string): Promise<PresentationOptions> {
   const { data: settings } = await supabase
@@ -352,6 +400,129 @@ interface DeckPhoto {
   starred: boolean
   /** Whether Claude is sent the image, not just its details. */
   shown: boolean
+}
+
+/** Runs of photos taken one after another that may be the same slide: close
+ * in time, and mostly the same slide text (or, with no text to go on, a few
+ * seconds apart). Returns runs of indexes into `photos`, in order. */
+function groupSlideRuns(photos: { text: string | null; item_timestamp: string }[]): number[][] {
+  const words = photos.map((p) =>
+    new Set((p.text ?? '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 3)))
+  // Words on many photos are the screen around the slide (a meeting app's
+  // "Talking: ...", the speaker's name, a footer), not the slide itself. A
+  // slide built up in a few steps repeats its own words a few times, so only
+  // words on at least 6 photos count.
+  const seen = new Map<string, number>()
+  for (const set of words) for (const w of set) seen.set(w, (seen.get(w) ?? 0) + 1)
+  const common = new Set([...seen].filter(([, n]) => n >= 6 && n > photos.length * 0.3).map(([w]) => w))
+  const slideWords = words.map((set) => new Set([...set].filter((w) => !common.has(w))))
+
+  const runs: number[][] = []
+  photos.forEach((p, i) => {
+    const run = runs[runs.length - 1]
+    if (run) {
+      const gap = new Date(p.item_timestamp).getTime() - new Date(photos[i - 1].item_timestamp).getTime()
+      const a = slideWords[i - 1]
+      const b = slideWords[i]
+      const shared = [...a].filter((w) => b.has(w)).length
+      const smaller = Math.min(a.size, b.size)
+      const sameText = smaller >= 3 && shared / smaller >= SAME_SLIDE_OVERLAP
+      const bothBlank = a.size < 3 && b.size < 3 && gap <= 30_000
+      if (gap <= SAME_SLIDE_GAP_MS && (sameText || bothBlank)) {
+        run.push(i)
+        return
+      }
+    }
+    runs.push([i])
+  })
+  return runs
+}
+
+/** Ids of photos to leave out of the presentation because another photo of
+ * the same slide shows everything they do (a later step of a slide that
+ * builds up, or a repeat). Claude looks at each run of likely repeats;
+ * starred photos are always kept, and anything unclear is kept. */
+async function pickSlidePhotos(
+  photos: { id: string; url: string; text: string | null; caption: string | null; item_timestamp: string; starred: boolean | null }[],
+  startedAt: string,
+): Promise<string[]> {
+  const runs = groupSlideRuns(photos).filter((run) => run.length > 1)
+  if (runs.length === 0) return []
+  // Past 20 images the API's size limit is stricter than our photos meet, so
+  // each request holds at most 20; a longer run is looked at in parts.
+  const pieces = runs.flatMap((run) => {
+    const parts: number[][] = []
+    for (let i = 0; i < run.length; i += MAX_PHOTOS_SHOWN) parts.push(run.slice(i, i + MAX_PHOTOS_SHOWN))
+    return parts.filter((part) => part.length > 1)
+  })
+  const batches: number[][][] = []
+  for (const piece of pieces) {
+    const batch = batches[batches.length - 1]
+    if (batch && batch.flat().length + piece.length <= MAX_PHOTOS_SHOWN) batch.push(piece)
+    else batches.push([piece])
+  }
+
+  const dropped: string[] = []
+  // A few requests at a time.
+  for (let i = 0; i < batches.length; i += 6) {
+    const results = await Promise.all(batches.slice(i, i + 6).map((batch) => pickInBatch(batch)))
+    dropped.push(...results.flat())
+  }
+  const starred = new Set(photos.filter((p) => p.starred).map((p) => p.id))
+  const skipped = dropped.filter((id) => !starred.has(id))
+  console.log(`pickSlidePhotos: ${runs.length} runs, leaving out ${skipped.length} of ${photos.length} photos`)
+  return skipped
+
+  async function pickInBatch(batch: number[][]): Promise<string[]> {
+    const labels = new Map<string, string>()
+    const content: Record<string, unknown>[] = [{
+      type: 'text',
+      text: `An attendee photographed slides during a conference talk. Below are groups of photos taken one after another that may show the same slide. A slide that builds up (bullets or parts appearing one step at a time) is often photographed at every step, and a slide is sometimes photographed twice.
+
+For each group, decide which photos the attendee's write-up doesn't need: a photo is redundant only when another photo in the SAME group shows the same slide with everything it shows (a later, fuller step of the build, or a clearer shot of the same thing). Keep any photo that shows something no other photo in its group shows: a different slide, a step whose content is replaced rather than added to, or a different part of a page. When unsure, keep it. Ignore the video-call window, cursor and room around the slide.`,
+    }]
+    batch.forEach((piece, g) => {
+      content.push({ type: 'text', text: `Group ${g + 1}:` })
+      piece.forEach((index, n) => {
+        const photo = photos[index]
+        const label = `G${g + 1}P${n + 1}`
+        labels.set(label, photo.id)
+        content.push({ type: 'text', text: `${label} (taken at ${formatElapsed(startedAt, photo.item_timestamp)}):` })
+        content.push({ type: 'image', source: { type: 'url', url: photo.url } })
+      })
+    })
+    content.push({
+      type: 'text',
+      text: 'Return ONLY a JSON object {"redundant": [labels]}, e.g. {"redundant": ["G1P1", "G1P2"]}, or {"redundant": []}. No markdown fences, no commentary.',
+    })
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY!,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: NAMING_MODEL,
+        thinking: { type: 'between_tools' },
+        max_tokens: 2000,
+        messages: [{ role: 'user', content }],
+      }),
+    })
+    if (!response.ok) throw new Error(`Claude API ${response.status}: ${(await response.text()).slice(0, 300)}`)
+    const data: { content?: { type: string; text?: string }[] } = await response.json()
+    const raw = data.content?.find((b) => b.type === 'text')?.text?.trim() ?? ''
+    const result = JSON.parse(raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')) as { redundant?: unknown }
+    const redundant = Array.isArray(result.redundant) ? result.redundant : []
+    const ids = redundant.map((label) => labels.get(String(label))).filter((id): id is string => !!id)
+    // Never every photo of a group: one always stays.
+    return batch.flatMap((piece, g) => {
+      const groupIds = piece.map((index) => photos[index].id)
+      const out = ids.filter((id) => groupIds.includes(id))
+      return out.length >= groupIds.length ? out.slice(0, -1) : out
+    })
+  }
 }
 
 /** Picks which photos Claude sees: starred ones first, the rest spread

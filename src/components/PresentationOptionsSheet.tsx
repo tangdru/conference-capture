@@ -116,6 +116,17 @@ export function PresentationOptionsSheet({ userId, onBack }: PresentationOptions
                 choices={[['all', 'All'], ['starred', 'Starred'], ['none', 'None']]}
                 onChange={(v) => set('photos', v)}
               />
+              {options.photos !== 'none' && (
+                <ToggleRows
+                  rows={[{
+                    key: 'skipRepeatSlides',
+                    label: 'Skip repeated slides',
+                    hint: 'When a slide builds up, keeps the most complete photo',
+                  }]}
+                  options={options}
+                  onChange={set}
+                />
+              )}
             </ul>
 
             <h2 className="app-menu__section-title">Layout and style</h2>

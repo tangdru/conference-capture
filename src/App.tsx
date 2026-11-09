@@ -6,6 +6,7 @@ import { ActionSheet, ActionSheetButtonStyle } from '@capacitor/action-sheet'
 import type { Session as AuthSession } from '@supabase/supabase-js'
 import type { PhotoItem, Session, TimelineItemData } from './types'
 import * as db from './db'
+import { clearCachedSessions, readCachedSessions, saveCachedSessions } from './sessionCache'
 import { compactDeckPhotos, hasPhotoLinks, hasShortVersion, shortDeckHtml } from './deck'
 import { AuthGate, signOut } from './auth/AuthGate'
 import { AddEmailSheet } from './auth/AddEmailSheet'
@@ -59,12 +60,26 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     [],
   )
 
+  // The copy saved on the phone shows at once; the full load replaces it.
   useEffect(() => {
     let cancelled = false
+    let fresh = false
+    let showingSaved = false
+    void readCachedSessions(userId).then(async (saved) => {
+      if (!saved || cancelled || fresh) return
+      const shown = await withPending(saved)
+      if (cancelled || fresh) return
+      showingSaved = true
+      setSessions(shown)
+    })
     async function load(attempt: number) {
       try {
-        const loaded = await fetchSessionsWithPending()
-        if (!cancelled) setSessions(loaded)
+        const loaded = await db.fetchSessions(userId)
+        const shown = await withPending(loaded)
+        if (cancelled) return
+        fresh = true
+        setSessions(shown)
+        void saveCachedSessions(userId, loaded)
       } catch (err) {
         if (cancelled) return
         const message: string = (err as { message?: string })?.message ?? 'Failed to load sessions'
@@ -75,13 +90,30 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
           window.setTimeout(() => void load(attempt + 1), 1500)
           return
         }
-        setLoadError(message)
+        // With the saved copy showing, say it couldn't refresh rather than
+        // replace the sessions with an error.
+        if (showingSaved) setHomeError(`Showing your sessions as last loaded: ${message}`)
+        else setLoadError(message)
       }
     }
     void load(1)
     return () => {
       cancelled = true
     }
+  }, [userId])
+
+  // Keep the saved copy up to date with changes made since the last load,
+  // whenever the app goes to the background.
+  const sessionsRef = useRef<Session[] | null>(null)
+  sessionsRef.current = sessions
+  useEffect(() => {
+    function onHide() {
+      if (document.visibilityState === 'hidden' && sessionsRef.current) {
+        void saveCachedSessions(userId, sessionsRef.current)
+      }
+    }
+    document.addEventListener('visibilitychange', onHide)
+    return () => document.removeEventListener('visibilitychange', onHide)
   }, [userId])
 
   // Generation runs server-side for minutes, and the request that started it
@@ -115,8 +147,14 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
 
   /** Sessions as stored, plus what's still on the phone waiting to be sent. */
   async function fetchSessionsWithPending(): Promise<Session[]> {
-    const [loaded, photos, items] = await Promise.all([
-      db.fetchSessions(userId),
+    const loaded = await db.fetchSessions(userId)
+    void saveCachedSessions(userId, loaded)
+    return withPending(loaded)
+  }
+
+  /** Sessions plus what's still on the phone waiting to be sent. */
+  async function withPending(loaded: Session[]): Promise<Session[]> {
+    const [photos, items] = await Promise.all([
       pendingPhotos().catch(() => new Map<string, PhotoItem[]>()),
       db.pendingItems(),
     ])
@@ -348,6 +386,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         onAddEmail={() => setAddingEmail(true)}
         onSignOut={() => {
           setMenu(null)
+          void clearCachedSessions(userId)
           signOut()
         }}
       />
@@ -362,6 +401,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         }}
         onDelete={async () => {
           await db.deleteAccount(sessions.map((s) => s.id))
+          await clearCachedSessions(userId)
           setMenu(null)
         }}
       />

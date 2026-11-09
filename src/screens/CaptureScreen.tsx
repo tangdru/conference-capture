@@ -634,6 +634,8 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
         <CameraViewfinder
           onCapture={commitPhoto}
           onClose={() => setCameraOpen(false)}
+          onRemember={session.status === 'recording' ? rememberThis : undefined}
+          remembered={remembered}
         />
       )}
     </div>

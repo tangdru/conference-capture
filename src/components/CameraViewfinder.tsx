@@ -2,11 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { DeviceTilt } from '../native/deviceTilt'
 import { NativeCamera, type FlashMode } from '../native/nativeCamera'
+import { StarIcon } from './InlineIcons'
 import './CameraViewfinder.css'
 
 interface CameraViewfinderProps {
   onCapture: (blob: Blob) => void
   onClose: () => void
+  /** "Remember this", for while the talk is being recorded. */
+  onRemember?: () => void
+  /** Briefly true after a Remember this, as its confirmation. */
+  remembered?: boolean
 }
 
 const MAX_THUMBS = 3
@@ -16,7 +21,7 @@ const MAX_THUMBS = 3
 // a getUserMedia <video> fills the stage instead.
 const NATIVE = Capacitor.isNativePlatform()
 
-export function CameraViewfinder({ onCapture, onClose }: CameraViewfinderProps) {
+export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = false }: CameraViewfinderProps) {
   const stageRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -372,6 +377,15 @@ export function CameraViewfinder({ onCapture, onClose }: CameraViewfinderProps) 
         <div className="viewfinder__controls">
           <button className="viewfinder__shutter" onClick={capture} aria-label="Capture photo" />
         </div>
+        {onRemember && (
+          <button
+            className={`viewfinder__remember${remembered ? ' viewfinder__remember--done' : ''}`}
+            onClick={onRemember}
+            aria-label={remembered ? 'Remembered' : 'Remember this moment'}
+          >
+            <StarIcon filled={remembered} />
+          </button>
+        )}
       </div>
 
       <canvas ref={canvasRef} style={{ display: 'none' }} />

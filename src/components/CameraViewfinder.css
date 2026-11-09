@@ -285,7 +285,7 @@ html.native-camera .capture-screen > :not(.viewfinder) {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: calc(env(safe-area-inset-bottom) + 20px);
+  bottom: calc(env(safe-area-inset-bottom) + 10px);
   text-align: center;
   font-size: 12px;
   color: var(--text-muted);
@@ -320,6 +320,38 @@ html.native-camera .capture-screen > :not(.viewfinder) {
 }
 
 .viewfinder__shutter:active {
+  transform: scale(0.94);
+}
+
+/* Remember this, centred under the shutter: the same star and yellow as
+   the one beside the camera button on the session screen. */
+.viewfinder__remember {
+  position: absolute;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 34px);
+  width: 44px;
+  height: 44px;
+  margin-left: -22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.viewfinder__remember .inline-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--semantic-warning);
+  transform: rotate(var(--vf-icon-turn, 0deg));
+  transition: transform var(--duration-slow) var(--easing-base);
+}
+
+.viewfinder__remember:active {
   transform: scale(0.94);
 }
 

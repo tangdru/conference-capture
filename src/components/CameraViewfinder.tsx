@@ -376,16 +376,16 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
         </span>
         <div className="viewfinder__controls">
           <button className="viewfinder__shutter" onClick={capture} aria-label="Capture photo" />
+          {onRemember && (
+            <button
+              className={`viewfinder__remember${remembered ? ' viewfinder__remember--done' : ''}`}
+              onClick={onRemember}
+              aria-label={remembered ? 'Remembered' : 'Remember this moment'}
+            >
+              <StarIcon filled={remembered} />
+            </button>
+          )}
         </div>
-        {onRemember && (
-          <button
-            className={`viewfinder__remember${remembered ? ' viewfinder__remember--done' : ''}`}
-            onClick={onRemember}
-            aria-label={remembered ? 'Remembered' : 'Remember this moment'}
-          >
-            <StarIcon filled={remembered} />
-          </button>
-        )}
       </div>
 
       <canvas ref={canvasRef} style={{ display: 'none' }} />

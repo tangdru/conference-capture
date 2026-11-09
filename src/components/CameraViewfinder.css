@@ -285,7 +285,7 @@ html.native-camera .capture-screen > :not(.viewfinder) {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: calc(env(safe-area-inset-bottom) + 10px);
+  bottom: calc(env(safe-area-inset-bottom) + 20px);
   text-align: center;
   font-size: 12px;
   color: var(--text-muted);
@@ -323,15 +323,14 @@ html.native-camera .capture-screen > :not(.viewfinder) {
   transform: scale(0.94);
 }
 
-/* Remember this, centred under the shutter: the same star and yellow as
-   the one beside the camera button on the session screen. */
+/* Remember this, left of the shutter (where the Camera app keeps its last
+   photo): the same star and yellow as on the session screen. */
 .viewfinder__remember {
-  position: absolute;
-  left: 50%;
-  bottom: calc(env(safe-area-inset-bottom) + 34px);
-  width: 44px;
-  height: 44px;
-  margin-left: -22px;
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: center;
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -344,8 +343,8 @@ html.native-camera .capture-screen > :not(.viewfinder) {
 }
 
 .viewfinder__remember .inline-icon {
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   color: var(--semantic-warning);
   transform: rotate(var(--vf-icon-turn, 0deg));
   transition: transform var(--duration-slow) var(--easing-base);

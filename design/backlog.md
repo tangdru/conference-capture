@@ -19,6 +19,21 @@ on the native app is in `native-app-migration.md`.
   taking a photo. (Requested 2026-11-10.)
 - **Session photo album.** A grid of every photo in the session, opened from
   the session, to browse them all at once. (Requested 2026-11-10.)
+- **Video clips: tap for a photo, hold the shutter for video.** Same camera,
+  same shutter, like the iPhone camera. Claude can't take video directly
+  (only images, text and PDFs), so the phone turns a clip into things it
+  can read:
+  - a few frames from the clip (one whenever the picture changes enough,
+    e.g. each step of a demo), each sent like a photo with its own slide text;
+  - the clip's sound, transcribed on the phone like the ambient transcript
+    (or nothing new, when the ambient transcript is already running).
+  Claude then reads the clip as "these frames, with this being said" --
+  good for demos and animated slides, though motion between the frames is
+  lost. The presentation shows the clip itself (or its best frame with a
+  play button). Costs: clips are large, so they'd need the upload queue,
+  a length cap (say 60 s) and a size limit in storage; frames count toward
+  the 20 images Claude sees per presentation. Shares the upload path with
+  the planned audio clips (`audio-clips-plan` notes). (Requested 2026-11-10.)
 
 ## Native iOS
 

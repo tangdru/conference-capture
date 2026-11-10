@@ -32,7 +32,9 @@ export function hasPhotoLinks(html: string): boolean {
 }
 
 /** The page with its photos embedded and scaled down to at most
- * PHOTO_MAX_SIDE. A photo that can't be fetched keeps its link. */
+ * PHOTO_MAX_SIDE. A photo that can't be fetched right now (no signal) keeps
+ * its link; one that was deleted from the session since the page was built
+ * is taken out, with its caption, rather than left as a broken image. */
 export async function compactDeckPhotos(html: string): Promise<string> {
   const sources = [...new Set(html.match(/data:image\/jpe?g;base64,[A-Za-z0-9+/=]+/g) ?? [])]
   let result = html
@@ -40,22 +42,48 @@ export async function compactDeckPhotos(html: string): Promise<string> {
     const smaller = await shrinkJpeg(src).catch(() => null)
     if (smaller && smaller.length < src.length) result = result.split(src).join(smaller)
   }
+  const gone: string[] = []
   for (const link of new Set(html.match(PHOTO_LINK) ?? [])) {
-    const embedded = await embedPhoto(link).catch(() => null)
-    if (embedded) result = result.split(link).join(embedded)
+    try {
+      result = result.split(link).join(await embedPhoto(link))
+    } catch (err) {
+      if (err instanceof PhotoGone) gone.push(link)
+    }
   }
-  return result
+  return gone.length ? withoutPhotos(result, gone) : result
 }
+
+class PhotoGone extends Error {}
 
 async function embedPhoto(link: string): Promise<string> {
   const response = await fetch(link)
-  if (!response.ok) throw new Error(`Photo fetch failed (${response.status})`)
+  if (!response.ok) {
+    // Storage answers a link to a deleted file with "not found" (as a 400 or
+    // 404); anything else -- an expired link, a server hiccup -- may work later.
+    const body = await response.text().catch(() => '')
+    if (response.status === 404 || /not.?found/i.test(body)) throw new PhotoGone(link)
+    throw new Error(`Photo fetch failed (${response.status})`)
+  }
   const url = URL.createObjectURL(await response.blob())
   try {
     return await shrinkJpeg(url)
   } finally {
     URL.revokeObjectURL(url)
   }
+}
+
+/** The page without the photos at these links: each <img>, and the figure
+ * (with its caption) it sits in, if any. */
+function withoutPhotos(html: string, links: string[]): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const wanted = new Set(links)
+  doc.querySelectorAll('img').forEach((img) => {
+    if (!wanted.has(img.getAttribute('src') ?? '')) return
+    const figure = img.closest('figure')
+    ;(figure ?? img).remove()
+  })
+  const doctype = /^\s*<!doctype[^>]*>/i.exec(html)?.[0] ?? '<!DOCTYPE html>'
+  return `${doctype}\n${doc.documentElement.outerHTML}`
 }
 
 async function shrinkJpeg(src: string): Promise<string> {

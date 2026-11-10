@@ -111,7 +111,7 @@ export function startHomeTour() {
         element: '.session-card',
         popover: {
           title: 'Your sessions',
-          description: 'Tap one to open it. Swipe left on it for more.',
+          description: 'Tap one to open it. Once its presentation is built, the card shows a slide and the speaker, and a tap opens the presentation. Swipe left on it for more.',
           side: 'bottom',
           align: 'start',
         },
@@ -120,7 +120,7 @@ export function startHomeTour() {
         'session-card',
         '.home-screen .swipe-actions',
         'Swipe left on a session',
-        'Build its presentation. Once it’s ready: view it, share it, or rebuild it after you add more. The last button deletes the session.',
+        'Edit opens the session itself. Then build its presentation, or once it’s ready, share it or rebuild it after you add more. Pin keeps a session at the top of the list. The last button deletes it.',
       ),
       {
         element: '.home-searchbox',

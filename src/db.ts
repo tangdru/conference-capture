@@ -5,7 +5,7 @@ import { dropQueuedRow, dropQueuedSession, flushOutbox, patchQueuedRow, queuedRo
 import type { DeckStatus, EnrichmentItemData, HighlightItem, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData, TranscriptItem, VideoItem } from './types'
 
 const ITEM_COLUMNS = 'id, session_id, type, subtype, payload, text, caption, photo_path, video_path, duration_ms, item_timestamp, added_later, excluded, starred, position'
-const SESSION_COLUMNS = 'id, title, status, started_at, accumulated_ms, live_span_started_at, deck_status, deck_path, deck_error, deck_generated_at, deck_heartbeat_at, enrichment_error, last_enriched_at, updated_at'
+const SESSION_COLUMNS = 'id, title, status, started_at, accumulated_ms, live_span_started_at, deck_status, deck_path, deck_error, deck_generated_at, deck_heartbeat_at, enrichment_error, last_enriched_at, updated_at, pinned_at, deck_cover_photo_id, deck_read_minutes'
 
 interface SessionRow {
   id: string
@@ -22,6 +22,9 @@ interface SessionRow {
   enrichment_error: string | null
   last_enriched_at: string | null
   updated_at: string
+  pinned_at: string | null
+  deck_cover_photo_id: string | null
+  deck_read_minutes: number | null
 }
 
 interface ItemRow {
@@ -70,6 +73,9 @@ function sessionFromRow(row: SessionRow, items: TimelineItemData[]): Session {
     enrichmentError: row.enrichment_error,
     lastEnrichedAt: row.last_enriched_at ? new Date(row.last_enriched_at).getTime() : null,
     updatedAt: new Date(row.updated_at).getTime(),
+    pinnedAt: row.pinned_at ? new Date(row.pinned_at).getTime() : null,
+    deckCoverPhotoId: row.deck_cover_photo_id,
+    deckReadMinutes: row.deck_read_minutes,
   }
 }
 
@@ -256,6 +262,16 @@ export async function createSession(userId: string): Promise<Session> {
 
   if (error) throw error
   return sessionFromRow(data, [])
+}
+
+/** Pins or unpins a session. Only the pin changes: not the session's last
+ * activity, so pinning doesn't reorder the list. */
+export async function setSessionPinned(sessionId: string, pinnedAt: number | null): Promise<void> {
+  const { error } = await supabase
+    .from('cc_sessions')
+    .update({ pinned_at: pinnedAt === null ? null : new Date(pinnedAt).toISOString() })
+    .eq('id', sessionId)
+  if (error) throw error
 }
 
 export async function updateSession(
@@ -633,11 +649,19 @@ export async function fetchSessionEnrichmentState(sessionId: string): Promise<{ 
 
 export async function fetchSessionDeckState(
   sessionId: string,
-): Promise<{ title: string; deckStatus: DeckStatus; deckPath: string | null; deckError: string | null; deckGeneratedAt: number | null }> {
+): Promise<{
+  title: string
+  deckStatus: DeckStatus
+  deckPath: string | null
+  deckError: string | null
+  deckGeneratedAt: number | null
+  deckCoverPhotoId: string | null
+  deckReadMinutes: number | null
+}> {
   // The title too: generating names a session that was never named.
   const { data, error } = await supabase
     .from('cc_sessions')
-    .select('title, deck_status, deck_path, deck_error, deck_generated_at, deck_heartbeat_at')
+    .select('title, deck_status, deck_path, deck_error, deck_generated_at, deck_heartbeat_at, deck_cover_photo_id, deck_read_minutes')
     .eq('id', sessionId)
     .single()
   if (error) throw error
@@ -646,6 +670,8 @@ export async function fetchSessionDeckState(
     ...deckProgress(data),
     deckPath: data.deck_path,
     deckGeneratedAt: data.deck_generated_at ? new Date(data.deck_generated_at).getTime() : null,
+    deckCoverPhotoId: data.deck_cover_photo_id,
+    deckReadMinutes: data.deck_read_minutes,
   }
 }
 

@@ -139,4 +139,10 @@ export interface Session {
   lastEnrichedAt: number | null
   /** Last time any field on this session (or its items) was saved. */
   updatedAt: number
+  /** When the user pinned it to the top of the home list, or null. */
+  pinnedAt: number | null
+  /** The slide Sparkle chose as the talk's most telling image, if any. */
+  deckCoverPhotoId: string | null
+  /** About how long the presentation takes to read, if known. */
+  deckReadMinutes: number | null
 }

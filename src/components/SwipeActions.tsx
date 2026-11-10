@@ -2,6 +2,7 @@ import { useEffect, useRef, type CSSProperties, type PointerEvent as ReactPointe
 import './SwipeActions.css'
 
 const ACTION_WIDTH = 72
+const NARROW_ACTION_WIDTH = 60
 const OVERDRAG = 24
 /** Pixels of movement before committing to a horizontal (swipe) vs vertical (scroll) gesture. */
 const DIRECTION_LOCK_THRESHOLD = 8
@@ -42,7 +43,8 @@ interface SwipeActionsProps {
 
 export function SwipeActions({ id, revealedId, onReveal, actions, dragHandle, disabled, children }: SwipeActionsProps) {
   const slotCount = actions.length + (dragHandle ? 1 : 0)
-  const revealWidth = slotCount * ACTION_WIDTH
+  // Five buttons at full width are wider than a phone's card; narrow them.
+  const revealWidth = slotCount * (slotCount > 4 ? NARROW_ACTION_WIDTH : ACTION_WIDTH)
   const isRevealed = !disabled && revealedId === id
   const rootRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -212,6 +214,37 @@ export function DeleteIcon() {
         strokeLinejoin="round"
       />
       <path d="M11 11v7M15 11v7" stroke="var(--recording-dot)" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/** Edit: a pencil, as for notes. */
+export function EditIcon() {
+  return (
+    <svg viewBox="0 0 26 26" width="18" height="18" fill="none" aria-hidden="true">
+      <path
+        d="M17.5 4.5l4 4L9 21l-5 1 1-5L17.5 4.5z"
+        stroke="var(--accent)"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M15 7l4 4" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/** Pin to the top of the list; filled once pinned. */
+export function PinIcon({ filled = false }: { filled?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <path
+        d="M9 3h6l-1 6 3.5 3.5V15H13v6l-1 1-1-1v-6H6.5v-2.5L10 9 9 3z"
+        fill={filled ? 'var(--accent)' : 'none'}
+        stroke="var(--accent)"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }

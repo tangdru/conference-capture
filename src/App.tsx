@@ -127,7 +127,18 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     function refresh() {
       ids.forEach((id) => {
         db.fetchSessionDeckState(id)
-          .then((state) => updateSessionLocally(id, (s) => ({ ...s, ...state })))
+          .then(async (state) => {
+            // A finished build also saved entries into the session (the
+            // speaker's bio among them, which the card shows): read them too.
+            const items = state.deckStatus === 'ready' ? await db.fetchSessionItems(id).catch(() => null) : null
+            updateSessionLocally(id, (s) => {
+              if (!items) return { ...s, ...state }
+              // Photos still uploading from this phone aren't on the server yet.
+              const fetched = new Set(items.map((i) => i.id))
+              const uploading = s.items.filter((i) => i.type === 'photo' && i.uploading && !fetched.has(i.id))
+              return { ...s, ...state, items: [...items, ...uploading].sort((a, b) => a.timestamp - b.timestamp) }
+            })
+          })
           .catch(() => {})
       })
     }
@@ -183,6 +194,20 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     const session = await db.createSession(userId)
     setSessions((prev) => (prev ? [session, ...prev] : [session]))
     setRoute({ screen: 'capture', sessionId: session.id })
+  }
+
+  /** Pins a presentation to the top of the Presentations view, or unpins it;
+   * put back if the save fails. */
+  async function togglePin(id: string) {
+    const before = sessions?.find((s) => s.id === id)?.pinnedAt ?? null
+    const after = before ? null : Date.now()
+    updateSessionLocally(id, (s) => ({ ...s, pinnedAt: after }))
+    try {
+      await db.setSessionPinned(id, after)
+    } catch (err) {
+      updateSessionLocally(id, (s) => ({ ...s, pinnedAt: before }))
+      setHomeError(err instanceof Error ? err.message : 'Couldn’t pin that presentation')
+    }
   }
 
   function openSession(id: string, focusItemId?: string) {
@@ -426,6 +451,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       }}
       onGenerateDeck={generateDeckForSession}
       onViewDeck={viewDeck}
+      onTogglePin={togglePin}
       onShareDeck={shareDeck}
       onDeleteSession={deleteSession}
       onRefresh={refreshSessions}

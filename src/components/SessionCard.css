@@ -135,3 +135,63 @@
 .session-card__meta .session-card__subtitle {
   margin: 0;
 }
+
+/* A session with a finished presentation: its slide, title, speaker. */
+.session-card--presentation {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+}
+
+.session-card__cover {
+  flex-shrink: 0;
+  width: 88px;
+  height: 66px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.session-card__cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.session-card__cover .inline-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.session-card__body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.session-card--presentation .session-card__title {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.session-card__speaker {
+  font-size: 13px;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-card--presentation .session-card__subtitle {
+  margin: 0;
+}

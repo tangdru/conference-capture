@@ -365,34 +365,6 @@
   }
 }
 
-/* Sessions | Presentations */
-.home-view-switch {
-  display: flex;
-  gap: 4px;
-  margin-top: 12px;
-  padding: 3px;
-  border-radius: 999px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-}
-
-.home-view-switch__tab {
-  flex: 1;
-  padding: 7px 0;
-  border: none;
-  border-radius: 999px;
-  background: none;
-  color: var(--text-secondary);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.home-view-switch__tab.is-selected {
-  background: var(--accent-subtle);
-  color: var(--accent);
-}
-
 /* A day's heading: tap to fold the day away. */
 .home-day {
   display: flex;
@@ -438,4 +410,8 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.home-day__header--static {
+  cursor: default;
 }

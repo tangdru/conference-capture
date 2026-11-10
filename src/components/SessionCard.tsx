@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import type { Session } from '../types'
+import type { PhotoItem, Session } from '../types'
+import { usePhotoUrl } from '../hooks/usePhotoUrl'
 import { formatDuration, formatElapsed, formatSessionSubtitle } from '../format'
 import { isSessionActive } from '../sessionActivity'
 import { ClockIcon, ErrorIcon, NoteIcon, PhotoIcon, PresentationIcon, SparkleIcon } from './InlineIcons'
@@ -34,6 +35,11 @@ export function SessionCard({ session, now, onTap, onViewDeck, onGenerateDeck }:
     )
   }
 
+  // A finished presentation: what the talk was at a glance, and a tap opens it.
+  if (!live && session.deckStatus === 'ready' && session.deckPath) {
+    return <PresentationSessionCard session={session} onTap={onTap} />
+  }
+
   return (
     <button className={`session-card${live ? ' session-card--active' : ''}`} onClick={onTap}>
       <p className="session-card__title">{session.title}</p>
@@ -41,6 +47,45 @@ export function SessionCard({ session, now, onTap, onViewDeck, onGenerateDeck }:
       <BuildingStatus session={session} />
     </button>
   )
+}
+
+function PresentationSessionCard({ session, onTap }: { session: Session; onTap: () => void }) {
+  const photo = coverPhoto(session)
+  const bio = session.items.find((i) => i.type === 'enrichment' && i.subtype === 'speaker_bio' && !i.excluded)
+  const speaker = bio && bio.type === 'enrichment' && bio.subtype === 'speaker_bio'
+    ? [bio.name, bio.org].filter(Boolean).join(' · ')
+    : ''
+  const meta = [
+    formatSessionSubtitle(session.startedAt),
+    session.deckReadMinutes ? `${session.deckReadMinutes} min read` : '',
+  ].filter(Boolean).join(' · ')
+  return (
+    <button className="session-card session-card--presentation" onClick={onTap} aria-label={`Open presentation: ${session.title}`}>
+      <span className="session-card__cover" aria-hidden="true">
+        {photo ? <Cover photo={photo} /> : <PresentationIcon />}
+      </span>
+      <span className="session-card__body">
+        <span className="session-card__title">{session.title}</span>
+        {speaker && <span className="session-card__speaker">{speaker}</span>}
+        <span className="session-card__subtitle">{meta}</span>
+      </span>
+    </button>
+  )
+}
+
+function Cover({ photo }: { photo: PhotoItem }) {
+  const url = usePhotoUrl(photo)
+  return url ? <img src={url} alt="" loading="lazy" /> : null
+}
+
+/** The card's image: a photo the user starred, else the slide Sparkle chose
+ * as the talk's most telling, else the first photo after the opening slide. */
+function coverPhoto(session: Session): PhotoItem | undefined {
+  const photos = session.items.filter((i): i is PhotoItem => i.type === 'photo' && !i.excluded)
+  return photos.find((p) => p.starred)
+    ?? photos.find((p) => p.id === session.deckCoverPhotoId)
+    ?? photos[1]
+    ?? photos[0]
 }
 
 /** The status line, in one order on every card -- left to right, whichever

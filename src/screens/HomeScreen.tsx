@@ -5,7 +5,6 @@ import { hasContentSinceDeck } from '../deck'
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
 import { useKeyboardHeight } from '../hooks/useKeyboardHeight'
 import { SessionCard } from '../components/SessionCard'
-import { PresentationCard } from '../components/PresentationCard'
 import { groupByDay } from '../dayGroups'
 import { SearchResults } from '../components/SearchResults'
 import { searchSessions } from '../search'
@@ -14,8 +13,9 @@ import {
   SwipeActions,
   type SwipeAction,
   DeleteIcon,
+  EditIcon,
   GenerateIcon,
-  ViewIcon,
+  PinIcon,
   ShareIcon,
 } from '../components/SwipeActions'
 import { Logo } from '../components/Logo'
@@ -23,18 +23,7 @@ import { TOUR_REVEAL_EVENT, type TourRevealTarget } from '../tour'
 import './HomeScreen.css'
 
 const SORT_KEY = 'cc-session-sort'
-const VIEW_KEY = 'cc-home-view'
 const COLLAPSED_KEY = 'cc-collapsed-days'
-
-type HomeView = 'sessions' | 'presentations'
-
-function savedView(): HomeView {
-  try {
-    return localStorage.getItem(VIEW_KEY) === 'presentations' ? 'presentations' : 'sessions'
-  } catch {
-    return 'sessions'
-  }
-}
 
 function savedCollapsed(): Set<string> {
   try {
@@ -78,6 +67,8 @@ interface HomeScreenProps {
   onOpenMenu: () => void
   onGenerateDeck: (id: string) => void
   onViewDeck: (id: string) => void
+  /** Pin a session to the top of the list, or unpin it. */
+  onTogglePin: (id: string) => void
   onShareDeck: (id: string) => void
   onDeleteSession: (id: string) => void
   /** Reloads the list -- run by pulling it down past the top. */
@@ -95,6 +86,7 @@ export function HomeScreen({
   onOpenMenu,
   onGenerateDeck,
   onViewDeck,
+  onTogglePin,
   onShareDeck,
   onDeleteSession,
   onRefresh,
@@ -107,7 +99,6 @@ export function HomeScreen({
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SessionSort>(savedSort)
   const [searchOpen, setSearchOpen] = useState(false)
-  const [view, setView] = useState<HomeView>(savedView)
   // Days folded away, by date, remembered between opens.
   const [collapsed, setCollapsed] = useState<Set<string>>(savedCollapsed)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -138,15 +129,6 @@ export function HomeScreen({
     searchInputRef.current?.blur()
   }
 
-  function changeView(next: HomeView) {
-    setView(next)
-    try {
-      localStorage.setItem(VIEW_KEY, next)
-    } catch {
-      // Not remembered this time.
-    }
-  }
-
   function toggleDay(key: string) {
     setCollapsed((prev) => {
       const next = new Set(prev)
@@ -165,7 +147,7 @@ export function HomeScreen({
    * presentation sorts stay one list. */
   function renderByDay(list: Session[], render: (session: Session) => React.ReactNode, dated: boolean) {
     if (!dated) return list.map(render)
-    const timeOf = sort === 'activity' && view === 'sessions' ? lastActivityAt : (s: Session) => s.startedAt
+    const timeOf = sort === 'activity' ? lastActivityAt : (s: Session) => s.startedAt
     return groupByDay(list, timeOf, now).map((day) => {
       const open = !collapsed.has(day.key)
       return (
@@ -173,9 +155,7 @@ export function HomeScreen({
           <button className="home-day__header" onClick={() => toggleDay(day.key)} aria-expanded={open}>
             <span className="home-day__label">{day.label}</span>
             <span className="home-day__count">
-              {day.items.length} {view === 'presentations'
-                ? (day.items.length === 1 ? 'presentation' : 'presentations')
-                : (day.items.length === 1 ? 'session' : 'sessions')}
+              {day.items.length} {day.items.length === 1 ? 'session' : 'sessions'}
             </span>
             <svg className={`home-day__chevron${open ? '' : ' home-day__chevron--closed'}`} viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
               <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -199,11 +179,12 @@ export function HomeScreen({
   // Live sessions stay on top, newest first, whatever the sort -- they're what
   // you're in the middle of. The chosen sort orders everything else.
   const live = sortSessions(sessions, 'started').filter((s) => isSessionActive(s, now))
-  const past = sortSessions(sessions, sort).filter((s) => !isSessionActive(s, now))
+  const notLive = sortSessions(sessions, sort).filter((s) => !isSessionActive(s, now))
+  // Pinned sessions have their own group on top, the latest pin first, and
+  // aren't repeated below.
+  const pinned = notLive.filter((s) => s.pinnedAt).sort((a, b) => (b.pinnedAt ?? 0) - (a.pinnedAt ?? 0))
+  const past = notLive.filter((s) => !s.pinnedAt)
   const datedSort = sort === 'started' || sort === 'oldest' || sort === 'activity'
-  // Finished presentations, in the chosen order (by date unless sorted by name).
-  const presentations = sortSessions(sessions, sort === 'deck' || sort === 'activity' ? 'started' : sort)
-    .filter((s) => s.deckStatus === 'ready' && s.deckPath)
 
   // The tutorial opens the first card's swipe panel to show what's in it.
   const firstCardId = useRef<string | null>(null)
@@ -221,8 +202,8 @@ export function HomeScreen({
   function deckActions(session: Session): SwipeAction[] {
     switch (session.deckStatus) {
       case 'ready':
+        // Tapping the card opens the presentation, so no View here.
         return [
-          { icon: <ViewIcon />, label: 'View presentation', onClick: () => onViewDeck(session.id) },
           { icon: <ShareIcon />, label: 'Share presentation', onClick: () => onShareDeck(session.id) },
           // Regenerating only makes sense once there's something new to add.
           ...(hasContentSinceDeck(session)
@@ -246,7 +227,11 @@ export function HomeScreen({
         // Close the row on any action so the card slides back into view and
         // its status line (e.g. "Building presentation…") is visible.
         actions={[
+          { icon: <EditIcon />, label: 'Edit session', onClick: () => onOpenSession(session.id) },
           ...deckActions(session),
+          session.pinnedAt
+            ? { icon: <PinIcon filled />, label: 'Unpin', onClick: () => onTogglePin(session.id) }
+            : { icon: <PinIcon />, label: 'Pin to top', onClick: () => onTogglePin(session.id) },
           { icon: <DeleteIcon />, label: 'Delete', onClick: () => onDeleteSession(session.id) },
         ].map((action) => ({
           ...action,
@@ -259,7 +244,11 @@ export function HomeScreen({
         <SessionCard
           session={session}
           now={now}
-          onTap={() => onOpenSession(session.id)}
+          // A finished presentation opens on tap; Edit (swipe) opens the session.
+          onTap={() =>
+            !isSessionActive(session, now) && session.deckStatus === 'ready' && session.deckPath
+              ? onViewDeck(session.id)
+              : onOpenSession(session.id)}
           onViewDeck={() => onViewDeck(session.id)}
           onGenerateDeck={() => onGenerateDeck(session.id)}
         />
@@ -286,21 +275,6 @@ export function HomeScreen({
             </span>
           </button>
         </div>
-        {sessions.length > 0 && !searching && (
-          <div className="home-view-switch" role="tablist" aria-label="Show">
-            {(['sessions', 'presentations'] as const).map((v) => (
-              <button
-                key={v}
-                role="tab"
-                aria-selected={view === v}
-                className={`home-view-switch__tab${view === v ? ' is-selected' : ''}`}
-                onClick={() => changeView(v)}
-              >
-                {v === 'sessions' ? 'Sessions' : 'Presentations'}
-              </button>
-            ))}
-          </div>
-        )}
       </header>
 
       {error && (
@@ -338,31 +312,27 @@ export function HomeScreen({
           {searching ? (
             <SearchResults results={results} query={query.trim()} onOpen={onOpenSession} onAsk={() => onAskAll(query.trim())} />
           ) : (
-            view === 'presentations' && sessions.length > 0 ? (
-              presentations.length === 0 ? (
+            <>
+              {live.map(renderCard)}
+
+              {sessions.length === 0 && (
                 <p className="home-empty">
-                  No presentations yet. Swipe a session and tap Generate presentation.
+                  No sessions yet. Tap "New Session" to start capturing your first talk.
                 </p>
-              ) : (
-                renderByDay(
-                  presentations,
-                  (session) => <PresentationCard key={session.id} session={session} onOpen={() => onViewDeck(session.id)} />,
-                  sort !== 'name',
-                )
-              )
-            ) : (
-              <>
-                {live.map(renderCard)}
+              )}
 
-                {sessions.length === 0 && (
-                  <p className="home-empty">
-                    No sessions yet. Tap "New Session" to start capturing your first talk.
-                  </p>
-                )}
+              {pinned.length > 0 && (
+                <section className="home-day" aria-label="Pinned">
+                  <div className="home-day__header home-day__header--static">
+                    <span className="home-day__label">Pinned</span>
+                    <span className="home-day__count">{pinned.length}</span>
+                  </div>
+                  <div className="home-day__items">{pinned.map(renderCard)}</div>
+                </section>
+              )}
 
-                {renderByDay(past, renderCard, datedSort)}
-              </>
-            )
+              {renderByDay(past, renderCard, datedSort)}
+            </>
           )}
         </div>
       </div>

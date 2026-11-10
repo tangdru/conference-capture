@@ -203,14 +203,23 @@ async function generateDeckPart(
     .single()
   if (sessionError) throw sessionError
 
+  // A page at a time: Supabase returns at most 1000 rows per request, and a
+  // long workshop passes that.
   const loadItems = async () => {
-    const { data, error } = await supabase
-      .from('cc_timeline_items')
-      .select('id, type, subtype, payload, text, caption, photo_path, item_timestamp, excluded, starred, position, placement_locked')
-      .eq('session_id', sessionId)
-      .order('item_timestamp', { ascending: true })
-    if (error) throw error
-    return data ?? []
+    // deno-lint-ignore no-explicit-any -- rows as the untyped client returns them
+    const rows: any[] = []
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabase
+        .from('cc_timeline_items')
+        .select('id, type, subtype, payload, text, caption, photo_path, item_timestamp, excluded, starred, position, placement_locked')
+        .eq('session_id', sessionId)
+        .order('item_timestamp', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, from + 999)
+      if (error) throw error
+      rows.push(...(data ?? []))
+      if (!data || data.length < 1000) return rows
+    }
   }
   let allItemRows = await loadItems()
 
@@ -281,6 +290,7 @@ async function generateDeckPart(
   const skippedSet = new Set(skipped)
   const deckPhotoRows = chosenPhotoRows.filter((r) => !skippedSet.has(r.id))
   const allPhotos: DeckPhoto[] = deckPhotoRows.map((row, i) => ({
+    id: row.id,
     placeholder: `PHOTO_${i + 1}`,
     url: photoLinks[row.photo_path],
     caption: row.caption ?? '',
@@ -327,7 +337,11 @@ async function generateDeckPart(
   }
 
   if (!written.trim()) throw new Error('Claude returned no presentation content')
-  const finalHtml = substitutePhotos(stripCodeFence(written.trim()), photos)
+  const page = stripCodeFence(written.trim())
+  // The slide Claude named as the talk's most telling image, for the card.
+  const coverPlaceholder = /<meta\s+name=["']cc-cover["']\s+content=["'](PHOTO_\d+)["']/i.exec(page)?.[1]
+  const coverPhotoId = photos.find((p) => p.placeholder === coverPlaceholder)?.id ?? null
+  const finalHtml = substitutePhotos(page, photos)
 
   const deckPath = `${session.owner_id}/${sessionId}/deck.html`
   const { error: uploadError } = await supabase.storage
@@ -345,6 +359,8 @@ async function generateDeckPart(
       deck_path: deckPath,
       deck_generated_at: new Date().toISOString(),
       deck_error: null,
+      deck_cover_photo_id: coverPhotoId,
+      deck_read_minutes: readMinutes(page),
     })
     .eq('id', sessionId)
 
@@ -392,6 +408,8 @@ async function loadOptions(supabase: ReturnType<typeof createClient>, ownerId: s
 }
 
 interface DeckPhoto {
+  /** The photo's timeline item. */
+  id: string
   placeholder: string
   url: string
   caption: string
@@ -517,7 +535,7 @@ For each group, decide which photos the attendee's write-up doesn't need: a phot
     const redundant = Array.isArray(result.redundant) ? result.redundant : []
     const ids = redundant.map((label) => labels.get(String(label))).filter((id): id is string => !!id)
     // Never every photo of a group: one always stays.
-    return batch.flatMap((piece, g) => {
+    return batch.flatMap((piece) => {
       const groupIds = piece.map((index) => photos[index].id)
       const out = ids.filter((id) => groupIds.includes(id))
       return out.length >= groupIds.length ? out.slice(0, -1) : out
@@ -694,6 +712,7 @@ function presentationRequirements(o: PresentationOptions): string {
     `Notes, transcript lines and photos marked ★ were starred by the attendee afterwards as entries that mattered most. Give them the same weight as the "Remember this" moments: ${o.tldr ? 'in the TL;DR and ' : ''}called out in their chapter. Don't show the ★ itself or call them "starred".`,
     'Place each photo in the chapter that matches its elapsed time (not an appendix dumped at the end), full width of the text column, never cropped so a slide\'s content is cut off. Reference EACH photo using an <img> tag whose src is EXACTLY its placeholder token, e.g. <img src="PHOTO_1">. Do not invent placeholder names and do not attempt to embed real image data yourself.',
     'Work acronym expansions into the text where each term first appears, not as a list.',
+    'In the <head>, add <meta name="cc-cover" content="PHOTO_n"> naming the ONE photo that best shows what this talk was about -- a key chart, diagram, result or core idea -- never the title slide, an agenda, a photo of the speaker or audience, or a thank-you/questions slide. The app shows it as the talk\'s thumbnail. Leave the tag out if there are no photos.',
     `${o.theme === 'auto' ? 'Pick a visual theme (color palette, type) that fits the subject matter of the talk.' : `Use a ${o.theme} theme (${o.theme === 'dark' ? 'dark background, light text' : 'light background, dark text'}), with type that fits the subject of the talk.`}${/^#[0-9a-fA-F]{6}$/.test(o.accent) ? ` Use ${o.accent} as the accent color (links, rules, highlights, chart emphasis), adjusted only if needed for readable contrast.` : ''} Keep it tasteful and readable: a comfortable text column (about 65 characters wide), generous spacing, legibility over spectacle.`,
   ]
   if (!times) rules.push("Don't show elapsed times (like 12:40) anywhere on the page.")
@@ -1073,6 +1092,16 @@ function formatHighlights(
     const noted = notes.filter((n) => near(n.item_timestamp)).map((n) => `"${n.text}"`).join('; ')
     return `- [${formatElapsed(startedAt, h.item_timestamp)}]${said ? ` -- being said around it: "${said}"` : ''}${noted ? ` -- noted around it: ${noted}` : ''}`
   }).join('\n')
+}
+
+/** About how long the page takes to read, at 230 words a minute. */
+function readMinutes(html: string): number {
+  const text = html
+    .replace(/<(script|style|svg)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&[a-z#0-9]+;/gi, ' ')
+  const words = text.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length
+  return Math.max(1, Math.round(words / 230))
 }
 
 function stripCodeFence(text: string): string {

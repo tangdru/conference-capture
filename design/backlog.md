@@ -34,10 +34,10 @@ on the native app is in `native-app-migration.md`.
   a length cap (say 60 s) and a size limit in storage; frames count toward
   the 20 images Claude sees per presentation. Shares the upload path with
   the planned audio clips (`audio-clips-plan` notes). (Requested 2026-11-10.)
-- **Last photo thumbnail in the camera.** While the camera is open, a small
-  thumbnail of the photo just taken sits by the shutter. Press and hold it
-  to see the photo larger (to check it caught the slide), let go to return
-  to the camera -- no leaving camera mode. (Requested 2026-11-10.)
+- **Preview from the camera's thumbnail row.** The camera already shows a
+  row of thumbnails of the photos taken. Press and hold one to see that
+  photo larger (to check it caught the slide), let go to return to the
+  camera -- no leaving camera mode. (Requested 2026-11-10.)
 
 ## Native iOS
 

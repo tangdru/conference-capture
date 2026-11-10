@@ -1219,9 +1219,18 @@ function readMinutes(html: string): number {
   return Math.max(1, Math.round(words / 230))
 }
 
+/** The HTML document alone: Claude sometimes wraps it in a markdown fence
+ * ("```html" ... "```"), or the fence's end goes missing across rounds,
+ * which a browser shows as text at the top. Keep in step with cleanDeckHtml
+ * in the app. */
 function stripCodeFence(text: string): string {
-  const match = text.match(/^```(?:html)?\n([\s\S]*)\n```$/)
-  return match ? match[1] : text
+  let page = text.trim()
+  page = page.replace(/^```[a-z]*[ \t]*\r?\n/i, '').replace(/\r?\n?```\s*$/, '')
+  const start = page.search(/<!doctype html|<html[\s>]/i)
+  if (start > 0) page = page.slice(start)
+  const end = page.toLowerCase().lastIndexOf('</html>')
+  if (end !== -1) page = page.slice(0, end + '</html>'.length)
+  return page
 }
 
 function substitutePhotos(html: string, photos: { placeholder: string; url: string }[]): string {

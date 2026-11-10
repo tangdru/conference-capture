@@ -17,6 +17,19 @@ export function isReadyToGenerate(session: Session): boolean {
   )
 }
 
+/** The page without anything around the HTML document: Claude sometimes
+ * wraps it in a markdown fence ("```html" ... "```"), which a browser shows
+ * as text at the top. Keep in step with cleanPage in generate-deck. */
+export function cleanDeckHtml(html: string): string {
+  let page = html.trim()
+  page = page.replace(/^```[a-z]*[ \t]*\r?\n/i, '').replace(/\r?\n?```\s*$/, '')
+  const start = page.search(/<!doctype html|<html[\s>]/i)
+  if (start > 0) page = page.slice(start)
+  const end = page.toLowerCase().lastIndexOf('</html>')
+  if (end !== -1) page = page.slice(0, end + '</html>'.length)
+  return page === html.trim() ? html : page
+}
+
 // The edge function can't hold or re-encode photos, so a new presentation
 // links to them. The phone embeds them the first time the page is opened or
 // shared, scaled down, and saves that page back: it then works offline and

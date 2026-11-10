@@ -8,7 +8,7 @@ import type { PhotoItem, Session, TimelineItemData } from './types'
 import * as db from './db'
 import { clearCachedSessions, readCachedSessions, saveCachedSessions } from './sessionCache'
 import { cachedDeckKeys, clearCachedDecks, deckKey, readCachedDeck, saveCachedDeck } from './deckCache'
-import { compactDeckPhotos, hasPhotoLinks, hasShortVersion, shortDeckHtml } from './deck'
+import { cleanDeckHtml, compactDeckPhotos, hasPhotoLinks, hasShortVersion, shortDeckHtml } from './deck'
 import { AuthGate, signOut } from './auth/AuthGate'
 import { AddEmailSheet } from './auth/AddEmailSheet'
 import { HomeScreen } from './screens/HomeScreen'
@@ -320,10 +320,16 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
    * time, so later opens and shares elsewhere download the small one). */
   async function loadDeckHtml(session: Session, deckPath: string): Promise<string> {
     const saved = await readCachedDeck(session.id, session.deckGeneratedAt)
-    if (saved) return saved
-    const html = await db.fetchDeckHtml(deckPath)
+    if (saved) {
+      const clean = cleanDeckHtml(saved)
+      if (clean !== saved) void saveCachedDeck(session.id, session.deckGeneratedAt, clean)
+      return clean
+    }
+    const fetched = await db.fetchDeckHtml(deckPath)
+    // Older pages may have a stray "```html" at the top; tidied and saved back.
+    const html = cleanDeckHtml(fetched)
     const compacted = await compactDeckPhotos(html)
-    if (compacted !== html) {
+    if (compacted !== fetched) {
       // Skip the save while a rebuild runs: it would overwrite the new page.
       const { deckStatus } = await db.fetchSessionDeckState(session.id).catch(() => ({ deckStatus: null }))
       if (deckStatus === 'ready') void db.replaceDeckHtml(deckPath, compacted).catch(() => {})

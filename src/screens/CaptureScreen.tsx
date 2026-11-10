@@ -17,6 +17,7 @@ import { useAmbientTranscription } from '../hooks/useAmbientTranscription'
 import { useWakeLock } from '../hooks/useWakeLock'
 import { useRecordingActivity } from '../hooks/useRecordingActivity'
 import * as db from '../db'
+import { forgetCachedDeck } from '../deckCache'
 import { SlideScanner, blobToBase64 } from '../native/slideScanner'
 import { backgroundUploads, queuePhoto } from '../photoUploads'
 import { saveClip } from '../clips'
@@ -143,6 +144,9 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
   async function deleteItem(item: TimelineItemData) {
     if (activeId === item.id) setActiveId(null)
     onUpdateLocal((s) => ({ ...s, items: s.items.filter((i) => i.id !== item.id) }))
+    // The presentation saved on the phone may show this photo: download it
+    // again next time, without it.
+    if (item.type === 'photo') void forgetCachedDeck(session.id)
     try {
       await db.deleteTimelineItem(item)
     } catch (err) {

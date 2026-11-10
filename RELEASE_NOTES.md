@@ -14,6 +14,19 @@ changes.
 
 ---
 
+## Build 53 — internal
+
+New in build 53: faster on a phone connection
+
+- The app opens straight to your sessions, even when your sign-in needs
+  renewing or there's no signal, instead of a blank screen.
+- Presentations are kept on the phone: your 12 most recent (and pinned ones)
+  download in the background once they're ready, so tapping a card opens
+  them at once, with no signal too. Others are kept after the first open.
+- Opening a presentation for the first time fetches its photos all at once
+  instead of one by one.
+- Swipe shows Edit only on sessions whose tap opens the presentation.
+
 ## Build 52 — internal
 
 New in build 52: a home list you can scan

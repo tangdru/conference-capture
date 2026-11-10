@@ -3,22 +3,6 @@
 Ideas agreed worth doing but not scheduled yet (2026-10-31). Newest thinking
 on the native app is in `native-app-migration.md`.
 
-## Fix first: slow on cellular (reported 2026-11-10, testing build 52 on 5G)
-
-- **Blank screen when the app opens.** The home screen waits until the
-  sessions are ready (`sessions === null` shows an empty `auth-loading` div in
-  `src/App.tsx`), and that waits on sign-in being restored and the saved copy
-  being read. Fix: show the saved copy (or at least the header and a loading
-  state) the instant the app starts, and never wait on the network to draw.
-  Check whether the launch screen hides before the app is ready.
-- **Opening a presentation from a card is slow.** On open, `compactDeckPhotos`
-  in `src/deck.ts` downloads every photo in the presentation one at a time and
-  shrinks each before showing anything. On 5G that's many seconds. Fix: keep
-  each ready presentation on the phone (the finished page, photos already
-  embedded) so it opens instantly and offline; build that copy in the
-  background once the presentation is ready, and fetch photos in parallel
-  rather than one by one. Replace the copy when the presentation is rebuilt.
-
 ## Native iOS
 
 - **"Presentation ready" notification.** Generation takes minutes and is

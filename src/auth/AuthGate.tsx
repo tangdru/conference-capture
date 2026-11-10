@@ -20,12 +20,28 @@ export function signOut() {
   return supabase.auth.signOut()
 }
 
+/** The sign-in saved on this device, read straight from storage. Asking
+ * Supabase for it waits on the network whenever the token has expired (it
+ * renews it first) -- a blank screen for seconds on a slow connection, and
+ * no way in at all offline. The saved one is enough to show the sessions
+ * saved on the phone; Supabase renews it before the first request. */
+function savedSession(): AuthSession | undefined {
+  if (wasSignedOut()) return undefined
+  try {
+    const key = Object.keys(localStorage).find((k) => /^sb-.+-auth-token$/.test(k))
+    const saved = key ? (JSON.parse(localStorage.getItem(key) ?? 'null') as AuthSession | null) : null
+    return saved?.access_token && saved.refresh_token && saved.user?.id ? saved : undefined
+  } catch {
+    return undefined
+  }
+}
+
 interface AuthGateProps {
   children: (session: AuthSession) => React.ReactNode
 }
 
 export function AuthGate({ children }: AuthGateProps) {
-  const [session, setSession] = useState<AuthSession | null | undefined>(undefined)
+  const [session, setSession] = useState<AuthSession | null | undefined>(savedSession)
   const [quickSignInError, setQuickSignInError] = useState('')
 
   async function startAsGuest() {
@@ -36,7 +52,11 @@ export function AuthGate({ children }: AuthGateProps) {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
+    const saved = savedSession()
+    supabase.auth.getSession().then(async ({ data, error }) => {
+      // Couldn't renew the saved sign-in (no signal): keep using it. A
+      // sign-in that's really over arrives as SIGNED_OUT below.
+      if (!data.session && error && saved) return
       // Someone who signed out wants to sign back in. A new blank account here
       // would look like their sessions had vanished.
       if (data.session || !Capacitor.isNativePlatform() || wasSignedOut()) {
@@ -47,8 +67,9 @@ export function AuthGate({ children }: AuthGateProps) {
       // Add email, which keeps this same account.
       await startAsGuest()
     })
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession)
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
+      // Only an actual sign-out ends the saved sign-in, not a failed renewal.
+      if (newSession || event === 'SIGNED_OUT' || !saved) setSession(newSession)
     })
     return () => listener.subscription.unsubscribe()
   }, [])

@@ -7,6 +7,7 @@ import type { Session as AuthSession } from '@supabase/supabase-js'
 import type { PhotoItem, Session, TimelineItemData } from './types'
 import * as db from './db'
 import { clearCachedSessions, readCachedSessions, saveCachedSessions } from './sessionCache'
+import { cachedDeckKeys, clearCachedDecks, deckKey, readCachedDeck, saveCachedDeck } from './deckCache'
 import { compactDeckPhotos, hasPhotoLinks, hasShortVersion, shortDeckHtml } from './deck'
 import { AuthGate, signOut } from './auth/AuthGate'
 import { AddEmailSheet } from './auth/AddEmailSheet'
@@ -20,6 +21,9 @@ import { DeleteAccountSheet } from './components/DeleteAccountSheet'
 import { shouldAutoStartHomeTour, startHomeTour } from './tour'
 import { onPhotoUploaded, pendingPhotos, syncPhotoUploadAuth } from './photoUploads'
 import { startOutbox } from './itemOutbox'
+
+/** How many ready presentations to keep on the phone ahead of being opened. */
+const PREFETCH_DECKS = 12
 
 type Route = { screen: 'home' } | { screen: 'capture'; sessionId: string; focusItemId?: string }
 
@@ -115,6 +119,33 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     document.addEventListener('visibilitychange', onHide)
     return () => document.removeEventListener('visibilitychange', onHide)
   }, [userId])
+
+  // Ready presentations not yet on the phone are fetched in the background,
+  // newest first, one at a time, so a tap opens them at once. Pinned ones and
+  // the most recent few; older ones are saved the first time they're opened.
+  const readyDecks =
+    sessions
+      ?.filter((s) => s.deckStatus === 'ready' && s.deckPath && s.deckGeneratedAt !== null)
+      .sort((a, b) => (b.pinnedAt ?? 0) - (a.pinnedAt ?? 0) || (b.deckGeneratedAt ?? 0) - (a.deckGeneratedAt ?? 0))
+      .slice(0, PREFETCH_DECKS) ?? []
+  const readyDeckKey = readyDecks.map((s) => deckKey(s.id, s.deckGeneratedAt!)).join(',')
+  const readyDecksRef = useRef(readyDecks)
+  readyDecksRef.current = readyDecks
+  useEffect(() => {
+    if (!readyDeckKey || !Capacitor.isNativePlatform()) return
+    let cancelled = false
+    void (async () => {
+      const have = await cachedDeckKeys()
+      for (const session of readyDecksRef.current) {
+        if (cancelled) return
+        if (have.has(deckKey(session.id, session.deckGeneratedAt!))) continue
+        await loadDeckHtml(session, session.deckPath!).catch(() => {})
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [readyDeckKey])
 
   // Generation runs server-side for minutes, and the request that started it
   // doesn't survive the phone switching apps -- so while any deck is
@@ -234,16 +265,20 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     }
   }
 
-  /** The presentation's page, its photos shrunk -- saved back the first time
-   * so later opens and shares download the small one. */
+  /** The presentation's page, photos embedded and shrunk: from the copy on
+   * the phone if there is one, else downloaded (and saved back the first
+   * time, so later opens and shares elsewhere download the small one). */
   async function loadDeckHtml(session: Session, deckPath: string): Promise<string> {
+    const saved = await readCachedDeck(session.id, session.deckGeneratedAt)
+    if (saved) return saved
     const html = await db.fetchDeckHtml(deckPath)
     const compacted = await compactDeckPhotos(html)
-    // Skip the save while a rebuild runs: it would overwrite the new page.
-    if (hasPhotoLinks(html) || compacted.length < html.length * 0.8) {
+    if (compacted !== html) {
+      // Skip the save while a rebuild runs: it would overwrite the new page.
       const { deckStatus } = await db.fetchSessionDeckState(session.id).catch(() => ({ deckStatus: null }))
       if (deckStatus === 'ready') void db.replaceDeckHtml(deckPath, compacted).catch(() => {})
     }
+    if (!hasPhotoLinks(compacted)) void saveCachedDeck(session.id, session.deckGeneratedAt, compacted)
     return compacted
   }
 
@@ -412,6 +447,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         onSignOut={() => {
           setMenu(null)
           void clearCachedSessions(userId)
+          void clearCachedDecks()
           signOut()
         }}
       />
@@ -427,6 +463,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         onDelete={async () => {
           await db.deleteAccount(sessions.map((s) => s.id))
           await clearCachedSessions(userId)
+          await clearCachedDecks()
           setMenu(null)
         }}
       />

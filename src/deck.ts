@@ -36,21 +36,55 @@ export function hasPhotoLinks(html: string): boolean {
  * its link; one that was deleted from the session since the page was built
  * is taken out, with its caption, rather than left as a broken image. */
 export async function compactDeckPhotos(html: string): Promise<string> {
+  const links = [...new Set(html.match(PHOTO_LINK) ?? [])]
+  // Done before: every photo is in the page and already scaled down.
+  if (!links.length && html.includes(COMPACT_MARK)) return html
   const sources = [...new Set(html.match(/data:image\/jpe?g;base64,[A-Za-z0-9+/=]+/g) ?? [])]
   let result = html
-  for (const src of sources) {
-    const smaller = await shrinkJpeg(src).catch(() => null)
-    if (smaller && smaller.length < src.length) result = result.split(src).join(smaller)
-  }
+  const smaller = await inParallel(sources, (src) => shrinkJpeg(src).catch(() => null))
+  sources.forEach((src, i) => {
+    const small = smaller[i]
+    if (small && small.length < src.length) result = result.split(src).join(small)
+  })
+  // All at once rather than one by one: on a phone network each fetch is
+  // mostly waiting.
   const gone: string[] = []
-  for (const link of new Set(html.match(PHOTO_LINK) ?? [])) {
-    try {
-      result = result.split(link).join(await embedPhoto(link))
-    } catch (err) {
+  let failed = false
+  const embedded = await inParallel(links, (link) =>
+    embedPhoto(link).catch((err) => {
       if (err instanceof PhotoGone) gone.push(link)
+      else failed = true
+      return null
+    }),
+  )
+  links.forEach((link, i) => {
+    const data = embedded[i]
+    if (data) result = result.split(link).join(data)
+  })
+  if (gone.length) result = withoutPhotos(result, gone)
+  return failed ? result : markCompact(result)
+}
+
+const COMPACT_MARK = '<meta name="cc-photos-embedded" content="1">'
+
+function markCompact(html: string): string {
+  if (html.includes(COMPACT_MARK)) return html
+  const head = /<head[^>]*>/i.exec(html)
+  return head ? html.replace(head[0], `${head[0]}${COMPACT_MARK}`) : html
+}
+
+/** Runs `work` on every item, a few at a time, results in order. */
+async function inParallel<T, R>(items: T[], work: (item: T) => Promise<R>, limit = 6): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  let next = 0
+  async function worker() {
+    while (next < items.length) {
+      const i = next++
+      results[i] = await work(items[i])
     }
   }
-  return gone.length ? withoutPhotos(result, gone) : result
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
 }
 
 class PhotoGone extends Error {}

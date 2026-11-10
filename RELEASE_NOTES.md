@@ -14,6 +14,20 @@ changes.
 
 ---
 
+## Build 56 — internal
+
+New in build 56:
+
+- Swipe down on a photo you're viewing in a session to close it, the same
+  gesture as after taking a photo. A short drag springs back; when zoomed in,
+  dragging moves around the photo instead.
+- In the camera, press and hold a thumbnail in the row to see that photo
+  large; let go to keep shooting.
+- A light tap you can feel each time you take a photo.
+- (Server, already live:) presentations build one at a time, so asking for
+  several no longer hits Claude's rate limit; one asked for while another
+  builds shows "Presentation queued" and starts by itself.
+
 ## Build 55 — internal
 
 New in build 55:

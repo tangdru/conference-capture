@@ -3,6 +3,15 @@
 Ideas agreed worth doing but not scheduled yet (2026-10-31). Newest thinking
 on the native app is in `native-app-migration.md`.
 
+## Capture
+
+- **End session.** An explicit "End" in the session (and on the live card)
+  that stops recording and closes the session for good. Today there's no
+  end: a paused session stays in the top spot for 20 minutes after the last
+  capture, or until its presentation is built (2026-11-10). Ending could
+  offer to build the presentation right away. Ended sessions can still be
+  edited; recording again would reopen them. (Requested 2026-11-10.)
+
 ## Native iOS
 
 - **"Presentation ready" notification.** Generation takes minutes and is

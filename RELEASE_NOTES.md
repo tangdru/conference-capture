@@ -14,6 +14,22 @@ changes.
 
 ---
 
+## Build 50 — internal
+
+New in build 50: every session shows, and it opens faster
+
+- Fixed: past 1,000 entries in total, the newest sessions showed up empty
+  or seemed missing. Everything loads now.
+- Your sessions show the moment the app opens, from a copy saved on the
+  phone, then refresh. With no signal, the last loaded sessions still show.
+- Session cards show how long each talk was recorded.
+- The Remember this star sits just right of the camera button, and in the
+  camera just right of the shutter, in the same spot. Held sideways, it's
+  below the shutter.
+- Building a presentation leaves out repeat photos of a slide that builds
+  up, keeping the fullest one (Presentation options > Skip repeated slides,
+  on by default).
+
 ## Build 49 — internal
 
 New in build 49: Remember this from the camera

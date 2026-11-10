@@ -21,6 +21,7 @@ import { DeleteAccountSheet } from './components/DeleteAccountSheet'
 import { shouldAutoStartHomeTour, startHomeTour } from './tour'
 import { onPhotoUploaded, pendingPhotos, syncPhotoUploadAuth } from './photoUploads'
 import { startOutbox } from './itemOutbox'
+import { OFFLINE_MESSAGE, errorMessage, isNetworkError } from './networkError'
 
 /** How many ready presentations to keep on the phone ahead of being opened. */
 const PREFETCH_DECKS = 12
@@ -96,8 +97,9 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         }
         // With the saved copy showing, say it couldn't refresh rather than
         // replace the sessions with an error.
-        if (showingSaved) setHomeError(`Showing your sessions as last loaded: ${message}`)
-        else setLoadError(message)
+        if (showingSaved) {
+          setHomeError(isNetworkError(err) ? OFFLINE_MESSAGE : `Showing your sessions as last loaded: ${message}`)
+        } else setLoadError(errorMessage(err, message))
       }
     }
     void load(1)
@@ -146,6 +148,35 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       cancelled = true
     }
   }, [readyDeckKey])
+
+  // A "no connection" message clears itself: once the phone is back online
+  // (or the app comes back to the front, or every 20 seconds), reload quietly,
+  // and drop the message when that works.
+  const offline = homeError === OFFLINE_MESSAGE
+  useEffect(() => {
+    if (!offline) return
+    let busy = false
+    async function retry() {
+      if (busy || document.visibilityState !== 'visible') return
+      busy = true
+      try {
+        setSessions(await fetchSessionsWithPending())
+        setHomeError((current) => (current === OFFLINE_MESSAGE ? null : current))
+      } catch {
+        // Still offline: try again later.
+      } finally {
+        busy = false
+      }
+    }
+    window.addEventListener('online', retry)
+    document.addEventListener('visibilitychange', retry)
+    const interval = window.setInterval(retry, 20_000)
+    return () => {
+      window.removeEventListener('online', retry)
+      document.removeEventListener('visibilitychange', retry)
+      window.clearInterval(interval)
+    }
+  }, [offline])
 
   // Generation runs server-side for minutes, and the request that started it
   // doesn't survive the phone switching apps -- so while any deck is
@@ -213,7 +244,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     try {
       setSessions(await fetchSessionsWithPending())
     } catch (err) {
-      setHomeError(err instanceof Error ? err.message : 'Failed to refresh')
+      setHomeError(errorMessage(err, 'Failed to refresh'))
     }
   }
 
@@ -237,7 +268,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       await db.setSessionPinned(id, after)
     } catch (err) {
       updateSessionLocally(id, (s) => ({ ...s, pinnedAt: before }))
-      setHomeError(err instanceof Error ? err.message : 'Couldn’t pin that presentation')
+      setHomeError(errorMessage(err, 'Couldn’t pin that presentation'))
     }
   }
 
@@ -315,7 +346,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       const url = await db.resolveDeckUrl(session.deckPath)
       window.open(url, '_blank', 'noopener')
     } catch (err) {
-      setHomeError(err instanceof Error ? err.message : 'Failed to open presentation')
+      setHomeError(errorMessage(err, 'Failed to open presentation'))
     }
   }
 
@@ -359,7 +390,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       // Closing the share sheet without picking anything isn't an error.
       const message = err instanceof Error ? err.message : ''
       if (/cancel|abort/i.test(message) || (err as { name?: string })?.name === 'AbortError') return
-      setHomeError(message || 'Failed to share presentation')
+      setHomeError(errorMessage(err, 'Failed to share presentation'))
     }
   }
 
@@ -374,7 +405,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       await db.deleteSession(session)
     } catch (err) {
       setSessions((prev) => (prev ? [...prev, session] : prev))
-      setHomeError(err instanceof Error ? err.message : 'Failed to delete session')
+      setHomeError(errorMessage(err, 'Failed to delete session'))
     }
   }
 

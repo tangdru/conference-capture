@@ -16,6 +16,12 @@ export function lastActivityAt(session: Session): number {
  * still probably the thing the user is mid-session with. */
 export function isSessionActive(session: Session, now: number): boolean {
   if (session.status === 'recording') return true
-  if (session.status === 'suspended') return now - lastActivityAt(session) < INACTIVITY_MS
+  if (session.status === 'suspended') {
+    // A presentation built since the last capture means the talk is done:
+    // the session joins the list (where a tap opens the presentation).
+    const last = lastActivityAt(session)
+    if (session.deckStatus === 'ready' && session.deckGeneratedAt !== null && session.deckGeneratedAt >= last) return false
+    return now - last < INACTIVITY_MS
+  }
   return false
 }

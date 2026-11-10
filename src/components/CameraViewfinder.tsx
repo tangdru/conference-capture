@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
+import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import { DeviceTilt } from '../native/deviceTilt'
 import { NativeCamera, type FlashMode } from '../native/nativeCamera'
 import { StarIcon } from './InlineIcons'
@@ -26,6 +27,9 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [shots, setShots] = useState<string[]>([])
+  // Press and hold a thumbnail to see that photo larger; let go to return.
+  const [peek, setPeek] = useState<string | null>(null)
+  const peekTimer = useRef<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Browser only: iOS starts the stream with a few landscape frames, shown
   // letterboxed, before it settles into the portrait shape that fills the
@@ -201,7 +205,26 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
     onCapture(blob)
   }
 
+  function startPeek(src: string) {
+    if (peekTimer.current) window.clearTimeout(peekTimer.current)
+    peekTimer.current = window.setTimeout(() => {
+      peekTimer.current = null
+      setPeek(src)
+      if (NATIVE) void Haptics.impact({ style: ImpactStyle.Light })
+    }, 180)
+  }
+
+  function endPeek() {
+    if (peekTimer.current) window.clearTimeout(peekTimer.current)
+    peekTimer.current = null
+    setPeek(null)
+  }
+  useEffect(() => () => {
+    if (peekTimer.current) window.clearTimeout(peekTimer.current)
+  }, [])
+
   async function capture() {
+    if (NATIVE) void Haptics.impact({ style: ImpactStyle.Light })
     const degrees = NATIVE ? await DeviceTilt.getRotation().then((r) => r.degrees).catch(() => 0) : 0
     if (useNative) {
       setBlink(true)
@@ -338,6 +361,12 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
         )}
         {blink && <span className="viewfinder__blink" aria-hidden="true" />}
 
+        {peek && (
+          <div className={`viewfinder__peek${tilt === 90 || tilt === 270 ? ' viewfinder__peek--sideways' : ''}`} aria-hidden="true">
+            <img src={peek} alt="" />
+          </div>
+        )}
+
         {zoomRange && lenses.length > 0 && (
           <div className="viewfinder__lenses">
             {lenses.map((lens) => {
@@ -359,8 +388,20 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
         {shots.length > 0 && (
           <div className="viewfinder__strip" role="status" aria-label={`${shots.length} photos captured`}>
             {visibleThumbs.map((src, i) => (
-              <div className="viewfinder__thumb" key={i}>
-                <img src={src} alt="" />
+              <div
+                className="viewfinder__thumb"
+                key={i}
+                aria-label="Hold to preview"
+                onPointerDown={() => startPeek(src)}
+                onPointerUp={endPeek}
+                onPointerCancel={endPeek}
+                onContextMenu={(e) => e.preventDefault()}
+                // Not a swipe down to close, or a tap to focus.
+                onTouchStart={(e) => e.stopPropagation()}
+                onTouchEnd={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <img src={src} alt="" draggable={false} />
                 <span className="viewfinder__check">✓</span>
               </div>
             ))}

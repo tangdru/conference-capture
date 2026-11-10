@@ -14,9 +14,6 @@ on the native app is in `native-app-migration.md`.
 - **Ask during a live session.** Ask questions about the talk while it's
   still going (today Ask works on finished sessions). Answers would draw on
   the transcript and photos captured so far. (Requested 2026-11-10.)
-- **Swipe down to close a photo.** When viewing a photo inside a live
-  session, swipe down returns to the session — the same gesture as after
-  taking a photo. (Requested 2026-11-10.)
 - **Session photo album.** A grid of every photo in the session, opened from
   the session, to browse them all at once. (Requested 2026-11-10.)
 - **Video clips: tap for a photo, hold the shutter for video.** Same camera,
@@ -34,10 +31,6 @@ on the native app is in `native-app-migration.md`.
   a length cap (say 60 s) and a size limit in storage; frames count toward
   the 20 images Claude sees per presentation. Shares the upload path with
   the planned audio clips (`audio-clips-plan` notes). (Requested 2026-11-10.)
-- **Preview from the camera's thumbnail row.** The camera already shows a
-  row of thumbnails of the photos taken. Press and hold one to see that
-  photo larger (to check it caught the slide), let go to return to the
-  camera -- no leaving camera mode. (Requested 2026-11-10.)
 
 ## Native iOS
 
@@ -51,8 +44,8 @@ on the native app is in `native-app-migration.md`.
   is generated, 2026-10-31.)
 - **Faster capture.** Action Button / Control Center / Lock Screen control to
   take a slide photo, and App Intents ("Hey Siri, start a session").
-- **Small native polish.** Haptics on shutter and note save; Spotlight
-  indexing of sessions.
+- **Small native polish.** Haptic on note save; Spotlight indexing of
+  sessions. (The shutter haptic is done.)
 
 ## Less note-taking (opt-in tools, the user stays in control)
 

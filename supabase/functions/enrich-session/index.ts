@@ -394,9 +394,14 @@ function describeTimeline(notesPhotos: ItemRow[], transcriptRows: ItemRow[], eli
     const at = new Date(row.item_timestamp).getTime()
     const kind = row.type === 'note' ? 'note' : 'photo caption'
     const content = row.type === 'note' ? row.text : row.caption || '(untitled photo)'
+    // Links the phone decoded from QR codes on the photo (lines in its text).
+    const codes = row.type === 'photo'
+      ? (row.text ?? '').split('\n').filter((l) => l.startsWith('QR code: ')).map((l) => l.slice('QR code: '.length).trim())
+      : []
+    const qr = codes.length ? ` (QR code on this photo links to: ${codes.join(', ')})` : ''
     const eligible = row.position === null && !row.placement_locked
     const tag = eligible ? `PLACEABLE id=${row.id}` : 'FIXED'
-    lines.push({ at, text: `[${tag}] ${row.item_timestamp} -- ${kind}: "${content}"` })
+    lines.push({ at, text: `[${tag}] ${row.item_timestamp} -- ${kind}: "${content}"${qr}` })
   }
 
   for (const row of transcriptRows) {
@@ -443,7 +448,7 @@ Do all of the following, grounded strictly in what's actually in the timeline an
 2. transcriptSplits: For EVERY id marked SPLITTABLE above, break its verbatim text into smaller, meaningful entries -- each entry a separate idea or sentence-group, never longer than necessary, and never reworded or paraphrased: every segment must be an EXACT, VERBATIM, contiguous substring of that chunk's original text, in original order. If a chunk is already short and coherent, it's fine to return it as a single segment (or omit it from transcriptSplits entirely to leave it as-is).
 3. notePlacements: For EVERY id marked PLACEABLE above, actively look for the SPLITTABLE/FIXED transcript segment whose subject matter it's actually about -- a note is often typed a few seconds to tens of seconds after the moment it refers to, so don't assume the captured timestamp is already right. Return the ISO 8601 timestamp (same date, a time within the session) of that matching moment, placing the note just after it. Only return the item's own captured timestamp unchanged if you've genuinely checked and found no better match. Every PLACEABLE id must get an entry.
 4. actionItems: Commitments or follow-ups the SPEAKER made (e.g. "I'll send the slides", "we're releasing this in Q2") -- not things the attendee should do. Each needs the exact text of the commitment and brief surrounding context. Empty array if none.
-5. references: Papers, books, tools, or URLs the speaker explicitly cited or named. Each needs a title, source (e.g. author/publisher/site), a one-line description, and a url if one was actually given (otherwise null). Empty array if none.
+5. references: Papers, books, tools, or URLs the speaker explicitly cited or named. Each needs a title, source (e.g. author/publisher/site), a one-line description, and a url if one was actually given (otherwise null). A link from a QR code on a photo counts as given: list each one, with that exact url, titled by what the slide or talk says it's for. Empty array if none.
 6. speakerBio: Only if the session reveals who the speaker actually is (self-introduction in the transcript, or a title/intro slide photo) -- name, role, org, and a one-line description. Set to null if the speaker's identity isn't actually established by the content, not a guess.
 7. acronyms: Acronyms or jargon terms used but left unexplained by the speaker (skip any the speaker already defines themselves). Each needs the term and its expansion. Empty array if none.
 

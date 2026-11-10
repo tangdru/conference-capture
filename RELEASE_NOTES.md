@@ -14,6 +14,17 @@ changes.
 
 ---
 
+## Build 54 — internal
+
+New in build 54: links from QR codes
+
+- Photograph a slide with a QR code and the phone reads the link, along with
+  the slide's text. The link goes into the presentation's References and the
+  session summary's references, named by what the slide says it's for, even
+  when the photo itself is left out as a repeat. Search finds it too.
+- Only photos taken on build 54 or later; older photos aren't re-read.
+- Starting the app no longer flashes white before your sessions appear.
+
 ## Build 53 — internal
 
 New in build 53: faster on a phone connection

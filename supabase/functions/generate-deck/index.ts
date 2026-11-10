@@ -311,8 +311,11 @@ async function generateDeckPart(
   }
 
   const highlightsText = formatHighlights(session.started_at, highlightRows, transcriptSegments, notes)
+  // From every photo, shown in the page or not (a repeat slide, or photos
+  // left out): a QR code's link belongs in the references either way.
+  const qrLinksText = formatQrLinks(session.started_at, photoRows)
   const { text, finished } = await callClaude(
-    title, session.started_at, notes, transcriptSegments, enrichmentRows, photos, highlightsText,
+    title, session.started_at, notes, transcriptSegments, enrichmentRows, photos, highlightsText, qrLinksText,
     written, invokedAt + ROUND_BUDGET_MS, options,
   )
   written += text
@@ -562,12 +565,33 @@ function formatElapsed(startedAtIso: string, itemIso: string): string {
   return hours > 0 ? `${hours}:${minutes.toString().padStart(2, '0')}:${seconds}` : `${minutes}:${seconds}`
 }
 
+/** Every link decoded from a QR code on the session's photos, with when it
+ * was shown -- each once. */
+function formatQrLinks(startedAt: string, photoRows: { text?: string | null; item_timestamp: string }[]): string {
+  const seen = new Set<string>()
+  const lines: string[] = []
+  for (const row of photoRows) {
+    for (const line of (row.text ?? '').split('\n')) {
+      if (!line.startsWith('QR code: ')) continue
+      const link = line.slice('QR code: '.length).trim()
+      if (!link || seen.has(link)) continue
+      seen.add(link)
+      lines.push(`- [${formatElapsed(startedAt, row.item_timestamp)}] ${link}`)
+    }
+  }
+  return lines.length ? lines.join('\n') : '(None.)'
+}
+
 /** A photo's on-device text as one line for the prompt, capped so a dense
- * slide can't crowd out the rest of the session. */
+ * slide can't crowd out the rest of the session. QR codes the phone decoded
+ * ("QR code: <link>" lines) are kept whole and listed on their own. */
 function formatSlideText(text: string): string {
-  const flat = text.split('\n').map((l) => l.trim()).filter(Boolean).join(' / ')
-  if (!flat) return ''
-  return ` -- text on it: "${flat.length > 600 ? `${flat.slice(0, 600)}…` : flat}"`
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
+  const codes = lines.filter((l) => l.startsWith('QR code: ')).map((l) => l.slice('QR code: '.length))
+  const flat = lines.filter((l) => !l.startsWith('QR code: ')).join(' / ')
+  const qr = codes.length ? ` -- QR code on it links to: ${codes.join(', ')}` : ''
+  if (!flat) return qr
+  return ` -- text on it: "${flat.length > 600 ? `${flat.slice(0, 600)}…` : flat}"${qr}`
 }
 
 async function callClaude(
@@ -578,6 +602,7 @@ async function callClaude(
   enrichmentRows: { subtype: string | null; payload: Record<string, unknown> | null }[],
   photos: DeckPhoto[],
   highlightsText: string,
+  qrLinksText: string,
   writtenSoFar: string,
   deadline: number,
   o: PresentationOptions,
@@ -616,6 +641,9 @@ ${photosText}
 
 Moments the attendee marked "Remember this" (tapped live, as it happened):
 ${highlightsText}
+
+Links from QR codes on the attendee's photos (decoded on the phone, so exact):
+${qrLinksText}
 
 Requirements:
 ${presentationRequirements(o)}`
@@ -690,7 +718,7 @@ function presentationRequirements(o: PresentationOptions): string {
   structure.push(`Chapters: the talk divided into 3 to 8 chapters in the order it actually unfolded, each with a heading${times ? ' and its starting elapsed time' : ''}. Synthesize and organize the notes and transcript into clear prose -- don't dump either source verbatim. Use the transcript to fill gaps the notes left out${o.quotes ? ' and to surface direct quotes worth calling out' : ''}, but let the notes drive what the attendee found important. ${chapterBody}`)
   const closing: string[] = []
   if (o.actionItems && !o.tldr) closing.push('the action items, as a short list, if there are any')
-  if (o.references) closing.push('the references (as links where there\'s a URL) and anything else worth following up on')
+  if (o.references) closing.push('the references (as links where there\'s a URL -- including every link from a QR code on a photo, titled by what the slide says it\'s for) and anything else worth following up on')
   if (closing.length) structure.push(`A short closing section with ${closing.join(', then ')}.`)
 
   const keyMomentsWhere = o.tldr ? 'belongs in the TL;DR and gets a callout in its chapter' : 'gets a callout in its chapter'

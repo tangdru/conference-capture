@@ -42,6 +42,8 @@ and starring any entry (2026-11-01). Rough order of value.
 4. **Turn it into things to do.**
    - Action items to Reminders with one tap (native Reminders).
    - QR codes and URLs on slide photos pulled out as tappable references.
+     *(Shipped in build 54 for QR codes: decoded on the phone, listed in
+     References.)*
 
 ## Product
 

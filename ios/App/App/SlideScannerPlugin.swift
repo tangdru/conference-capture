@@ -54,7 +54,13 @@ enum SlideScan {
             page = flat
             flattened = data
         }
-        return (readText(in: page), flattened)
+        // QR codes are looked for in the whole photo, not just the slide: one
+        // is often on a poster or a screen beside it.
+        let codes = readQRCodes(in: flattened != nil ? [image, page] : [image])
+        let text = ([readText(in: page)] + codes.map { "QR code: \($0)" })
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+        return (text, flattened)
     }
 
     // MARK: - Finding the slide
@@ -107,6 +113,26 @@ enum SlideScan {
         filter.setValue(point(quad.bottomRight), forKey: "inputBottomRight")
         filter.setValue(point(quad.bottomLeft), forKey: "inputBottomLeft")
         return filter.outputImage
+    }
+
+    // MARK: - Reading QR codes
+
+    /// What the QR codes in the photo say (usually a link), each once, in the
+    /// order found. Looks in the flattened slide too: a code shot at an angle
+    /// can be too skewed to read in the photo itself.
+    private static func readQRCodes(in images: [CIImage]) -> [String] {
+        var found: [String] = []
+        for image in images {
+            let request = VNDetectBarcodesRequest()
+            request.symbologies = [.qr]
+            try? VNImageRequestHandler(ciImage: image, options: [:]).perform([request])
+            for code in request.results ?? [] {
+                guard let payload = code.payloadStringValue?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !payload.isEmpty, !found.contains(payload) else { continue }
+                found.append(payload)
+            }
+        }
+        return found
     }
 
     // MARK: - Reading the text

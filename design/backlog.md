@@ -54,8 +54,9 @@ and starring any entry (2026-11-01). Rough order of value.
 
 ## Finding things across a conference
 
-Day groups and the Presentations view shipped first (2026-11-09). The rest,
-roughly in order:
+Shipped 2026-11-09/10: sessions grouped by day, and richer cards for
+sessions with a presentation (Sparkle's chosen slide, speaker, read time; tap
+opens it), plus Pin. The rest, roughly in order:
 
 - **Build all of a day's presentations at once.** One tap runs Sparkle on
   every session of the day without a presentation, which also names the many
@@ -69,8 +70,7 @@ roughly in order:
   on the right; the browser version today is the phone layout stretched.
 - **Share by link.** A private, optionally expiring link to a presentation,
   so colleagues can open it in any browser without the app.
-- **Filters and favorites.** Has a presentation, starred, this week; star a
-  whole session.
+- **Filters.** Has a presentation, pinned, this week.
 - **Export** to Notion or Google Docs.
 
 ## Storage and cost
@@ -84,6 +84,13 @@ day is roughly 150-200 MB per person; Pro is $25/month for 100 GB.
 - **Smaller photos.** Compress slide photos harder (about half the size);
   Claude still reads the text fine. Cheapest win, do first if storage grows.
 - **Watch usage** and move to Supabase Pro only near 1 GB.
+- **Sync only what changed.** The app now shows the copy saved on the phone
+  at once, then reloads everything. Next step: ask only for entries new or
+  changed since the last sync. Needs an updated-at time on entries and a
+  record of deletions (a migration).
+- **Load a session's entries when it's opened.** Only worth it at tens of
+  thousands of entries; needs per-session summaries for the cards and search
+  moved to the server.
 - **Phone-first with iCloud** (as Apple Notes and Day One do): no server
   storage cost, but a large rewrite, since presentations, enrichment, Ask and
   titles run on the server and need the data there, as do the web version

@@ -1,5 +1,5 @@
 export type SessionStatus = 'recording' | 'suspended' | 'enriching' | 'complete'
-export type DeckStatus = 'none' | 'generating' | 'ready' | 'error'
+export type DeckStatus = 'none' | 'queued' | 'generating' | 'ready' | 'error'
 
 export interface NoteItem {
   id: string

@@ -82,6 +82,16 @@
   animation: pulse 2s ease-in-out infinite;
 }
 
+/* Waiting its turn: quieter than a build in progress, and still. */
+.session-card__deck--queued {
+  color: var(--text-secondary);
+}
+
+.session-card__deck--queued .session-card__deck-dot {
+  background: currentColor;
+  animation: none;
+}
+
 .session-card__deck-icon {
   position: relative;
   /* inline-block, not flex: its line keeps a real text baseline, so the icon

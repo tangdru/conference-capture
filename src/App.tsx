@@ -182,7 +182,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   // doesn't survive the phone switching apps -- so while any deck is
   // building, read its state from the database instead of waiting on that
   // request: every few seconds, and right away when the app comes back.
-  const generatingIds = sessions?.filter((s) => s.deckStatus === 'generating').map((s) => s.id).join(',') ?? ''
+  const generatingIds = sessions?.filter((s) => s.deckStatus === 'generating' || s.deckStatus === 'queued').map((s) => s.id).join(',') ?? ''
   useEffect(() => {
     if (!generatingIds) return
     const ids = generatingIds.split(',')
@@ -217,6 +217,25 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [generatingIds])
+
+  // Presentations build one at a time; the server starts the next queued one
+  // when a build ends. If it couldn't (its sign-in had run out, or a build
+  // stopped without finishing), start the one that's waited longest from
+  // here -- once it's clear nothing is building.
+  const queuedIds = sessions?.filter((s) => s.deckStatus === 'queued').map((s) => s.id) ?? []
+  const anyBuilding = sessions?.some((s) => s.deckStatus === 'generating') ?? false
+  const nextQueued = !anyBuilding ? queuedIds[queuedIds.length - 1] ?? null : null
+  const kickedAt = useRef(new Map<string, number>())
+  useEffect(() => {
+    if (!nextQueued) return
+    const timer = window.setTimeout(() => {
+      const last = kickedAt.current.get(nextQueued) ?? 0
+      if (Date.now() - last < 60_000) return
+      kickedAt.current.set(nextQueued, Date.now())
+      void generateDeckForSession(nextQueued)
+    }, 8000)
+    return () => window.clearTimeout(timer)
+  }, [nextQueued])
 
   /** Sessions as stored, plus what's still on the phone waiting to be sent. */
   async function fetchSessionsWithPending(): Promise<Session[]> {

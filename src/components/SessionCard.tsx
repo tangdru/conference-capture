@@ -211,6 +211,13 @@ function DeckIcon({
 
 /** Generation takes a few minutes and otherwise happens silently, so say so. */
 function BuildingStatus({ session }: { session: Session }) {
+  if (session.deckStatus === 'queued') {
+    return (
+      <p className="session-card__deck session-card__deck--queued" role="status">
+        <span className="session-card__deck-dot" aria-hidden="true" /> Presentation queued… builds after the one in progress
+      </p>
+    )
+  }
   if (session.deckStatus !== 'generating') return null
   return (
     <p className="session-card__deck" role="status">

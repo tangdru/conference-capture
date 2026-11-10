@@ -35,6 +35,12 @@ const SAME_SLIDE_OVERLAP = 0.5
 // Choosing between them runs beside the first round's other work; past this,
 // every photo goes in rather than hold up the presentation.
 const PICK_PHOTOS_MS = 75_000
+// A build that hasn't said it's still going for this long has stopped (the
+// app uses the same window): it no longer holds up the queue.
+const BUILD_SILENCE_MS = 6 * 60 * 1000
+// Claude's "too many requests" (and "overloaded"): wait and try again this
+// many times before giving up.
+const RATE_LIMIT_RETRIES = 4
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void }
 
@@ -141,24 +147,40 @@ Deno.serve(async (req) => {
   }
 
   // The first call checks there's something to build from and marks the
-  // session 'generating' before answering, so the app's next read sees it.
+  // session 'generating' before answering, so the app's next read sees it --
+  // or 'queued', when another presentation on this account is still being
+  // built: they're built one at a time, which keeps within Claude's limits.
   if (part === 0) {
     try {
-      await markGenerating(supabase, sessionId)
+      const start = await markGenerating(supabase, sessionId)
+      if (start !== 'started') return jsonResponse({ [start]: true }, 202)
     } catch (err) {
-      return jsonResponse({ error: await recordError(err) }, 500)
+      const message = await recordError(err)
+      await startNextQueued(supabase, authHeader)
+      return jsonResponse({ error: message }, 500)
     }
   }
 
   // The writing runs after the response, in rounds: the app polls the
   // session row for the outcome rather than waiting on this request.
   EdgeRuntime.waitUntil(
-    generateDeckPart(supabase, authHeader, sessionId, part, photoLinks, options, skippedPhotos, invokedAt).catch(recordError),
+    generateDeckPart(supabase, authHeader, sessionId, part, photoLinks, options, skippedPhotos, invokedAt).catch(async (err) => {
+      await recordError(err)
+      // A failed build doesn't hold up the ones waiting behind it.
+      await startNextQueued(supabase, authHeader)
+    }),
   )
   return jsonResponse({ started: true }, 202)
 })
 
-async function markGenerating(supabase: ReturnType<typeof createClient>, sessionId: string): Promise<void> {
+/** Starts this session's build ('started'), or queues it behind another one
+ * still being built on the account ('queued'). A session already being built
+ * is left alone ('already'): the app may ask again for one the server has
+ * just taken from the queue. */
+async function markGenerating(
+  supabase: ReturnType<typeof createClient>,
+  sessionId: string,
+): Promise<'started' | 'queued' | 'already'> {
   if (!ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured')
   const { data: rows, error } = await supabase
     .from('cc_timeline_items')
@@ -170,11 +192,84 @@ async function markGenerating(supabase: ReturnType<typeof createClient>, session
   if (!usable) {
     throw new Error('This session has no notes, transcript, or photos to build a presentation from')
   }
+
+  // Only this account's sessions are visible here (RLS).
+  const recent = new Date(Date.now() - BUILD_SILENCE_MS).toISOString()
+  const { data: building, error: buildingError } = await supabase
+    .from('cc_sessions')
+    .select('id')
+    .eq('deck_status', 'generating')
+    .gt('deck_heartbeat_at', recent)
+  if (buildingError) throw buildingError
+  if ((building ?? []).some((r) => r.id === sessionId)) return 'already'
+  const now = new Date().toISOString()
+  if ((building ?? []).length > 0) {
+    // deck_heartbeat_at holds when it was queued, so the queue keeps order.
+    const { error: queueError } = await supabase
+      .from('cc_sessions')
+      .update({ deck_status: 'queued', deck_error: null, deck_heartbeat_at: now })
+      .eq('id', sessionId)
+    if (queueError) throw queueError
+    console.log(`generate-deck: ${sessionId} queued behind ${building!.map((r) => r.id).join(', ')}`)
+    return 'queued'
+  }
+
   const { error: updateError } = await supabase
     .from('cc_sessions')
-    .update({ deck_status: 'generating', deck_error: null, deck_heartbeat_at: new Date().toISOString() })
+    .update({ deck_status: 'generating', deck_error: null, deck_heartbeat_at: now })
     .eq('id', sessionId)
   if (updateError) throw updateError
+  return 'started'
+}
+
+/** Starts the presentation that has waited longest in this account's queue,
+ * if any. Best effort: the app also starts it when it sees a queue with
+ * nothing building (e.g. this request's sign-in had run out). */
+async function startNextQueued(supabase: ReturnType<typeof createClient>, authHeader: string): Promise<void> {
+  try {
+    const { data: next } = await supabase
+      .from('cc_sessions')
+      .select('id')
+      .eq('deck_status', 'queued')
+      .order('deck_heartbeat_at', { ascending: true })
+      .limit(1)
+    const id = next?.[0]?.id
+    if (!id) return
+    const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-deck`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: authHeader,
+        apikey: Deno.env.get('SUPABASE_ANON_KEY')!,
+      },
+      body: JSON.stringify({ sessionId: id }),
+    })
+    console.log(`generate-deck: started queued ${id} (${res.status})`)
+  } catch (err) {
+    console.error('startNextQueued failed:', err)
+  }
+}
+
+/** A Claude request, sent again after a wait when Claude says it's getting
+ * too many (429) or is overloaded (529). */
+async function claudeFetch(body: Record<string, unknown>): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY!,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(body),
+    })
+    if ((response.status !== 429 && response.status !== 529) || attempt >= RATE_LIMIT_RETRIES) return response
+    const after = Number(response.headers.get('retry-after'))
+    const waitMs = Math.min(30_000, Number.isFinite(after) && after > 0 ? after * 1000 : 10_000 * (attempt + 1))
+    console.log(`Claude ${response.status}; trying again in ${waitMs / 1000}s`)
+    await response.body?.cancel().catch(() => {})
+    await new Promise((resolve) => setTimeout(resolve, waitMs))
+  }
 }
 
 /** One round of writing the page. Supabase stops a function after 150s on
@@ -368,6 +463,7 @@ async function generateDeckPart(
     .eq('id', sessionId)
 
   if (part > 0) await supabase.storage.from(DECKS_BUCKET).remove([partialPath])
+  await startNextQueued(supabase, authHeader)
 }
 
 /** The photos the options put in the presentation: all, starred, or none. */
@@ -517,19 +613,11 @@ For each group, decide which photos the attendee's write-up doesn't need: a phot
       text: 'Return ONLY a JSON object {"redundant": [labels]}, e.g. {"redundant": ["G1P1", "G1P2"]}, or {"redundant": []}. No markdown fences, no commentary.',
     })
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY!,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: NAMING_MODEL,
-        thinking: { type: 'between_tools' },
-        max_tokens: 2000,
-        messages: [{ role: 'user', content }],
-      }),
+    const response = await claudeFetch({
+      model: NAMING_MODEL,
+      thinking: { type: 'between_tools' },
+      max_tokens: 2000,
+      messages: [{ role: 'user', content }],
     })
     if (!response.ok) throw new Error(`Claude API ${response.status}: ${(await response.text()).slice(0, 300)}`)
     const data: { content?: { type: string; text?: string }[] } = await response.json()
@@ -671,19 +759,11 @@ ${presentationRequirements(o)}`
   // Streamed, not one blocking request: writing a whole page takes minutes,
   // and a connection that sits silent that long gets dropped upstream (seen
   // as a Cloudflare 520 from api.anthropic.com). Streaming keeps bytes moving.
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY!,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: ANTHROPIC_MODEL,
-      max_tokens: 48000,
-      stream: true,
-      messages,
-    }),
+  const response = await claudeFetch({
+    model: ANTHROPIC_MODEL,
+    max_tokens: 48000,
+    stream: true,
+    messages,
   })
 
   if (!response.ok || !response.body) {
@@ -919,20 +999,13 @@ async function organizeSession(
     keys.push('placements')
   }
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY!,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: NAMING_MODEL,
-      thinking: { type: 'between_tools' },
-      max_tokens: 6000,
-      messages: [{
-        role: 'user',
-        content: `Below is what an attendee captured during one conference talk, in order, each line tagged with its elapsed time: their NOTEs, the SPEAKER's words (transcribed on the phone, so some words may be wrong; numbered L1, L2...), and text read off SLIDE PHOTOs.
+  const response = await claudeFetch({
+    model: NAMING_MODEL,
+    thinking: { type: 'between_tools' },
+    max_tokens: 6000,
+    messages: [{
+      role: 'user',
+      content: `Below is what an attendee captured during one conference talk, in order, each line tagged with its elapsed time: their NOTEs, the SPEAKER's words (transcribed on the phone, so some words may be wrong; numbered L1, L2...), and text read off SLIDE PHOTOs.
 
 ${material}
 
@@ -940,8 +1013,7 @@ Do the following, grounded strictly in what's above -- never invent, and never p
 ${tasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
 
 Return ONLY one JSON object with exactly these keys: ${keys.join(', ')}. No markdown fences, no commentary.`,
-      }],
-    }),
+    }],
   })
   if (!response.ok) throw new Error(`Claude API ${response.status}: ${(await response.text()).slice(0, 300)}`)
   const data: { content?: { type: string; text?: string }[] } = await response.json()
@@ -1069,24 +1141,16 @@ async function nameSession(
     transcriptSegments.length ? `Transcript:\n${transcriptSegments.map((t) => t.text).join(' ')}` : '',
   ].filter(Boolean).join('\n\n').slice(0, 12000)
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY!,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: NAMING_MODEL,
-      // Sonnet 5.5 thinks before answering unless told not to, and the
-      // thinking alone used up a small token cap, leaving no title.
-      thinking: { type: 'between_tools' },
-      max_tokens: 200,
-      messages: [{
-        role: 'user',
-        content: `Here is what an attendee captured during one conference talk. Give the talk a title for their list of sessions: what it was about, 2 to 7 words, Title Case, no quotes or trailing punctuation. Use the talk's own title if a slide shows it. If there isn't enough here to tell what it was about, reply with exactly NONE.\n\n${material}`,
-      }],
-    }),
+  const response = await claudeFetch({
+    model: NAMING_MODEL,
+    // Sonnet 5.5 thinks before answering unless told not to, and the
+    // thinking alone used up a small token cap, leaving no title.
+    thinking: { type: 'between_tools' },
+    max_tokens: 200,
+    messages: [{
+      role: 'user',
+      content: `Here is what an attendee captured during one conference talk. Give the talk a title for their list of sessions: what it was about, 2 to 7 words, Title Case, no quotes or trailing punctuation. Use the talk's own title if a slide shows it. If there isn't enough here to tell what it was about, reply with exactly NONE.\n\n${material}`,
+    }],
   })
   if (!response.ok) {
     console.error(`nameSession: Claude API ${response.status}: ${(await response.text()).slice(0, 300)}`)

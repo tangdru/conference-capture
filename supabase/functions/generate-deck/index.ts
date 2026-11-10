@@ -219,6 +219,29 @@ async function markGenerating(
     .update({ deck_status: 'generating', deck_error: null, deck_heartbeat_at: now })
     .eq('id', sessionId)
   if (updateError) throw updateError
+
+  // Two asked for at the same moment both find nothing building above. Each
+  // has now marked itself, so look again: only the earliest goes ahead, and
+  // the other waits its turn.
+  const { data: racing, error: racingError } = await supabase
+    .from('cc_sessions')
+    .select('id')
+    .eq('deck_status', 'generating')
+    .gt('deck_heartbeat_at', recent)
+    .order('deck_heartbeat_at', { ascending: true })
+    .order('id', { ascending: true })
+    .limit(1)
+  if (racingError) throw racingError
+  const first = racing?.[0]?.id
+  if (first && first !== sessionId) {
+    const { error: queueError } = await supabase
+      .from('cc_sessions')
+      .update({ deck_status: 'queued' })
+      .eq('id', sessionId)
+    if (queueError) throw queueError
+    console.log(`generate-deck: ${sessionId} queued behind ${first} (asked for at the same time)`)
+    return 'queued'
+  }
   return 'started'
 }
 

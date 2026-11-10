@@ -10,9 +10,33 @@ changes.
   review. When sending a build to Friends, combine the notes of every build
   since the last one Friends got (marked below).
 
-**Last build sent to Friends: 48** (sent 2026-11-08)
+**Last build sent to Friends: 51** (sent 2026-11-10)
 
 ---
+
+## Build 51 — internal, Friends
+
+New in build 51: a photo deleted after its presentation was built is taken
+out of the presentation when it opens, instead of showing as a broken image.
+
+Friends got these notes (builds 49, 50 and 51 combined):
+
+New since your last build (48):
+
+Fixes
+- A photo you delete from a session is taken out of a presentation built before you deleted it, instead of showing as a broken image.
+- Past 1,000 entries in total, the newest sessions showed up empty or seemed missing. Everything loads now.
+- Sign-in emails now show just the code, so work email security can't use it up before you type it.
+
+Faster
+- Your sessions show the moment the app opens, from a copy saved on the phone, then refresh. With no signal, the last loaded sessions still show.
+
+Session cards and capture
+- Session cards show how long each talk was recorded.
+- While recording, the camera has a Remember this star right of the shutter, in the same spot as the star beside the camera button in the session. Held sideways, it's below the shutter.
+
+Presentations
+- Repeat photos of a slide that builds up are left out, keeping the fullest one (Presentation options > Skip repeated slides, on by default).
 
 ## Build 50 — internal
 

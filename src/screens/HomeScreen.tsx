@@ -217,6 +217,11 @@ export function HomeScreen({
     }
   }
 
+  /** A finished presentation opens on tap; anything else opens the session. */
+  function opensPresentation(session: Session): boolean {
+    return !isSessionActive(session, now) && session.deckStatus === 'ready' && !!session.deckPath
+  }
+
   function renderCard(session: Session) {
     return (
       <SwipeActions
@@ -227,7 +232,11 @@ export function HomeScreen({
         // Close the row on any action so the card slides back into view and
         // its status line (e.g. "Building presentation…") is visible.
         actions={[
-          { icon: <EditIcon />, label: 'Edit session', onClick: () => onOpenSession(session.id) },
+          // Only where a tap opens the presentation; otherwise a tap already
+          // opens the session.
+          ...(opensPresentation(session)
+            ? [{ icon: <EditIcon />, label: 'Edit session', onClick: () => onOpenSession(session.id) }]
+            : []),
           ...deckActions(session),
           session.pinnedAt
             ? { icon: <PinIcon filled />, label: 'Unpin', onClick: () => onTogglePin(session.id) }
@@ -245,10 +254,7 @@ export function HomeScreen({
           session={session}
           now={now}
           // A finished presentation opens on tap; Edit (swipe) opens the session.
-          onTap={() =>
-            !isSessionActive(session, now) && session.deckStatus === 'ready' && session.deckPath
-              ? onViewDeck(session.id)
-              : onOpenSession(session.id)}
+          onTap={() => (opensPresentation(session) ? onViewDeck(session.id) : onOpenSession(session.id))}
           onViewDeck={() => onViewDeck(session.id)}
           onGenerateDeck={() => onGenerateDeck(session.id)}
         />

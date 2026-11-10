@@ -14,6 +14,18 @@ changes.
 
 ---
 
+## Build 55 — internal
+
+New in build 55:
+
+- A session whose presentation finished building leaves the live spot at the
+  top straight away, so its card opens the presentation.
+- No signal? "Load failed" now reads "No connection", and the list reloads
+  and the message clears by itself when you're back online.
+- Presentations build one at a time: ask for another while one is building
+  and its card says "Presentation queued" until its turn. (Needs the server
+  update, pending.)
+
 ## Build 54 — internal
 
 New in build 54: links from QR codes

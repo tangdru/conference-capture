@@ -690,11 +690,3 @@ export async function replaceDeckHtml(path: string, html: string): Promise<void>
   if (error) throw error
 }
 
-// A Blob URL (rather than a signed URL) so the browser treats it as same-origin
-// -- the only way an <a download> actually saves the file instead of just
-// navigating to it, since the real file lives in a private, cross-origin bucket.
-export async function resolveDeckUrl(path: string): Promise<string> {
-  const { data, error } = await supabase.storage.from(DECKS_BUCKET).download(path)
-  if (error) throw error
-  return URL.createObjectURL(data)
-}

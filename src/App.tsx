@@ -368,8 +368,16 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         setOpenDeck({ title: session.title, html: await loadDeckHtml(session, session.deckPath) })
         return
       }
-      const url = await db.resolveDeckUrl(session.deckPath)
-      window.open(url, '_blank', 'noopener')
+      // The tab opens now, while this still counts as the user's tap (a popup
+      // blocker would stop it after the wait), and gets the page once loaded.
+      // The page goes in as UTF-8 HTML from here: storage hands it back as
+      // plain text, which showed the page's source with garbled dashes.
+      const tab = window.open('', '_blank')
+      if (tab) tab.opener = null
+      const html = await loadDeckHtml(session, session.deckPath)
+      const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }))
+      if (tab) tab.location.href = url
+      else window.open(url, '_blank', 'noopener')
     } catch (err) {
       setHomeError(errorMessage(err, 'Failed to open presentation'))
     }

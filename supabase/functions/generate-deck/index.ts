@@ -906,7 +906,7 @@ async function organizeSession(
     action_items: 'actionItems: commitments or follow-ups the SPEAKER made (e.g. "I\'ll share the slides", "it ships in Q2"), not things the attendee should do. Each {text, context}: the commitment and brief surrounding context. [] if none.',
     speaker_bio: 'speakerBio: only if the content shows who the speaker is (a self-introduction, or a title or intro slide): {name, role, org, description} with a one-line description; empty string for any part not stated. null if the speaker\'s identity isn\'t established -- never guess.',
     acronyms: 'acronyms: acronyms or jargon used but not explained by the speaker (skip ones they define). Each {term, expansion}. [] if none.',
-    references: 'references: papers, books, tools, products or URLs the speaker or slides explicitly named. Each {title, source, description, url}: source is the author, publisher or site; description one line; url only if one was actually given, else null. [] if none.',
+    references: 'references: papers, books, tools, products or URLs the speaker or slides explicitly named. Each {title, source, description, url}: source is the author, publisher or site; description one line; url only if one was actually given, else null. A link from a QR code on a slide photo counts as given: list each one with that exact url, titled by what the slide says it\'s for. [] if none.',
   }
   const keyFor: Record<EntryKind, string> = {
     summary: 'summary', action_items: 'actionItems', speaker_bio: 'speakerBio', acronyms: 'acronyms', references: 'references',

@@ -14,6 +14,15 @@ changes.
 
 ---
 
+## Build 57 — internal
+
+New in build 57:
+
+- Presentations no longer show a stray "```html" line at the top. Ones
+  already built are tidied the first time they're opened.
+- (Server, already live:) new presentations are saved without it, and the
+  website opens presentations as a page instead of showing their code.
+
 ## Build 56 — internal
 
 New in build 56:

@@ -5,6 +5,8 @@ import { hasContentSinceDeck } from '../deck'
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
 import { useKeyboardHeight } from '../hooks/useKeyboardHeight'
 import { SessionCard } from '../components/SessionCard'
+import { PresentationCard } from '../components/PresentationCard'
+import { groupByDay } from '../dayGroups'
 import { SearchResults } from '../components/SearchResults'
 import { searchSessions } from '../search'
 import { SortMenu, SORT_OPTIONS, type SessionSort } from '../components/SortMenu'
@@ -21,6 +23,27 @@ import { TOUR_REVEAL_EVENT, type TourRevealTarget } from '../tour'
 import './HomeScreen.css'
 
 const SORT_KEY = 'cc-session-sort'
+const VIEW_KEY = 'cc-home-view'
+const COLLAPSED_KEY = 'cc-collapsed-days'
+
+type HomeView = 'sessions' | 'presentations'
+
+function savedView(): HomeView {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'presentations' ? 'presentations' : 'sessions'
+  } catch {
+    return 'sessions'
+  }
+}
+
+function savedCollapsed(): Set<string> {
+  try {
+    const saved = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '[]')
+    return new Set(Array.isArray(saved) ? saved.filter((k) => typeof k === 'string') : [])
+  } catch {
+    return new Set()
+  }
+}
 
 function savedSort(): SessionSort {
   try {
@@ -84,6 +107,9 @@ export function HomeScreen({
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SessionSort>(savedSort)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [view, setView] = useState<HomeView>(savedView)
+  // Days folded away, by date, remembered between opens.
+  const [collapsed, setCollapsed] = useState<Set<string>>(savedCollapsed)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const results = useMemo(() => searchSessions(sessions, query), [sessions, query])
   const searching = query.trim().length > 0
@@ -112,6 +138,55 @@ export function HomeScreen({
     searchInputRef.current?.blur()
   }
 
+  function changeView(next: HomeView) {
+    setView(next)
+    try {
+      localStorage.setItem(VIEW_KEY, next)
+    } catch {
+      // Not remembered this time.
+    }
+  }
+
+  function toggleDay(key: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      try {
+        localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]))
+      } catch {
+        // Not remembered this time.
+      }
+      return next
+    })
+  }
+
+  /** Sessions under a heading per day when the sort is by time; the name and
+   * presentation sorts stay one list. */
+  function renderByDay(list: Session[], render: (session: Session) => React.ReactNode, dated: boolean) {
+    if (!dated) return list.map(render)
+    const timeOf = sort === 'activity' && view === 'sessions' ? lastActivityAt : (s: Session) => s.startedAt
+    return groupByDay(list, timeOf, now).map((day) => {
+      const open = !collapsed.has(day.key)
+      return (
+        <section key={day.key} className="home-day" aria-label={day.label}>
+          <button className="home-day__header" onClick={() => toggleDay(day.key)} aria-expanded={open}>
+            <span className="home-day__label">{day.label}</span>
+            <span className="home-day__count">
+              {day.items.length} {view === 'presentations'
+                ? (day.items.length === 1 ? 'presentation' : 'presentations')
+                : (day.items.length === 1 ? 'session' : 'sessions')}
+            </span>
+            <svg className={`home-day__chevron${open ? '' : ' home-day__chevron--closed'}`} viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+              <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          {open && <div className="home-day__items">{day.items.map(render)}</div>}
+        </section>
+      )
+    })
+  }
+
   function changeSort(next: SessionSort) {
     setSort(next)
     try {
@@ -125,6 +200,10 @@ export function HomeScreen({
   // you're in the middle of. The chosen sort orders everything else.
   const live = sortSessions(sessions, 'started').filter((s) => isSessionActive(s, now))
   const past = sortSessions(sessions, sort).filter((s) => !isSessionActive(s, now))
+  const datedSort = sort === 'started' || sort === 'oldest' || sort === 'activity'
+  // Finished presentations, in the chosen order (by date unless sorted by name).
+  const presentations = sortSessions(sessions, sort === 'deck' || sort === 'activity' ? 'started' : sort)
+    .filter((s) => s.deckStatus === 'ready' && s.deckPath)
 
   // The tutorial opens the first card's swipe panel to show what's in it.
   const firstCardId = useRef<string | null>(null)
@@ -207,6 +286,21 @@ export function HomeScreen({
             </span>
           </button>
         </div>
+        {sessions.length > 0 && !searching && (
+          <div className="home-view-switch" role="tablist" aria-label="Show">
+            {(['sessions', 'presentations'] as const).map((v) => (
+              <button
+                key={v}
+                role="tab"
+                aria-selected={view === v}
+                className={`home-view-switch__tab${view === v ? ' is-selected' : ''}`}
+                onClick={() => changeView(v)}
+              >
+                {v === 'sessions' ? 'Sessions' : 'Presentations'}
+              </button>
+            ))}
+          </div>
+        )}
       </header>
 
       {error && (
@@ -244,17 +338,31 @@ export function HomeScreen({
           {searching ? (
             <SearchResults results={results} query={query.trim()} onOpen={onOpenSession} onAsk={() => onAskAll(query.trim())} />
           ) : (
-            <>
-              {live.map(renderCard)}
-
-              {sessions.length === 0 && (
+            view === 'presentations' && sessions.length > 0 ? (
+              presentations.length === 0 ? (
                 <p className="home-empty">
-                  No sessions yet. Tap "New Session" to start capturing your first talk.
+                  No presentations yet. Swipe a session and tap Generate presentation.
                 </p>
-              )}
+              ) : (
+                renderByDay(
+                  presentations,
+                  (session) => <PresentationCard key={session.id} session={session} onOpen={() => onViewDeck(session.id)} />,
+                  sort !== 'name',
+                )
+              )
+            ) : (
+              <>
+                {live.map(renderCard)}
 
-              {past.map(renderCard)}
-            </>
+                {sessions.length === 0 && (
+                  <p className="home-empty">
+                    No sessions yet. Tap "New Session" to start capturing your first talk.
+                  </p>
+                )}
+
+                {renderByDay(past, renderCard, datedSort)}
+              </>
+            )
           )}
         </div>
       </div>

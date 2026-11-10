@@ -52,6 +52,27 @@ and starring any entry (2026-11-01). Rough order of value.
 
 - **Export a written summary** to Notes, email or Notion, alongside the deck.
 
+## Finding things across a conference
+
+Day groups and the Presentations view shipped first (2026-11-09). The rest,
+roughly in order:
+
+- **Build all of a day's presentations at once.** One tap runs Sparkle on
+  every session of the day without a presentation, which also names the many
+  sessions still called "Session".
+- **Events.** Group days into an event (e.g. "IEEE VIS 2026"), suggested from
+  dates or made by hand, with its own page of talks. Needs the day groups.
+- **Event digest.** One presentation for a day or event: themes across the
+  talks, where speakers agreed and differed, linking into each talk's
+  presentation. Builds on Ask across sessions.
+- **Desktop web layout.** Sessions by day on the left, the open presentation
+  on the right; the browser version today is the phone layout stretched.
+- **Share by link.** A private, optionally expiring link to a presentation,
+  so colleagues can open it in any browser without the app.
+- **Filters and favorites.** Has a presentation, starred, this week; star a
+  whole session.
+- **Export** to Notion or Google Docs.
+
 ## Storage and cost
 
 Considered 2026-11-08, not decided. Supabase holds the main copy of

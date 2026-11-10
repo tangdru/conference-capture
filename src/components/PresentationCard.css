@@ -1,0 +1,82 @@
+.presentation-card {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  text-align: left;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.presentation-card:active {
+  transform: scale(0.99);
+}
+
+/* A slide in 4:3, the shape most talks use. */
+.presentation-card__cover {
+  flex-shrink: 0;
+  width: 96px;
+  height: 72px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.presentation-card__cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.presentation-card__cover .inline-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.presentation-card__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.presentation-card__title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.presentation-card__speaker {
+  font-size: 13px;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.presentation-card__summary {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-secondary, var(--text-muted));
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.presentation-card__meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}

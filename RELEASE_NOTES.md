@@ -14,6 +14,21 @@ changes.
 
 ---
 
+## Build 52 — internal
+
+New in build 52: a home list you can scan
+
+- Sessions are grouped by day (Today, Yesterday, "Sun, Nov 8") with a count.
+  Tap a day to fold it away; it stays folded.
+- A session with a finished presentation shows a slide from the talk, the
+  speaker and where they're from, and the date and minutes to read. Tap it
+  to open the presentation.
+- Swipe a session for Edit (opens the session), Share, Rebuild, Pin and
+  Delete. Pinned sessions sit at the top.
+- The slide on the card is one Sparkle picks as the most telling (a chart or
+  key idea, not the title slide); a photo you starred wins. Rebuild an older
+  presentation to get Sparkle's pick and the reading time.
+
 ## Build 51 — internal, Friends
 
 New in build 51: a photo deleted after its presentation was built is taken

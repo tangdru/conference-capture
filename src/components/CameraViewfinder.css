@@ -323,12 +323,18 @@ html.native-camera .capture-screen > :not(.viewfinder) {
   transform: scale(0.94);
 }
 
-/* Remember this, left of the shutter (where the Camera app keeps its last
-   photo): the same star and yellow as on the session screen. */
+/* Remember this, beside the shutter: its centre 76px right of the shutter's
+   centre, the same as the star beside the camera button on the session
+   screen, so it stays put as the camera opens. Held sideways it sits below
+   the shutter as the viewer sees it: the right side when the phone's top is
+   turned right, the left side when it's turned left. */
 .viewfinder__remember {
-  grid-column: 1;
+  grid-column: 3;
   grid-row: 1;
-  justify-self: center;
+  justify-self: start;
+  /* The column starts 62px from the shutter's centre (half its 68px plus the
+     28px gap); -10px puts this 48px button's centre at 76px. */
+  margin-left: -10px;
   width: 48px;
   height: 48px;
   display: flex;
@@ -340,6 +346,13 @@ html.native-camera .capture-screen > :not(.viewfinder) {
   background: none;
   color: var(--text-primary);
   cursor: pointer;
+}
+
+.viewfinder__remember--left {
+  grid-column: 1;
+  justify-self: end;
+  margin-left: 0;
+  margin-right: -10px;
 }
 
 .viewfinder__remember .inline-icon {

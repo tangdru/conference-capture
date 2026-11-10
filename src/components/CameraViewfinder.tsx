@@ -378,7 +378,7 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
           <button className="viewfinder__shutter" onClick={capture} aria-label="Capture photo" />
           {onRemember && (
             <button
-              className={`viewfinder__remember${remembered ? ' viewfinder__remember--done' : ''}`}
+              className={`viewfinder__remember${tilt === 270 ? ' viewfinder__remember--left' : ''}${remembered ? ' viewfinder__remember--done' : ''}`}
               onClick={onRemember}
               aria-label={remembered ? 'Remembered' : 'Remember this moment'}
             >

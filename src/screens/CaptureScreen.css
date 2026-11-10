@@ -259,6 +259,14 @@
   justify-content: flex-end;
 }
 
+/* Remember this sits just right of the camera button, its centre 76px from
+   the button's centre -- where the camera view puts its star beside the
+   shutter -- and Ask stays at the far right. */
+.capture-actions__end .remember-btn {
+  margin-left: 14px;
+  margin-right: auto;
+}
+
 /* Record/pause with the running time beside it. */
 .rec-pill {
   display: flex;

@@ -11,6 +11,14 @@ on the native app is in `native-app-migration.md`.
   capture, or until its presentation is built (2026-11-10). Ending could
   offer to build the presentation right away. Ended sessions can still be
   edited; recording again would reopen them. (Requested 2026-11-10.)
+- **Ask during a live session.** Ask questions about the talk while it's
+  still going (today Ask works on finished sessions). Answers would draw on
+  the transcript and photos captured so far. (Requested 2026-11-10.)
+- **Swipe down to close a photo.** When viewing a photo inside a live
+  session, swipe down returns to the session — the same gesture as after
+  taking a photo. (Requested 2026-11-10.)
+- **Session photo album.** A grid of every photo in the session, opened from
+  the session, to browse them all at once. (Requested 2026-11-10.)
 
 ## Native iOS
 

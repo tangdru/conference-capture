@@ -14,6 +14,14 @@ changes.
 
 ---
 
+## Build 63 — internal
+
+New in build 63:
+
+- Share now offers "Share link" and "Download". Download opens the share
+  sheet with the presentation file, to save to Files, text, email or AirDrop.
+  (It was called "Share file".)
+
 ## Build 62 — internal
 
 New in build 62: share presentations by link.

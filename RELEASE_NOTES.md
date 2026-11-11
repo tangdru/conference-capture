@@ -14,6 +14,22 @@ changes.
 
 ---
 
+## Build 59 — internal
+
+New in build 59: errors say what happened.
+
+- Every error is one short line, decided ahead of time -- e.g. "Out of
+  Claude API credits", "No signal", "Signed out or sign-in expired",
+  "Build stopped partway". Anything else reads "Something went wrong, try
+  again". No more raw technical messages.
+- A presentation that failed shows its reason on the card, beside the red !.
+- Out of Claude API credits: the presentation goes back to the front of the
+  queue and the rest keep their places, instead of each failing in turn. The
+  app tries again every 15 minutes and carries on by itself once there's
+  credit. (Server part live 2026-11-10.)
+- A change the server refuses, or the phone running out of space, now says
+  so instead of failing silently.
+
 ## Build 58 — internal
 
 New in build 58: made for bad conference wifi.

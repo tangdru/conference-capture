@@ -45,13 +45,6 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   const [route, setRoute] = useState<Route>({ screen: 'home' })
   const [loadError, setLoadError] = useState<string | null>(null)
   const [homeError, setHomeError] = useState<string | null>(null)
-  // A short, non-error confirmation (e.g. where a download went); fades by itself.
-  const [homeNotice, setHomeNotice] = useState<string | null>(null)
-  useEffect(() => {
-    if (!homeNotice) return
-    const timer = window.setTimeout(() => setHomeNotice(null), 4000)
-    return () => window.clearTimeout(timer)
-  }, [homeNotice])
   const [openDeck, setOpenDeck] = useState<{ title: string; html: string } | null>(null)
   // Ask across all sessions. Held here, not in HomeScreen, so it's still
   // open with its answers on coming back from a session it cited.
@@ -512,20 +505,24 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       const html = length === 'short' ? shortDeckHtml(fullHtml) : fullHtml
       const baseName = session.title.replace(/[^\w\- ]+/g, '').trim() || 'presentation'
       const fileName = `${baseName}${length === 'short' ? ' - TLDR' : ''}.html`
-      // Download: the page saved as a file to keep. In the app it goes to the
-      // Files app (On My iPhone › Conference Capture › Presentations).
+      // Download: the page itself as a file, through the share sheet -- save
+      // it to Files, text it, email it, AirDrop it.
       if (Capacitor.isNativePlatform()) {
-        await Filesystem.writeFile({
-          path: `Presentations/${fileName}`,
+        const { uri } = await Filesystem.writeFile({
+          path: fileName,
           data: html,
-          directory: Directory.Documents,
+          directory: Directory.Cache,
           encoding: Encoding.UTF8,
-          recursive: true,
         })
-        setHomeNotice('Saved to Files › Conference Capture › Presentations')
+        await Share.share({ title: session.title, files: [uri] })
         return
       }
       const file = new File([html], fileName, { type: 'text/html' })
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ title: session.title, files: [file] })
+        return
+      }
+      // No share sheet (most desktop browsers): a plain download.
       const url = URL.createObjectURL(file)
       const a = document.createElement('a')
       a.href = url
@@ -679,7 +676,6 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         await Promise.all([refreshSessions(), reloadSavedShares()])
       }}
       error={homeError}
-      notice={homeNotice}
       onDismissError={() => setHomeError(null)}
       onAskAll={(question) => setAskAll({ question, turns: [] })}
     />

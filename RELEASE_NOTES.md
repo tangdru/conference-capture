@@ -60,8 +60,8 @@ New in build 55:
 - No signal? "Load failed" now reads "No connection", and the list reloads
   and the message clears by itself when you're back online.
 - Presentations build one at a time: ask for another while one is building
-  and its card says "Presentation queued" until its turn. (Needs the server
-  update, pending.)
+  and its card says "Presentation queued" until its turn. (Server update
+  went live 2026-11-10.)
 
 ## Build 54 — internal
 

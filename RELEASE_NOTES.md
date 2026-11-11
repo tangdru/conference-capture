@@ -14,6 +14,17 @@ changes.
 
 ---
 
+## Build 61 — internal
+
+New in build 61:
+
+- Presentations: tapping a chapter in the sticky chapter bar scrolls to it,
+  instead of leaving a black screen.
+- Presentations whose text ran to the edge of the screen now get side
+  margins when you view them (every presentation, old and new).
+- (Server, already live:) Sparkle now always writes side margins into new
+  presentations, so they look right when shared and opened outside the app.
+
 ## Build 60 — internal
 
 New in build 60:

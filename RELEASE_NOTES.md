@@ -10,11 +10,50 @@ changes.
   review. When sending a build to Friends, combine the notes of every build
   since the last one Friends got (marked below).
 
-**Last build sent to Friends: 51** (sent 2026-11-10)
+**Last build sent to Friends: 63** (sent 2026-11-11)
 
 ---
 
-## Build 63 — internal
+## Build 63 — internal, Friends
+
+Sent to Friends with these combined notes (builds 52–63), which are also
+build 63's What to Test for every group:
+
+```
+New since build 51:
+
+SHARING
+- Share > "Share link": a link anyone can open in a browser, no app needed. Sharing again updates the same link.
+- Got a link from someone and have the app? Tap "Open in app" and it appears under "Shared with you" on your home screen.
+- Share > "Download" sends the presentation file itself: save to Files, text, email or AirDrop.
+
+WORKS ON BAD CONFERENCE WIFI
+- New Session starts at once, even with no signal.
+- Notes, edits, stars, renames, pins, deletes and pause/resume save on the phone first and send when there's a connection.
+- The app opens straight to your sessions, and loads only what changed.
+- Your recent presentations are kept on the phone and open instantly, offline too.
+
+PRESENTATIONS (SPARKLE)
+- Build several at once: they queue and build one at a time ("Presentation queued").
+- Links from QR codes on slides go into the References.
+- Tapping a chapter in the chapter bar scrolls to it; text no longer runs to the screen edge.
+- A finished session leaves the live spot at the top, so its card opens the presentation.
+
+HOME SCREEN
+- Sessions grouped by day; tap a day to fold it.
+- Finished presentations show a key slide, the speaker, the date and minutes to read.
+- Swipe a session for Edit, Share, Rebuild, Pin and Delete.
+
+CAMERA AND PHOTOS
+- Swipe down on a photo to close it.
+- In the camera, press and hold a thumbnail to see it large.
+- A light tap you can feel when you take a photo.
+
+CLEARER MESSAGES
+- Errors say what happened in a short line (e.g. "No signal", "Build stopped partway"), and a failed presentation shows why on its card.
+```
+
+The build itself:
 
 New in build 63:
 

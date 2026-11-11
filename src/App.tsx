@@ -45,6 +45,13 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   const [route, setRoute] = useState<Route>({ screen: 'home' })
   const [loadError, setLoadError] = useState<string | null>(null)
   const [homeError, setHomeError] = useState<string | null>(null)
+  // A short, non-error confirmation (e.g. where a download went); fades by itself.
+  const [homeNotice, setHomeNotice] = useState<string | null>(null)
+  useEffect(() => {
+    if (!homeNotice) return
+    const timer = window.setTimeout(() => setHomeNotice(null), 4000)
+    return () => window.clearTimeout(timer)
+  }, [homeNotice])
   const [openDeck, setOpenDeck] = useState<{ title: string; html: string } | null>(null)
   // Ask across all sessions. Held here, not in HomeScreen, so it's still
   // open with its answers on coming back from a session it cited.
@@ -466,19 +473,19 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   }
 
   /** A link anyone can open in a browser, or the page itself as a file. */
-  async function chooseShareKind(): Promise<'link' | 'file' | null> {
+  async function chooseShareKind(): Promise<'link' | 'download' | null> {
     if (!Capacitor.isNativePlatform()) {
-      return window.confirm('Share a link anyone can open in a browser? Cancel shares the file instead.') ? 'link' : 'file'
+      return window.confirm('Share a link anyone can open in a browser? Cancel downloads the file instead.') ? 'link' : 'download'
     }
     const { index } = await ActionSheet.showActions({
       title: 'Share presentation',
       options: [
         { title: 'Share link' },
-        { title: 'Share file' },
+        { title: 'Download' },
         { title: 'Cancel', style: ActionSheetButtonStyle.Cancel },
       ],
     })
-    return index === 0 ? 'link' : index === 1 ? 'file' : null
+    return index === 0 ? 'link' : index === 1 ? 'download' : null
   }
 
   async function shareDeck(id: string) {
@@ -505,24 +512,20 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       const html = length === 'short' ? shortDeckHtml(fullHtml) : fullHtml
       const baseName = session.title.replace(/[^\w\- ]+/g, '').trim() || 'presentation'
       const fileName = `${baseName}${length === 'short' ? ' - TLDR' : ''}.html`
-      // The native app hands the page to the iOS share sheet as a file, from
-      // which it can be saved to Files, AirDropped, mailed, etc.
+      // Download: the page saved as a file to keep. In the app it goes to the
+      // Files app (On My iPhone › Conference Capture › Presentations).
       if (Capacitor.isNativePlatform()) {
-        const { uri } = await Filesystem.writeFile({
-          path: fileName,
+        await Filesystem.writeFile({
+          path: `Presentations/${fileName}`,
           data: html,
-          directory: Directory.Cache,
+          directory: Directory.Documents,
           encoding: Encoding.UTF8,
+          recursive: true,
         })
-        await Share.share({ title: session.title, files: [uri] })
+        setHomeNotice('Saved to Files › Conference Capture › Presentations')
         return
       }
       const file = new File([html], fileName, { type: 'text/html' })
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ title: session.title, files: [file] })
-        return
-      }
-      // No share sheet (most desktop browsers) -- download it instead.
       const url = URL.createObjectURL(file)
       const a = document.createElement('a')
       a.href = url
@@ -676,6 +679,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         await Promise.all([refreshSessions(), reloadSavedShares()])
       }}
       error={homeError}
+      notice={homeNotice}
       onDismissError={() => setHomeError(null)}
       onAskAll={(question) => setAskAll({ question, turns: [] })}
     />

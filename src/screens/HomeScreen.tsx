@@ -80,6 +80,8 @@ interface HomeScreenProps {
   /** Reloads the list -- run by pulling it down past the top. */
   onRefresh: () => Promise<void>
   error: string | null
+  /** A short confirmation, shown until it fades (not an error). */
+  notice?: string | null
   onDismissError: () => void
   /** Ask Claude the search text as a question, across all sessions. */
   onAskAll: (question: string) => void
@@ -100,6 +102,7 @@ export function HomeScreen({
   onRemoveShared,
   onRefresh,
   error,
+  notice,
   onDismissError,
   onAskAll,
 }: HomeScreenProps) {
@@ -292,6 +295,12 @@ export function HomeScreen({
           </button>
         </div>
       </header>
+
+      {notice && !error && (
+        <div className="home-notice" role="status">
+          {notice}
+        </div>
+      )}
 
       {error && (
         <div className="home-error" role="alert">

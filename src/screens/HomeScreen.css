@@ -79,6 +79,14 @@
   background: currentColor;
 }
 
+.home-notice {
+  flex-shrink: 0;
+  background: rgba(0, 240, 220, 0.1);
+  color: var(--accent);
+  font-size: 13px;
+  padding: 10px 20px;
+}
+
 .home-error {
   flex-shrink: 0;
   background: rgba(255, 107, 107, 0.12);

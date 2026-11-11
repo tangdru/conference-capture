@@ -34,11 +34,6 @@ interface CaptureScreenProps {
   onBack: () => void
 }
 
-// The header's Enhance sparkle is hidden for now, even when there's new
-// transcript to enhance. The feature itself is intact -- set this to true
-// to bring the button back.
-const SHOW_ENHANCE_BUTTON = false
-
 function elapsedFor(session: Session, now: number): number {
   const live = session.status === 'recording' && session.liveSpanStartedAt
     ? now - session.liveSpanStartedAt
@@ -59,7 +54,6 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
   const [viewingPhotoId, setViewingPhotoId] = useState<string | null>(null)
   const [viewingVideoId, setViewingVideoId] = useState<string | null>(null)
   const [activeId, setActiveId] = useState<string | 'new' | null>(null)
-  const [enhancing, setEnhancing] = useState(false)
   // Briefly true after "Remember this", as its confirmation.
   const [remembered, setRemembered] = useState(false)
   // Words heard so far in the transcript segment that's still in progress.
@@ -70,11 +64,6 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
   const [pendingPhotos, setPendingPhotos] = useState<{ id: string; blob: Blob }[]>([])
   // Photos being straightened and read on-device (native only).
   const [processingPhotoIds, setProcessingPhotoIds] = useState<ReadonlySet<string>>(new Set())
-  // A ref, not just the `enhancing` state, guards re-entrancy -- a rapid
-  // double-tap can fire two clicks before React re-renders with the button
-  // disabled, which raced the edge function into running twice and
-  // doubling up enrichment content.
-  const enhancingRef = useRef(false)
   const savingNoteRef = useRef(false)
 
   useEffect(() => {
@@ -97,9 +86,6 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
     (i): i is VideoItem => i.type === 'video' && i.id === viewingVideoId,
   )
   const isLive = session.status === 'recording' || session.status === 'suspended'
-  const canEnhance = !enhancing && session.items.some(
-    (i) => i.type === 'transcript' && i.timestamp > (session.lastEnrichedAt ?? -Infinity),
-  )
 
   async function commitNewNote(text: string) {
     // The editor stays mounted until the save returns, so a blur (keyboard
@@ -439,28 +425,6 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
     () => { if (session.status === 'suspended') void resume() },
   )
 
-  /** Enhancement is its own action, independent of ending the session --
-   * callable any time there's new transcript since the last run (live,
-   * paused, or already complete), and repeatable as more audio comes in. */
-  async function handleEnhance() {
-    if (!canEnhance || enhancingRef.current) return
-    enhancingRef.current = true
-    setEnhancing(true)
-    try {
-      await db.enrichSession(session.id)
-      const [items, { lastEnrichedAt }] = await Promise.all([
-        db.fetchSessionItems(session.id),
-        db.fetchSessionEnrichmentState(session.id),
-      ])
-      onUpdateLocal((s) => ({ ...s, items, lastEnrichedAt }))
-    } catch (err) {
-      setSaveError(errorMessage(err))
-    } finally {
-      enhancingRef.current = false
-      setEnhancing(false)
-    }
-  }
-
   return (
     <div className="capture-screen" style={{ height: `calc(100dvh - ${keyboardHeight}px)` }}>
       <header className="capture-header">
@@ -471,7 +435,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
           <EditableTitle title={session.title} onCommit={commitTitle} />
         </div>
 
-        {(!isLive || (SHOW_ENHANCE_BUTTON && (canEnhance || enhancing))) && (
+        {!isLive && (
         <div className="capture-header__row2">
           {!isLive && (
             <div className="capture-header__primary">
@@ -484,16 +448,6 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
           )}
 
           <div className="capture-header__controls">
-            {SHOW_ENHANCE_BUTTON && (canEnhance || enhancing) && (
-              <button
-                className="header-btn"
-                onClick={handleEnhance}
-                disabled={enhancing}
-                aria-label={enhancing ? 'Enhancing…' : 'Enhance with new transcript'}
-              >
-                <SparkleIcon />
-              </button>
-            )}
             {!isLive && (
               session.deckStatus === 'ready' && session.deckGeneratedAt && (
                 session.updatedAt > session.deckGeneratedAt ? (
@@ -646,15 +600,6 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
         />
       )}
     </div>
-  )
-}
-
-function SparkleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M11 2l1.8 5.8a3 3 0 002 2L20.5 11.6l-5.7 1.8a3 3 0 00-2 2L11 21.2l-1.8-5.8a3 3 0 00-2-2L1.5 11.6l5.7-1.8a3 3 0 002-2L11 2z" fill="currentColor" />
-      <path d="M19 15l.7 2.3a1.2 1.2 0 00.8.8l2.3.7-2.3.7a1.2 1.2 0 00-.8.8L19 22.3l-.7-2.3a1.2 1.2 0 00-.8-.8l-2.3-.7 2.3-.7a1.2 1.2 0 00.8-.8L19 15z" fill="currentColor" />
-    </svg>
   )
 }
 

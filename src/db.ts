@@ -9,7 +9,7 @@ import { MESSAGES } from './networkError'
 import type { DeckStatus, EnrichmentItemData, HighlightItem, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData, TranscriptItem, VideoItem } from './types'
 
 const ITEM_COLUMNS = 'id, session_id, type, subtype, payload, text, caption, photo_path, video_path, duration_ms, item_timestamp, added_later, excluded, starred, position'
-const SESSION_COLUMNS = 'id, title, status, started_at, accumulated_ms, live_span_started_at, deck_status, deck_path, deck_error, deck_generated_at, deck_heartbeat_at, enrichment_error, last_enriched_at, updated_at, pinned_at, deck_cover_photo_id, deck_read_minutes'
+const SESSION_COLUMNS = 'id, title, status, started_at, accumulated_ms, live_span_started_at, deck_status, deck_path, deck_error, deck_generated_at, deck_heartbeat_at, updated_at, pinned_at, deck_cover_photo_id, deck_read_minutes'
 
 interface SessionRow {
   id: string
@@ -23,8 +23,6 @@ interface SessionRow {
   deck_error: string | null
   deck_generated_at: string | null
   deck_heartbeat_at: string | null
-  enrichment_error: string | null
-  last_enriched_at: string | null
   updated_at: string
   pinned_at: string | null
   deck_cover_photo_id: string | null
@@ -74,8 +72,6 @@ function sessionFromRow(row: SessionRow, items: TimelineItemData[]): Session {
     ...deckProgress(row),
     deckPath: row.deck_path,
     deckGeneratedAt: row.deck_generated_at ? new Date(row.deck_generated_at).getTime() : null,
-    enrichmentError: row.enrichment_error,
-    lastEnrichedAt: row.last_enriched_at ? new Date(row.last_enriched_at).getTime() : null,
     updatedAt: new Date(row.updated_at).getTime(),
     pinnedAt: row.pinned_at ? new Date(row.pinned_at).getTime() : null,
     deckCoverPhotoId: row.deck_cover_photo_id,
@@ -470,8 +466,6 @@ function newSessionRow(row: { id: string; title: string; status: string; started
     deck_error: null,
     deck_generated_at: null,
     deck_heartbeat_at: null,
-    enrichment_error: null,
-    last_enriched_at: null,
     updated_at: row.updated_at,
     pinned_at: row.pinned_at ?? null,
     deck_cover_photo_id: null,
@@ -799,15 +793,8 @@ export async function askAllSessions(
   return { answer: data.answer, sessions: data.sessions ?? {} }
 }
 
-export async function enrichSession(sessionId: string): Promise<number> {
-  await flushOutbox()
-  const { data, error } = await supabase.functions.invoke('enrich-session', { body: { sessionId } })
-  if (error) throw await functionError(error)
-  return data.count
-}
-
-/** Re-fetches a session's items -- used after enrich-session inserts new
- * rows server-side, so the local timeline picks them up without a full reload. */
+/** Re-fetches a session's items -- used after Sparkle saves entries into the
+ * session server-side, so the timeline picks them up without a full reload. */
 export async function fetchSessionItems(sessionId: string): Promise<TimelineItemData[]> {
   const { data, error } = await allPages<ItemRow>((from, to) => supabase
     .from('cc_timeline_items')
@@ -825,19 +812,6 @@ export async function fetchSessionItems(sessionId: string): Promise<TimelineItem
     if (item) items.push(item)
   }
   return items
-}
-
-/** Re-reads just the enrichment staleness marker after a run -- the edge
- * function sets it server-side, so the client re-fetches it rather than
- * approximating "now" locally. */
-export async function fetchSessionEnrichmentState(sessionId: string): Promise<{ lastEnrichedAt: number | null }> {
-  const { data, error } = await supabase
-    .from('cc_sessions')
-    .select('last_enriched_at')
-    .eq('id', sessionId)
-    .single()
-  if (error) throw error
-  return { lastEnrichedAt: data.last_enriched_at ? new Date(data.last_enriched_at).getTime() : null }
 }
 
 export async function fetchSessionDeckState(

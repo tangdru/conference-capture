@@ -4,7 +4,7 @@
 // step with explain() in supabase/functions/*/index.ts).
 
 export const MESSAGES = {
-  // Claude (Sparkle, Enhance, Ask) -- set by the server functions.
+  // Claude (Sparkle, Ask) -- set by the server functions.
   credits: 'Out of Claude API credits',
   apiKey: 'Claude API key missing or rejected',
   busy: 'Too many requests, even after the automatic retries',

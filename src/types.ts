@@ -132,11 +132,6 @@ export interface Session {
   deckPath: string | null
   deckError: string | null
   deckGeneratedAt: number | null
-  enrichmentError: string | null
-  /** Last time Enhancement successfully ran, or null if it never has. Gates
-   * whether Enhancement can run again -- it needs new transcript captured
-   * after this moment to have anything to do. */
-  lastEnrichedAt: number | null
   /** Last time any field on this session (or its items) was saved. */
   updatedAt: number
   /** When the user pinned it to the top of the home list, or null. */

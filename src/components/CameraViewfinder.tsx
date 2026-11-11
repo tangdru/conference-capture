@@ -224,7 +224,7 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
   }, [])
 
   async function capture() {
-    if (NATIVE) void Haptics.impact({ style: ImpactStyle.Medium })
+    if (NATIVE) void Haptics.impact({ style: ImpactStyle.Light })
     const degrees = NATIVE ? await DeviceTilt.getRotation().then((r) => r.degrees).catch(() => 0) : 0
     if (useNative) {
       setBlink(true)

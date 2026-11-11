@@ -209,10 +209,6 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
         ClipPlayer.shared.stop()
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.record, mode: .measurement, options: [])
-        // iOS silences haptics while an app records audio unless it asks to
-        // keep them -- without this, the shutter, Remember this and star taps
-        // can't be felt during a live session.
-        try? session.setAllowHapticsAndSystemSoundsDuringRecording(true)
         try session.setActive(true, options: .notifyOthersOnDeactivation)
         ClipRecorder.shared.begin()
     }

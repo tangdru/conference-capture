@@ -7,7 +7,8 @@
 // service-role key, and only for that user's id.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const BUCKETS = ['cc-photos', 'cc-videos', 'cc-decks']
+// cc-shared: pages shared by link, which must stop opening when the account goes.
+const BUCKETS = ['cc-photos', 'cc-videos', 'cc-decks', 'cc-shared']
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

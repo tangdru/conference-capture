@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
@@ -22,6 +22,8 @@ import { shouldAutoStartHomeTour, startHomeTour } from './tour'
 import { onPhotoUploaded, pendingPhotos, syncPhotoUploadAuth } from './photoUploads'
 import { onOutboxProblem, startOutbox } from './itemOutbox'
 import { startDeckUploads, uploadDeckLater } from './deckUploads'
+import { fetchSharedHtml, listSavedShares, removeSavedShare, saveShare, sharePresentation, stopSharing, tokenFromLink, type SavedShare } from './sharing'
+import { App as CapApp } from '@capacitor/app'
 import { MESSAGES, OFFLINE_MESSAGE, errorMessage } from './networkError'
 
 /** How many ready presentations to keep on the phone ahead of being opened. */
@@ -52,6 +54,60 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   useEffect(() => startOutbox(), [])
   useEffect(() => onOutboxProblem(setHomeError), [])
   useEffect(() => startDeckUploads(), [])
+
+  // Presentations others shared that were added to this account's sessions.
+  const [savedShares, setSavedShares] = useState<SavedShare[]>([])
+  const reloadSavedShares = useCallback(
+    () => listSavedShares().then(setSavedShares).catch(() => {}),
+    [],
+  )
+  useEffect(() => {
+    void reloadSavedShares()
+  }, [reloadSavedShares, userId])
+
+  // A shared page's "Open in app" (conferencecapture://shared/<token>) adds
+  // it to the sessions and opens it.
+  const addSharedRef = useRef<(token: string) => void>(() => {})
+  addSharedRef.current = (token: string) => {
+    void (async () => {
+      try {
+        await saveShare(userId, token)
+        const list = await listSavedShares()
+        setSavedShares(list)
+        const share = list.find((s) => s.token === token)
+        if (share) await openShared(share)
+      } catch (err) {
+        setHomeError(errorMessage(err))
+      }
+    })()
+  }
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+    const onUrl = (url: string | undefined) => {
+      const token = url ? tokenFromLink(url) : null
+      if (token) addSharedRef.current(token)
+    }
+    void CapApp.getLaunchUrl().then((launch) => onUrl(launch?.url)).catch(() => {})
+    const listener = CapApp.addListener('appUrlOpen', (event) => onUrl(event.url))
+    return () => {
+      void listener.then((l) => l.remove())
+    }
+  }, [])
+
+  async function openShared(share: SavedShare) {
+    if (!share.deck) return
+    try {
+      const html = await fetchSharedHtml(share.deck)
+      setOpenDeck({ title: share.deck.title, html: viewingHtml(html) })
+    } catch (err) {
+      setHomeError(errorMessage(err))
+    }
+  }
+
+  async function removeShared(token: string) {
+    setSavedShares((prev) => prev.filter((s) => s.token !== token))
+    await removeSavedShare(token).catch((err) => setHomeError(errorMessage(err)))
+  }
 
   // A photo that finishes uploading in the background is now in Supabase
   // like any other.
@@ -404,11 +460,41 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     }
   }
 
+  /** A link anyone can open in a browser, or the page itself as a file. */
+  async function chooseShareKind(): Promise<'link' | 'file' | null> {
+    if (!Capacitor.isNativePlatform()) {
+      return window.confirm('Share a link anyone can open in a browser? Cancel shares the file instead.') ? 'link' : 'file'
+    }
+    const { index } = await ActionSheet.showActions({
+      title: 'Share presentation',
+      options: [
+        { title: 'Share link' },
+        { title: 'Share file' },
+        { title: 'Cancel', style: ActionSheetButtonStyle.Cancel },
+      ],
+    })
+    return index === 0 ? 'link' : index === 1 ? 'file' : null
+  }
+
   async function shareDeck(id: string) {
     const session = sessions?.find((s) => s.id === id)
     if (!session?.deckPath) return
     try {
+      const kind = await chooseShareKind()
+      if (!kind) return
       const fullHtml = await loadDeckHtml(session, session.deckPath)
+      if (kind === 'link') {
+        const url = await sharePresentation(userId, session.id, session.title, fullHtml)
+        if (Capacitor.isNativePlatform()) {
+          await Share.share({ title: session.title, url })
+        } else if (navigator.share) {
+          await navigator.share({ title: session.title, url })
+        } else {
+          await navigator.clipboard?.writeText(url).catch(() => {})
+          window.prompt('Link copied. Anyone with it can open the presentation:', url)
+        }
+        return
+      }
       const length = await chooseDeckLength(fullHtml)
       if (!length) return
       const html = length === 'short' ? shortDeckHtml(fullHtml) : fullHtml
@@ -455,6 +541,8 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     // first. (The native app shows this as a standard iOS alert.)
     if (!window.confirm(`Delete "${session.title}"? Its notes, photos and transcript will be permanently removed.`)) return
     setSessions((prev) => prev?.filter((s) => s.id !== id) ?? prev)
+    // Its shared link stops opening too (best effort; needs signal).
+    void stopSharing(userId, id).catch(() => {})
     try {
       await db.deleteSession(session)
     } catch (err) {
@@ -576,7 +664,12 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       onTogglePin={togglePin}
       onShareDeck={shareDeck}
       onDeleteSession={deleteSession}
-      onRefresh={refreshSessions}
+      savedShares={savedShares}
+      onOpenShared={(share) => void openShared(share)}
+      onRemoveShared={(token) => void removeShared(token)}
+      onRefresh={async () => {
+        await Promise.all([refreshSessions(), reloadSavedShares()])
+      }}
       error={homeError}
       onDismissError={() => setHomeError(null)}
       onAskAll={(question) => setAskAll({ question, turns: [] })}

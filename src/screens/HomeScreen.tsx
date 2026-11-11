@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Session } from '../types'
+import type { SavedShare } from '../sharing'
+import { formatSessionSubtitle } from '../format'
 import { isSessionActive, lastActivityAt } from '../sessionActivity'
 import { hasContentSinceDeck } from '../deck'
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
@@ -71,6 +73,10 @@ interface HomeScreenProps {
   onTogglePin: (id: string) => void
   onShareDeck: (id: string) => void
   onDeleteSession: (id: string) => void
+  /** Presentations others shared that were added to these sessions. */
+  savedShares: SavedShare[]
+  onOpenShared: (share: SavedShare) => void
+  onRemoveShared: (token: string) => void
   /** Reloads the list -- run by pulling it down past the top. */
   onRefresh: () => Promise<void>
   error: string | null
@@ -89,6 +95,9 @@ export function HomeScreen({
   onTogglePin,
   onShareDeck,
   onDeleteSession,
+  savedShares,
+  onOpenShared,
+  onRemoveShared,
   onRefresh,
   error,
   onDismissError,
@@ -335,6 +344,42 @@ export function HomeScreen({
                     <span className="home-day__count">{pinned.length}</span>
                   </div>
                   <div className="home-day__items">{pinned.map(renderCard)}</div>
+                </section>
+              )}
+
+              {savedShares.length > 0 && (
+                <section className="home-day" aria-label="Shared with you">
+                  <div className="home-day__header home-day__header--static">
+                    <span className="home-day__label">Shared with you</span>
+                    <span className="home-day__count">{savedShares.length}</span>
+                  </div>
+                  <div className="home-day__items">
+                    {savedShares.map((share) => (
+                      <SwipeActions
+                        key={share.token}
+                        id={`shared-${share.token}`}
+                        revealedId={revealedId}
+                        onReveal={setRevealedId}
+                        actions={[{
+                          icon: <DeleteIcon />,
+                          label: 'Remove from my sessions',
+                          onClick: () => {
+                            setRevealedId(null)
+                            onRemoveShared(share.token)
+                          },
+                        }]}
+                      >
+                        <button className="session-card" onClick={() => onOpenShared(share)} disabled={!share.deck}>
+                          <p className="session-card__title">{share.deck?.title || 'Shared presentation'}</p>
+                          <p className="session-card__subtitle">
+                            {share.deck
+                              ? `Shared with you · added ${formatSessionSubtitle(share.addedAt)}`
+                              : 'No longer shared · swipe to remove'}
+                          </p>
+                        </button>
+                      </SwipeActions>
+                    ))}
+                  </div>
                 </section>
               )}
 

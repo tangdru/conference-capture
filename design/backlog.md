@@ -99,8 +99,16 @@ opens it), plus Pin. The rest, roughly in order:
   presentation. Builds on Ask across sessions.
 - **Desktop web layout.** Sessions by day on the left, the open presentation
   on the right; the browser version today is the phone layout stretched.
-- **Share by link.** A private, optionally expiring link to a presentation,
-  so colleagues can open it in any browser without the app.
+- **Share by link** -- built 2026-11-10 (build 62). Share → Share link gives a
+  link anyone can open in a browser; someone with the app taps "Open in app"
+  (or "Add to my sessions" on the website) and gets a "Shared with you" card
+  that opens the owner's current version. Possible later: an expiry date, and
+  a list of what you've shared with a "Stop sharing" switch.
+- **Friends (sharing option 2).** Builds on Share by link: find people (a name,
+  email, or a friend code / QR to scan at the conference), friend requests,
+  then "Share with…" a friend puts the same "Shared with you" card straight
+  into their list, with an accept/decline inbox and ideally a push
+  notification (needs APNs, see Native iOS).
 - **Filters.** Has a presentation, pinned, this week.
 - **Export** to Notion or Google Docs.
 

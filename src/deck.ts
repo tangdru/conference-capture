@@ -157,3 +157,42 @@ export function shortDeckHtml(html: string): string {
   doc.querySelectorAll('.cc-more').forEach((el) => el.remove())
   return `<!DOCTYPE html>\n${doc.documentElement.outerHTML}`
 }
+
+// Added only for viewing (never to the saved or shared file). In the app a
+// presentation shows in a sealed frame, where a tap on a chapter link
+// (href="#...") tries to load a new page and leaves the frame blank; this
+// turns those taps into scrolls. And a page Claude wrote with no side margins
+// gets some, so text doesn't touch the screen edge.
+const VIEWING_FIXES = `<script>(function(){
+document.addEventListener('click',function(e){
+  var a=e.target&&e.target.closest?e.target.closest('a[href^="#"]'):null;
+  if(!a)return;
+  e.preventDefault();
+  var id=decodeURIComponent(a.getAttribute('href').slice(1));
+  var t=id?(document.getElementById(id)||document.getElementsByName(id)[0]):null;
+  if(!t&&id)return;
+  var y=window.scrollY;
+  if(t)t.scrollIntoView({behavior:'smooth',block:'start'});else window.scrollTo({top:0,behavior:'smooth'});
+  setTimeout(function(){if(window.scrollY===y){if(t)t.scrollIntoView({block:'start'});else window.scrollTo(0,0);}},400);
+},true);
+function margins(){
+  var els=document.querySelectorAll('h1,h2,h3,p,li');
+  for(var i=0;i<els.length&&i<40;i++){
+    var r=els[i].getBoundingClientRect();
+    if(r.width>0&&(r.left<8||window.innerWidth-r.right<8)){
+      var s=document.createElement('style');
+      s.textContent='html,body{box-sizing:border-box}body{padding-left:max(20px,env(safe-area-inset-left))!important;padding-right:max(20px,env(safe-area-inset-right))!important}';
+      document.head.appendChild(s);
+      return;
+    }
+  }
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',margins);else margins();
+})()</script>`
+
+/** The page as shown in the app's viewer or a browser tab: with the viewing
+ * fixes above. Not for saving or sharing. */
+export function viewingHtml(html: string): string {
+  const close = html.toLowerCase().lastIndexOf('</body>')
+  return close === -1 ? html + VIEWING_FIXES : html.slice(0, close) + VIEWING_FIXES + html.slice(close)
+}

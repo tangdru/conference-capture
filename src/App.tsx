@@ -8,7 +8,7 @@ import type { PhotoItem, Session, TimelineItemData } from './types'
 import * as db from './db'
 import { clearCachedSessions, readCachedSessions, saveCachedSessions } from './sessionCache'
 import { cachedDeckKeys, clearCachedDecks, deckKey, readCachedDeck, saveCachedDeck } from './deckCache'
-import { cleanDeckHtml, compactDeckPhotos, hasPhotoLinks, hasShortVersion, shortDeckHtml } from './deck'
+import { cleanDeckHtml, compactDeckPhotos, viewingHtml, hasPhotoLinks, hasShortVersion, shortDeckHtml } from './deck'
 import { AuthGate, signOut } from './auth/AuthGate'
 import { AddEmailSheet } from './auth/AddEmailSheet'
 import { HomeScreen } from './screens/HomeScreen'
@@ -386,7 +386,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       // A new tab works in a browser, but the native app can't pass a blob:
       // URL to Safari -- show the page full-screen in-app there instead.
       if (Capacitor.isNativePlatform()) {
-        setOpenDeck({ title: session.title, html: await loadDeckHtml(session, session.deckPath) })
+        setOpenDeck({ title: session.title, html: viewingHtml(await loadDeckHtml(session, session.deckPath)) })
         return
       }
       // The tab opens now, while this still counts as the user's tap (a popup
@@ -396,7 +396,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       const tab = window.open('', '_blank')
       if (tab) tab.opener = null
       const html = await loadDeckHtml(session, session.deckPath)
-      const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }))
+      const url = URL.createObjectURL(new Blob([viewingHtml(html)], { type: 'text/html;charset=utf-8' }))
       if (tab) tab.location.href = url
       else window.open(url, '_blank', 'noopener')
     } catch (err) {

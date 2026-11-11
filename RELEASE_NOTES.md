@@ -14,6 +14,14 @@ changes.
 
 ---
 
+## Build 60 — internal
+
+New in build 60:
+
+- Clean-up only: the old Enhance feature (hidden since October; Sparkle does
+  its job now) is removed from the app, and its server function is deleted.
+  Nothing you use changes.
+
 ## Build 59 — internal
 
 New in build 59: errors say what happened.

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Session } from '../types'
 import type { SavedShare } from '../sharing'
 import { formatSessionSubtitle } from '../format'
@@ -23,6 +23,11 @@ import {
 import { Logo } from '../components/Logo'
 import { TOUR_REVEAL_EVENT, type TourRevealTarget } from '../tour'
 import './HomeScreen.css'
+
+// Where the session list was scrolled to. The home screen closes while a
+// presentation or a session is open, so this keeps the place for when it
+// comes back (for as long as the app is open).
+let savedScrollTop = 0
 
 const SORT_KEY = 'cc-session-sort'
 const COLLAPSED_KEY = 'cc-collapsed-days'
@@ -116,6 +121,20 @@ export function HomeScreen({
   const scrollRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const { progress, refreshing } = usePullToRefresh(scrollRef, listRef, onRefresh)
+
+  // Coming back from a presentation or a session: back where the list was.
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    el.scrollTop = savedScrollTop
+    const remember = () => {
+      if (!searchingRef.current) savedScrollTop = Math.max(0, el.scrollTop)
+    }
+    el.addEventListener('scroll', remember, { passive: true })
+    return () => el.removeEventListener('scroll', remember)
+  }, [])
+  const searchingRef = useRef(searching)
+  searchingRef.current = searching
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000)

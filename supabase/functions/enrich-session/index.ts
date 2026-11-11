@@ -24,6 +24,38 @@
 // anything, since there is no new spoken context to place them against.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+// What the app shows when something goes wrong: short and fixed, never the
+// raw error. Keep in step with MESSAGES in src/networkError.ts.
+const MESSAGES = {
+  credits: 'Out of Claude API credits',
+  apiKey: 'Claude API key missing or rejected',
+  busy: 'Too many requests, even after the automatic retries',
+  overloaded: 'Claude overloaded or down',
+  refused: 'Claude refused to write it',
+  tooBig: 'Session too big for one request',
+  stopped: 'Build stopped partway',
+  empty: 'Claude replied with nothing usable',
+  nothing: 'Nothing captured yet',
+  photos: "Photos couldn't be loaded for Claude",
+  unknown: 'Something went wrong, try again',
+}
+
+/** Which of MESSAGES a failure is. */
+function explain(err: unknown): string {
+  const text = err instanceof Error ? err.message : String(err)
+  if (/credit balance/i.test(text)) return MESSAGES.credits
+  if (/took too long|Couldn't continue/i.test(text)) return MESSAGES.stopped
+  if (/ANTHROPIC_API_KEY|\b40[13]\b|authentication_error|permission_error|x-api-key/i.test(text)) return MESSAGES.apiKey
+  if (/\b429\b|rate_limit/i.test(text)) return MESSAGES.busy
+  if (/\b413\b|request_too_large|prompt is too long|too many total/i.test(text)) return MESSAGES.tooBig
+  if (/\b5\d\d\b|overloaded|api_error|stream failed/i.test(text)) return MESSAGES.overloaded
+  if (/declined/i.test(text)) return MESSAGES.refused
+  if (/link a photo|\b400\b.*(image|url)/i.test(text)) return MESSAGES.photos
+  if (/returned no|malformed|Unexpected token|JSON/i.test(text)) return MESSAGES.empty
+  if (/no notes, transcript, or photos/i.test(text)) return MESSAGES.nothing
+  return MESSAGES.unknown
+}
+
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
 const ANTHROPIC_MODEL = 'claude-opus-5-5'
 const PHOTOS_BUCKET = 'cc-photos'
@@ -78,14 +110,16 @@ Deno.serve(async (req) => {
     sessionId = body.sessionId
     if (!sessionId) throw new Error('Missing sessionId')
   } catch (err) {
-    return jsonResponse({ error: err instanceof Error ? err.message : 'Bad request' }, 400)
+    console.error('enrich-session: bad request', err)
+    return jsonResponse({ error: MESSAGES.unknown }, 400)
   }
 
   try {
     const count = await enrichSession(supabase, sessionId)
     return jsonResponse({ count }, 200)
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Enrichment failed'
+    console.error('enrich-session failed:', err)
+    const message = explain(err)
     await supabase.from('cc_sessions').update({ enrichment_error: message }).eq('id', sessionId)
     return jsonResponse({ error: message }, 500)
   }

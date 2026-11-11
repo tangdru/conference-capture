@@ -8,6 +8,38 @@
 // client sends the conversation so far with each question.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+// What the app shows when something goes wrong: short and fixed, never the
+// raw error. Keep in step with MESSAGES in src/networkError.ts.
+const MESSAGES = {
+  credits: 'Out of Claude API credits',
+  apiKey: 'Claude API key missing or rejected',
+  busy: 'Too many requests, even after the automatic retries',
+  overloaded: 'Claude overloaded or down',
+  refused: 'Claude refused to write it',
+  tooBig: 'Session too big for one request',
+  stopped: 'Build stopped partway',
+  empty: 'Claude replied with nothing usable',
+  nothing: 'Nothing captured yet',
+  photos: "Photos couldn't be loaded for Claude",
+  unknown: 'Something went wrong, try again',
+}
+
+/** Which of MESSAGES a failure is. */
+function explain(err: unknown): string {
+  const text = err instanceof Error ? err.message : String(err)
+  if (/credit balance/i.test(text)) return MESSAGES.credits
+  if (/took too long|Couldn't continue/i.test(text)) return MESSAGES.stopped
+  if (/ANTHROPIC_API_KEY|\b40[13]\b|authentication_error|permission_error|x-api-key/i.test(text)) return MESSAGES.apiKey
+  if (/\b429\b|rate_limit/i.test(text)) return MESSAGES.busy
+  if (/\b413\b|request_too_large|prompt is too long|too many total/i.test(text)) return MESSAGES.tooBig
+  if (/\b5\d\d\b|overloaded|api_error|stream failed/i.test(text)) return MESSAGES.overloaded
+  if (/declined/i.test(text)) return MESSAGES.refused
+  if (/link a photo|\b400\b.*(image|url)/i.test(text)) return MESSAGES.photos
+  if (/returned no|malformed|Unexpected token|JSON/i.test(text)) return MESSAGES.empty
+  if (/no notes, transcript, or photos/i.test(text)) return MESSAGES.nothing
+  return MESSAGES.unknown
+}
+
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
 // Answers are read while the talk is fresh, often during it -- a faster
 // model keeps the wait short.
@@ -76,7 +108,8 @@ Deno.serve(async (req) => {
     if (body.scope !== 'all' && !sessionId) throw new Error('Missing sessionId')
     if (!question) throw new Error('Missing question')
   } catch (err) {
-    return jsonResponse({ error: err instanceof Error ? err.message : 'Bad request' }, 400)
+    console.error('ask-session: bad request', err)
+    return jsonResponse({ error: MESSAGES.unknown }, 400)
   }
 
   try {
@@ -85,7 +118,8 @@ Deno.serve(async (req) => {
       : await answerAcrossSessions(supabase, question, history)
     return jsonResponse(result, 200)
   } catch (err) {
-    return jsonResponse({ error: err instanceof Error ? err.message : 'Failed to answer' }, 500)
+    console.error('ask-session failed:', err)
+    return jsonResponse({ error: explain(err) }, 500)
   }
 })
 

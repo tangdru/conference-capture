@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { errorMessage } from '../networkError'
 import type {
   EnrichmentItemData,
   HighlightItem,
@@ -526,7 +527,7 @@ function ClipPlayer({ clip, items }: { clip: ClipInfo; items: TimelineItemData[]
   function toggle() {
     setError(null)
     togglePlay(clip.id).catch((err: unknown) => {
-      setError(err instanceof Error ? err.message : 'Couldn’t play this clip')
+      setError(errorMessage(err))
     })
   }
 

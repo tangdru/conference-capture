@@ -5,6 +5,7 @@ import {
   dropQueuedSession, flushOutbox, queuedEntries, queueItemDelete, queueItemPatch, queueRow, queueSession,
   queueSessionDelete, queueSessionPatch, type ItemPatch, type QueuedRow, type SessionPatch, type StoredFile,
 } from './itemOutbox'
+import { MESSAGES } from './networkError'
 import type { DeckStatus, EnrichmentItemData, HighlightItem, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData, TranscriptItem, VideoItem } from './types'
 
 const ITEM_COLUMNS = 'id, session_id, type, subtype, payload, text, caption, photo_path, video_path, duration_ms, item_timestamp, added_later, excluded, starred, position'
@@ -56,7 +57,7 @@ const DECK_SILENCE_MS = 6 * 60 * 1000
 function deckProgress(row: Pick<SessionRow, 'deck_status' | 'deck_error' | 'deck_heartbeat_at'>): { deckStatus: DeckStatus; deckError: string | null } {
   const lastHeard = row.deck_heartbeat_at ? new Date(row.deck_heartbeat_at).getTime() : 0
   if (row.deck_status === 'generating' && Date.now() - lastHeard > DECK_SILENCE_MS) {
-    return { deckStatus: 'error', deckError: 'It stopped before finishing' }
+    return { deckStatus: 'error', deckError: MESSAGES.stopped }
   }
   return { deckStatus: row.deck_status, deckError: row.deck_error }
 }
@@ -756,10 +757,21 @@ export async function addTranscriptSegment(
   return { id, type: 'transcript', text, timestamp, durationMs }
 }
 
+/** A function's own message (one of the app's fixed messages) when it
+ * answered with an error, else the error as it came. */
+async function functionError(error: unknown): Promise<unknown> {
+  const context = (error as { context?: Response } | null)?.context
+  if (context && typeof context.json === 'function') {
+    const body = await context.clone().json().catch(() => null) as { error?: unknown } | null
+    if (typeof body?.error === 'string') return new Error(body.error)
+  }
+  return error
+}
+
 export async function generateDeck(sessionId: string): Promise<void> {
   await flushOutbox()
   const { error } = await supabase.functions.invoke('generate-deck', { body: { sessionId } })
-  if (error) throw error
+  if (error) throw await functionError(error)
 }
 
 /** "Ask a session": answered from what was captured in it. `history` is the
@@ -771,7 +783,7 @@ export async function askSession(
 ): Promise<string> {
   await flushOutbox()
   const { data, error } = await supabase.functions.invoke('ask-session', { body: { sessionId, question, history } })
-  if (error) throw new Error('Couldn’t get an answer -- check your connection and try again')
+  if (error) throw await functionError(error)
   return data.answer
 }
 
@@ -783,14 +795,14 @@ export async function askAllSessions(
 ): Promise<{ answer: string; sessions: Record<string, string> }> {
   await flushOutbox()
   const { data, error } = await supabase.functions.invoke('ask-session', { body: { scope: 'all', question, history } })
-  if (error) throw new Error('Couldn’t get an answer -- check your connection and try again')
+  if (error) throw await functionError(error)
   return { answer: data.answer, sessions: data.sessions ?? {} }
 }
 
 export async function enrichSession(sessionId: string): Promise<number> {
   await flushOutbox()
   const { data, error } = await supabase.functions.invoke('enrich-session', { body: { sessionId } })
-  if (error) throw error
+  if (error) throw await functionError(error)
   return data.count
 }
 

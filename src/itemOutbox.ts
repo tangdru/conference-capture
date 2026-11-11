@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
+import { MESSAGES } from './networkError'
 import { supabase } from './supabaseClient'
 
 // Everything the user does in a session -- starting it, notes, transcript
@@ -62,6 +63,18 @@ let queue: Entry[] = []
 let saving: Promise<unknown> = Promise.resolve()
 let sending: Promise<void> | null = null
 const sessionSentListeners = new Set<() => void>()
+const problemListeners = new Set<(message: string) => void>()
+
+function report(message: string) {
+  problemListeners.forEach((fn) => fn(message))
+}
+
+/** Called with a message to show when a change can't be kept: the phone is
+ * out of space, or the server refused it. */
+export function onOutboxProblem(fn: (message: string) => void): () => void {
+  problemListeners.add(fn)
+  return () => problemListeners.delete(fn)
+}
 
 const loaded = readQueue().then((stored) => {
   queue = [...stored, ...queue]
@@ -89,7 +102,10 @@ function persist(): Promise<void> {
     } else {
       localStorage.setItem(FILE, data)
     }
-  }).catch((err) => console.warn('Could not save the outbox', err))
+  }).catch((err) => {
+    console.warn('Could not save the outbox', err)
+    report(MESSAGES.phoneFull)
+  })
   return saving as Promise<void>
 }
 
@@ -170,7 +186,10 @@ async function sendQueue(): Promise<void> {
     const entry = queue[0]
     const error = await send(entry)
     if (error && !canNeverSucceed(error)) return
-    if (error) console.warn('Dropped a change Supabase refused', entry.op, error)
+    if (error) {
+      console.warn('Dropped a change Supabase refused', entry.op, error)
+      report(MESSAGES.refusedChange)
+    }
 
     const index = queue.indexOf(entry)
     if (index !== -1) {

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { MESSAGES } from '../networkError'
 import type { PhotoItem, Session } from '../types'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
 import { formatDuration, formatElapsed, formatSessionSubtitle } from '../format'
@@ -170,7 +171,7 @@ function DeckIcon({
     modifier = 'ready'
   } else if (session.deckStatus === 'error') {
     icon = <ErrorIcon />
-    label = `Presentation failed${session.deckError ? `: ${session.deckError}` : ''}. Try again`
+    label = `${session.deckError || MESSAGES.unknown}. Tap to try again`
     action = onGenerate
     modifier = 'error'
   } else if (!live && isReadyToGenerate(session)) {
@@ -211,10 +212,19 @@ function DeckIcon({
 
 /** Generation takes a few minutes and otherwise happens silently, so say so. */
 function BuildingStatus({ session }: { session: Session }) {
+  if (session.deckStatus === 'error') {
+    // What went wrong, in words, beside the red ! (tapping that tries again).
+    return (
+      <p className="session-card__deck session-card__deck--error" role="status">
+        {session.deckError || MESSAGES.unknown}
+      </p>
+    )
+  }
   if (session.deckStatus === 'queued') {
     return (
       <p className="session-card__deck session-card__deck--queued" role="status">
-        <span className="session-card__deck-dot" aria-hidden="true" /> Presentation queued… builds after the one in progress
+        <span className="session-card__deck-dot" aria-hidden="true" />
+        {session.deckError ? `Presentation queued · ${session.deckError}` : 'Presentation queued… builds after the one in progress'}
       </p>
     )
   }

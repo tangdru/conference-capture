@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { errorMessage } from '../networkError'
 import './AskSheet.css'
 
 export interface AskTurn {
@@ -76,7 +77,7 @@ export function AskSheet({
       // Take the question back so it can be sent again as it was.
       onTurnsChange(history)
       setDraft(q)
-      setError(err instanceof Error ? err.message : 'Couldn’t get an answer')
+      setError(errorMessage(err))
     } finally {
       setAsking(false)
     }

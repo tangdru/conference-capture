@@ -44,6 +44,38 @@ const RATE_LIMIT_RETRIES = 4
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void }
 
+// What the app shows when something goes wrong: short and fixed, never the
+// raw error. Keep in step with MESSAGES in src/networkError.ts.
+const MESSAGES = {
+  credits: 'Out of Claude API credits',
+  apiKey: 'Claude API key missing or rejected',
+  busy: 'Too many requests, even after the automatic retries',
+  overloaded: 'Claude overloaded or down',
+  refused: 'Claude refused to write it',
+  tooBig: 'Session too big for one request',
+  stopped: 'Build stopped partway',
+  empty: 'Claude replied with nothing usable',
+  nothing: 'Nothing captured yet',
+  photos: "Photos couldn't be loaded for Claude",
+  unknown: 'Something went wrong, try again',
+}
+
+/** Which of MESSAGES a failure is. */
+function explain(err: unknown): string {
+  const text = err instanceof Error ? err.message : String(err)
+  if (/credit balance/i.test(text)) return MESSAGES.credits
+  if (/took too long|Couldn't continue/i.test(text)) return MESSAGES.stopped
+  if (/ANTHROPIC_API_KEY|\b40[13]\b|authentication_error|permission_error|x-api-key/i.test(text)) return MESSAGES.apiKey
+  if (/\b429\b|rate_limit/i.test(text)) return MESSAGES.busy
+  if (/\b413\b|request_too_large|prompt is too long|too many total/i.test(text)) return MESSAGES.tooBig
+  if (/\b5\d\d\b|overloaded|api_error|stream failed/i.test(text)) return MESSAGES.overloaded
+  if (/declined/i.test(text)) return MESSAGES.refused
+  if (/link a photo|\b400\b.*(image|url)/i.test(text)) return MESSAGES.photos
+  if (/returned no|malformed|Unexpected token|JSON/i.test(text)) return MESSAGES.empty
+  if (/no notes, transcript, or photos/i.test(text)) return MESSAGES.nothing
+  return MESSAGES.unknown
+}
+
 /** The account's Presentation options (cc_user_settings.presentation). Keep
  * in step with src/presentationOptions.ts in the app. */
 interface PresentationOptions {
@@ -134,16 +166,29 @@ Deno.serve(async (req) => {
     // numbers the photos the same way.
     skippedPhotos = Array.isArray(body.skippedPhotos) ? body.skippedPhotos : null
   } catch (err) {
-    return jsonResponse({ error: err instanceof Error ? err.message : 'Bad request' }, 400)
+    console.error('generate-deck: bad request', err)
+    return jsonResponse({ error: MESSAGES.unknown }, 400)
   }
 
   const recordError = async (err: unknown) => {
-    const message = err instanceof Error ? err.message : 'Deck generation failed'
+    console.error(`generate-deck: ${sessionId} failed:`, err)
+    const message = explain(err)
     await supabase
       .from('cc_sessions')
       .update({ deck_status: 'error', deck_error: message })
       .eq('id', sessionId)
     return message
+  }
+
+  // Out of credit: nothing else can be built either, so this one goes back to
+  // the front of the queue, saying why, and the rest keep their places. The
+  // app tries it again every so often; once there's credit it carries on.
+  const waitForCredit = async () => {
+    console.error(`generate-deck: ${sessionId} out of Claude API credits; holding the queue`)
+    await supabase
+      .from('cc_sessions')
+      .update({ deck_status: 'queued', deck_error: MESSAGES.credits, deck_heartbeat_at: '2000-01-01T00:00:00Z' })
+      .eq('id', sessionId)
   }
 
   // The first call checks there's something to build from and marks the
@@ -157,7 +202,7 @@ Deno.serve(async (req) => {
     } catch (err) {
       const message = await recordError(err)
       await startNextQueued(supabase, authHeader)
-      return jsonResponse({ error: message }, 500)
+      return jsonResponse({ error: message }, 422)
     }
   }
 
@@ -165,6 +210,7 @@ Deno.serve(async (req) => {
   // session row for the outcome rather than waiting on this request.
   EdgeRuntime.waitUntil(
     generateDeckPart(supabase, authHeader, sessionId, part, photoLinks, options, skippedPhotos, invokedAt).catch(async (err) => {
+      if (explain(err) === MESSAGES.credits) return waitForCredit()
       await recordError(err)
       // A failed build doesn't hold up the ones waiting behind it.
       await startNextQueued(supabase, authHeader)

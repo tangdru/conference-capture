@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { errorMessage } from '../networkError'
+import { onOutboxProblem } from '../itemOutbox'
 import { Capacitor } from '@capacitor/core'
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'
 import { Keyboard } from '@capacitor/keyboard'
@@ -52,6 +54,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
   // the same conversation.
   const [askTurns, setAskTurns] = useState<AskTurn[]>([])
   const [saveError, setSaveError] = useState<string | null>(null)
+  useEffect(() => onOutboxProblem(setSaveError), [])
   const [savedPhotoNotice, setSavedPhotoNotice] = useState(false)
   const [viewingPhotoId, setViewingPhotoId] = useState<string | null>(null)
   const [viewingVideoId, setViewingVideoId] = useState<string | null>(null)
@@ -112,7 +115,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
       onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
       setActiveId(null)
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save note -- tap away again to retry')
+      setSaveError(errorMessage(err))
     } finally {
       savingNoteRef.current = false
     }
@@ -137,7 +140,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
     try {
       await db.updateNoteText(session.id, id, text)
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save note')
+      setSaveError(errorMessage(err))
     }
   }
 
@@ -150,7 +153,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
     try {
       await db.deleteTimelineItem(session.id, item)
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to delete')
+      setSaveError(errorMessage(err))
     }
   }
 
@@ -179,7 +182,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
     try {
       await db.setItemExcluded(session.id, item.id, excluded)
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save')
+      setSaveError(errorMessage(err))
     }
   }
 
@@ -193,7 +196,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
     try {
       await db.setItemStarred(session.id, item.id, starred)
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save')
+      setSaveError(errorMessage(err))
     }
   }
 
@@ -243,7 +246,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
       if (converting) await db.convertToTimeOrder(session.id, nudged)
       await db.placeItem(session.id, movedId, timestamp)
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save order')
+      setSaveError(errorMessage(err))
     }
   }
 
@@ -252,7 +255,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
     try {
       await db.updateSession(session.id, { title })
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save title')
+      setSaveError(errorMessage(err))
     }
   }
 
@@ -263,7 +266,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
       setPendingPhotos((p) => p.filter((x) => x.id !== pendingId))
       if (Capacitor.isNativePlatform()) void processPhoto(item, blob)
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save photo -- will retry automatically')
+      setSaveError(errorMessage(err))
     }
   }
 
@@ -414,7 +417,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
     try {
       await db.updateSession(session.id, { status: 'suspended', accumulatedMs, liveSpanStartedAt: null })
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save')
+      setSaveError(errorMessage(err))
     }
   }
 
@@ -424,7 +427,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
     try {
       await db.updateSession(session.id, { status: 'recording', liveSpanStartedAt })
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save')
+      setSaveError(errorMessage(err))
     }
   }
 
@@ -451,7 +454,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
       ])
       onUpdateLocal((s) => ({ ...s, items, lastEnrichedAt }))
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to enhance')
+      setSaveError(errorMessage(err))
     } finally {
       enhancingRef.current = false
       setEnhancing(false)

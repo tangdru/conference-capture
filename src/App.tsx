@@ -20,9 +20,9 @@ import { PresentationOptionsSheet } from './components/PresentationOptionsSheet'
 import { DeleteAccountSheet } from './components/DeleteAccountSheet'
 import { shouldAutoStartHomeTour, startHomeTour } from './tour'
 import { onPhotoUploaded, pendingPhotos, syncPhotoUploadAuth } from './photoUploads'
-import { startOutbox } from './itemOutbox'
+import { onOutboxProblem, startOutbox } from './itemOutbox'
 import { startDeckUploads, uploadDeckLater } from './deckUploads'
-import { OFFLINE_MESSAGE, errorMessage, isNetworkError } from './networkError'
+import { MESSAGES, OFFLINE_MESSAGE, errorMessage } from './networkError'
 
 /** How many ready presentations to keep on the phone ahead of being opened. */
 const PREFETCH_DECKS = 12
@@ -50,6 +50,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
 
   useEffect(() => syncPhotoUploadAuth(), [])
   useEffect(() => startOutbox(), [])
+  useEffect(() => onOutboxProblem(setHomeError), [])
   useEffect(() => startDeckUploads(), [])
 
   // A photo that finishes uploading in the background is now in Supabase
@@ -108,8 +109,8 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         // With the saved copy showing, say it couldn't refresh rather than
         // replace the sessions with an error.
         if (showingSaved) {
-          setHomeError(isNetworkError(err) ? OFFLINE_MESSAGE : `Showing your sessions as last loaded: ${message}`)
-        } else setLoadError(errorMessage(err, message))
+          setHomeError(errorMessage(err))
+        } else setLoadError(errorMessage(err))
       }
     }
     void load(1)
@@ -232,20 +233,32 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   // when a build ends. If it couldn't (its sign-in had run out, or a build
   // stopped without finishing), start the one that's waited longest from
   // here -- once it's clear nothing is building.
-  const queuedIds = sessions?.filter((s) => s.deckStatus === 'queued').map((s) => s.id) ?? []
+  // When Claude's credits run out, the presentation it was building goes back
+  // to the front of the queue (saying so) and the rest keep their places;
+  // it's tried again every 15 minutes -- a refused try costs nothing -- and
+  // the queue carries on by itself once there's credit.
+  const queued = sessions?.filter((s) => s.deckStatus === 'queued') ?? []
+  const waitingForCredit = queued.find((s) => s.deckError === MESSAGES.credits)?.id ?? null
+  const queuedIds = queued.map((s) => s.id)
   const anyBuilding = sessions?.some((s) => s.deckStatus === 'generating') ?? false
-  const nextQueued = !anyBuilding ? queuedIds[queuedIds.length - 1] ?? null : null
+  const nextQueued = !anyBuilding ? waitingForCredit ?? queuedIds[queuedIds.length - 1] ?? null : null
+  const retryAfter = waitingForCredit ? 15 * 60_000 : 60_000
   const kickedAt = useRef(new Map<string, number>())
   useEffect(() => {
     if (!nextQueued) return
-    const timer = window.setTimeout(() => {
+    const tryNext = () => {
       const last = kickedAt.current.get(nextQueued) ?? 0
-      if (Date.now() - last < 60_000) return
+      if (Date.now() - last < retryAfter) return
       kickedAt.current.set(nextQueued, Date.now())
       void generateDeckForSession(nextQueued)
-    }, 8000)
-    return () => window.clearTimeout(timer)
-  }, [nextQueued])
+    }
+    const timer = window.setTimeout(tryNext, 8000)
+    const interval = window.setInterval(tryNext, 60_000)
+    return () => {
+      window.clearTimeout(timer)
+      window.clearInterval(interval)
+    }
+  }, [nextQueued, retryAfter])
 
   /** Sessions as stored, plus what's still on the phone waiting to be sent. */
   async function fetchSessionsWithPending(): Promise<Session[]> {
@@ -274,7 +287,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     try {
       setSessions(await fetchSessionsWithPending())
     } catch (err) {
-      setHomeError(errorMessage(err, 'Failed to refresh'))
+      setHomeError(errorMessage(err))
     }
   }
 
@@ -298,7 +311,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       await db.setSessionPinned(id, after)
     } catch (err) {
       updateSessionLocally(id, (s) => ({ ...s, pinnedAt: before }))
-      setHomeError(errorMessage(err, 'Couldn’t pin that presentation'))
+      setHomeError(errorMessage(err))
     }
   }
 
@@ -321,7 +334,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       updateSessionLocally(id, (s) => ({
         ...s,
         deckStatus: 'error',
-        deckError: err instanceof Error ? err.message : 'Failed to generate presentation',
+        deckError: errorMessage(err),
       }))
     }
   }
@@ -387,7 +400,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       if (tab) tab.location.href = url
       else window.open(url, '_blank', 'noopener')
     } catch (err) {
-      setHomeError(errorMessage(err, 'Failed to open presentation'))
+      setHomeError(errorMessage(err))
     }
   }
 
@@ -431,7 +444,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       // Closing the share sheet without picking anything isn't an error.
       const message = err instanceof Error ? err.message : ''
       if (/cancel|abort/i.test(message) || (err as { name?: string })?.name === 'AbortError') return
-      setHomeError(errorMessage(err, 'Failed to share presentation'))
+      setHomeError(errorMessage(err))
     }
   }
 
@@ -446,7 +459,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       await db.deleteSession(session)
     } catch (err) {
       setSessions((prev) => (prev ? [...prev, session] : prev))
-      setHomeError(errorMessage(err, 'Failed to delete session'))
+      setHomeError(errorMessage(err))
     }
   }
 

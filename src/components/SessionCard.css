@@ -83,6 +83,10 @@
 }
 
 /* Waiting its turn: quieter than a build in progress, and still. */
+.session-card__deck--error {
+  color: var(--recording-dot);
+}
+
 .session-card__deck--queued {
   color: var(--text-secondary);
 }

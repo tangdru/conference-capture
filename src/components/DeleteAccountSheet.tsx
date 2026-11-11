@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { errorMessage } from '../networkError'
 import './DeleteAccountSheet.css'
 
 interface DeleteAccountSheetProps {
@@ -22,7 +23,7 @@ export function DeleteAccountSheet({ email, sessionCount, onBack, onDelete }: De
     try {
       await onDelete()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.')
+      setError(errorMessage(err))
       setDeleting(false)
     }
   }

@@ -14,6 +14,20 @@ changes.
 
 ---
 
+## Build 58 — internal
+
+New in build 58: made for bad conference wifi.
+
+- New Session starts at once, even with no signal.
+- Notes, note edits, stars, hiding, moving, renaming, pinning, deleting, and
+  pause/resume all save on the phone first and go to the server when the
+  connection allows -- no more "failed to save".
+- Opening the app or pulling to refresh loads only what changed since last
+  time, not every session's entries again (a full reload at most once a day).
+- A presentation's finished page (photos embedded, often 10 MB) goes back to
+  the server only on a fast connection; it's kept on the phone meanwhile.
+- Still need a connection: videos.
+
 ## Build 57 — internal
 
 New in build 57:

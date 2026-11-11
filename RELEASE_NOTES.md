@@ -14,6 +14,17 @@ changes.
 
 ---
 
+## Build 64 — internal
+
+What to Test:
+
+```
+- Shared presentations are yours to keep: once you add one, it stays in "Shared with you" even if the sender deletes it ("Your saved copy"). While it's still shared you see their latest version.
+- "Pinned" and "Shared with you" fold away like the days (tap the heading), and stay folded.
+```
+
+---
+
 ## Build 63 — internal, Friends
 
 Sent to Friends with these combined notes (builds 52–63), which are also

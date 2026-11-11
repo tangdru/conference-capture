@@ -152,6 +152,23 @@ export function HomeScreen({
     })
   }
 
+  /** A heading that folds its group away, like the days -- remembered too. */
+  function foldableGroup(key: string, label: string, count: number, items: React.ReactNode) {
+    const open = !collapsed.has(key)
+    return (
+      <section key={key} className="home-day" aria-label={label}>
+        <button className="home-day__header" onClick={() => toggleDay(key)} aria-expanded={open}>
+          <span className="home-day__label">{label}</span>
+          <span className="home-day__count">{count}</span>
+          <svg className={`home-day__chevron${open ? '' : ' home-day__chevron--closed'}`} viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+            <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        {open && <div className="home-day__items">{items}</div>}
+      </section>
+    )
+  }
+
   /** Sessions under a heading per day when the sort is by time; the name and
    * presentation sorts stay one list. */
   function renderByDay(list: Session[], render: (session: Session) => React.ReactNode, dated: boolean) {
@@ -337,24 +354,10 @@ export function HomeScreen({
                 </p>
               )}
 
-              {pinned.length > 0 && (
-                <section className="home-day" aria-label="Pinned">
-                  <div className="home-day__header home-day__header--static">
-                    <span className="home-day__label">Pinned</span>
-                    <span className="home-day__count">{pinned.length}</span>
-                  </div>
-                  <div className="home-day__items">{pinned.map(renderCard)}</div>
-                </section>
-              )}
+              {pinned.length > 0 && foldableGroup('group:pinned', 'Pinned', pinned.length, pinned.map(renderCard))}
 
-              {savedShares.length > 0 && (
-                <section className="home-day" aria-label="Shared with you">
-                  <div className="home-day__header home-day__header--static">
-                    <span className="home-day__label">Shared with you</span>
-                    <span className="home-day__count">{savedShares.length}</span>
-                  </div>
-                  <div className="home-day__items">
-                    {savedShares.map((share) => (
+              {savedShares.length > 0 && foldableGroup('group:shared', 'Shared with you', savedShares.length, <>
+{savedShares.map((share) => (
                       <SwipeActions
                         key={share.token}
                         id={`shared-${share.token}`}
@@ -379,9 +382,7 @@ export function HomeScreen({
                         </button>
                       </SwipeActions>
                     ))}
-                  </div>
-                </section>
-              )}
+              </>)}
 
               {renderByDay(past, renderCard, datedSort)}
             </>

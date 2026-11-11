@@ -14,6 +14,21 @@ changes.
 
 ---
 
+## Build 62 — internal
+
+New in build 62: share presentations by link.
+
+- Share → "Share link" gives a link anyone can open in a browser, on a phone
+  or a computer, no app or sign-in needed. Sharing the same presentation again
+  updates the page behind the same link.
+- Someone with Conference Capture who opens the link taps "Open in app" (or
+  "Add to my sessions" on the website): the presentation appears on their
+  home screen under "Shared with you" and opens your current version.
+- If you delete the session, the link stops opening and their card says "No
+  longer shared" (swipe to remove it). Deleting your account removes your
+  shared pages too.
+- "Share file" still sends the page itself, for a copy that's theirs to keep.
+
 ## Build 61 — internal
 
 New in build 61:

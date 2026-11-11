@@ -23,7 +23,7 @@ export function SharedDeckPage({ token }: { token: string }) {
       try {
         const deck = (await lookupShared([token])).get(token)
         if (!deck) {
-          setError('This presentation is no longer shared')
+          setError(MESSAGES.notShared)
           return
         }
         setTitle(deck.title)

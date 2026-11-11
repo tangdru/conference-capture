@@ -22,7 +22,7 @@ import { shouldAutoStartHomeTour, startHomeTour } from './tour'
 import { onPhotoUploaded, pendingPhotos, syncPhotoUploadAuth } from './photoUploads'
 import { onOutboxProblem, startOutbox } from './itemOutbox'
 import { startDeckUploads, uploadDeckLater } from './deckUploads'
-import { fetchSharedHtml, listSavedShares, removeSavedShare, saveShare, sharePresentation, stopSharing, tokenFromLink, type SavedShare } from './sharing'
+import { fetchSharedHtml, listSavedShares, lookupShared, removeSavedShare, saveShare, sharePresentation, stopSharing, tokenFromLink, type SavedShare } from './sharing'
 import { App as CapApp } from '@capacitor/app'
 import { MESSAGES, OFFLINE_MESSAGE, errorMessage } from './networkError'
 
@@ -71,6 +71,11 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   addSharedRef.current = (token: string) => {
     void (async () => {
       try {
+        // A link that's no longer shared adds nothing.
+        if (!(await lookupShared([token])).has(token)) {
+          setHomeError(MESSAGES.notShared)
+          return
+        }
         await saveShare(userId, token)
         const list = await listSavedShares()
         setSavedShares(list)

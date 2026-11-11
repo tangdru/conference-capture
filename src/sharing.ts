@@ -5,8 +5,10 @@ import { supabase } from './supabaseClient'
 // ?p=<token>, which opens it in any browser without the app. One link per
 // session: sharing again replaces the page and keeps the link. Someone with
 // the app can add a link to their own sessions, where it shows as a "Shared
-// with you" card that opens the owner's copy (so it stays up to date, and
-// stops opening if the owner stops sharing).
+// with you" card. Adding it also saves a copy in their own (private) storage,
+// so it's theirs to keep: while it's still shared the card opens the owner's
+// latest version (and refreshes the copy), and after the owner stops sharing
+// or deletes it, the card opens the copy.
 
 export const SHARED_BUCKET = 'cc-shared'
 /** The website, which opens shared links (also from the app). */
@@ -27,9 +29,17 @@ export interface SharedDeck {
 export interface SavedShare {
   token: string
   addedAt: number
+  /** The title when it was last saved. */
+  title: string
+  /** This person's own copy (cc-decks), or null if none was saved. */
+  copyPath: string | null
+  /** The owner's version the copy was taken from. */
+  copiedAt: number | null
   /** Null once the owner stops sharing it (or deletes it). */
   deck: SharedDeck | null
 }
+
+const DECKS_BUCKET = 'cc-decks'
 
 function newToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(18))
@@ -100,20 +110,71 @@ export async function fetchSharedHtml(deck: SharedDeck): Promise<string> {
 
 /** Shared presentations this person added to their sessions, newest first. */
 export async function listSavedShares(): Promise<SavedShare[]> {
-  const { data, error } = await supabase.from('cc_saved_shares').select('token, added_at').order('added_at', { ascending: false })
+  const { data, error } = await supabase
+    .from('cc_saved_shares')
+    .select('token, added_at, title, copy_path, copied_at')
+    .order('added_at', { ascending: false })
   if (error) throw error
-  const rows = (data ?? []) as { token: string; added_at: string }[]
+  const rows = (data ?? []) as { token: string; added_at: string; title: string | null; copy_path: string | null; copied_at: string | null }[]
   const decks = await lookupShared(rows.map((r) => r.token))
-  return rows.map((r) => ({ token: r.token, addedAt: new Date(r.added_at).getTime(), deck: decks.get(r.token) ?? null }))
+  return rows.map((r) => ({
+    token: r.token,
+    addedAt: new Date(r.added_at).getTime(),
+    title: r.title ?? '',
+    copyPath: r.copy_path,
+    copiedAt: r.copied_at ? new Date(r.copied_at).getTime() : null,
+    deck: decks.get(r.token) ?? null,
+  }))
 }
 
-export async function saveShare(userId: string, token: string): Promise<void> {
-  const { error } = await supabase.from('cc_saved_shares').upsert({ user_id: userId, token }, { onConflict: 'user_id,token' })
+function copyPathFor(userId: string, token: string): string {
+  return `${userId}/saved/${token}.html`
+}
+
+/** Saves this person's own copy of a shared page, and notes where. */
+async function keepCopy(userId: string, deck: SharedDeck, html: string): Promise<void> {
+  const path = copyPathFor(userId, deck.token)
+  const { error: uploadError } = await supabase.storage
+    .from(DECKS_BUCKET)
+    .upload(path, new Blob([html], { type: 'text/html' }), { contentType: 'text/html', upsert: true })
+  if (uploadError) throw uploadError
+  const { error } = await supabase.from('cc_saved_shares').upsert(
+    { user_id: userId, token: deck.token, title: deck.title, copy_path: path, copied_at: new Date(deck.updatedAt).toISOString() },
+    { onConflict: 'user_id,token' },
+  )
   if (error) throw error
 }
 
-export async function removeSavedShare(token: string): Promise<void> {
-  const { error } = await supabase.from('cc_saved_shares').delete().eq('token', token)
+/** Adds a shared presentation to this person's sessions, with a copy of
+ * their own to keep. */
+export async function saveShare(userId: string, token: string): Promise<void> {
+  const deck = (await lookupShared([token])).get(token)
+  if (!deck) throw new Error('No longer shared')
+  await keepCopy(userId, deck, await fetchSharedHtml(deck))
+}
+
+/** The page to show for a saved share: the owner's latest while it's still
+ * shared (refreshing the kept copy when it's newer), otherwise the copy. */
+export async function openSavedShare(userId: string, share: SavedShare): Promise<{ title: string; html: string }> {
+  const deck = share.deck
+  if (deck && (share.copiedAt === null || deck.updatedAt > share.copiedAt || !share.copyPath)) {
+    const html = await fetchSharedHtml(deck)
+    void keepCopy(userId, deck, html).catch(() => {})
+    return { title: deck.title, html }
+  }
+  if (share.copyPath) {
+    const { data, error } = await supabase.storage.from(DECKS_BUCKET).download(share.copyPath)
+    if (error) throw error
+    return { title: deck?.title || share.title || 'Shared presentation', html: await data.text() }
+  }
+  if (deck) return { title: deck.title, html: await fetchSharedHtml(deck) }
+  throw new Error('No longer shared')
+}
+
+/** Takes it out of this person's sessions, and deletes their copy. */
+export async function removeSavedShare(share: Pick<SavedShare, 'token' | 'copyPath'>): Promise<void> {
+  if (share.copyPath) await supabase.storage.from(DECKS_BUCKET).remove([share.copyPath])
+  const { error } = await supabase.from('cc_saved_shares').delete().eq('token', share.token)
   if (error) throw error
 }
 

@@ -372,12 +372,14 @@ export function HomeScreen({
                           },
                         }]}
                       >
-                        <button className="session-card" onClick={() => onOpenShared(share)} disabled={!share.deck}>
-                          <p className="session-card__title">{share.deck?.title || 'Shared presentation'}</p>
+                        <button className="session-card" onClick={() => onOpenShared(share)} disabled={!share.deck && !share.copyPath}>
+                          <p className="session-card__title">{share.deck?.title || share.title || 'Shared presentation'}</p>
                           <p className="session-card__subtitle">
                             {share.deck
                               ? `Shared with you · added ${formatSessionSubtitle(share.addedAt)}`
-                              : 'No longer shared · swipe to remove'}
+                              : share.copyPath
+                                ? `Your saved copy · added ${formatSessionSubtitle(share.addedAt)}`
+                                : 'No longer shared · swipe to remove'}
                           </p>
                         </button>
                       </SwipeActions>

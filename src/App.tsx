@@ -22,7 +22,7 @@ import { shouldAutoStartHomeTour, startHomeTour } from './tour'
 import { onPhotoUploaded, pendingPhotos, syncPhotoUploadAuth } from './photoUploads'
 import { onOutboxProblem, startOutbox } from './itemOutbox'
 import { startDeckUploads, uploadDeckLater } from './deckUploads'
-import { fetchSharedHtml, listSavedShares, lookupShared, removeSavedShare, saveShare, sharePresentation, stopSharing, tokenFromLink, type SavedShare } from './sharing'
+import { listSavedShares, lookupShared, openSavedShare, removeSavedShare, saveShare, sharePresentation, stopSharing, tokenFromLink, type SavedShare } from './sharing'
 import { App as CapApp } from '@capacitor/app'
 import { MESSAGES, OFFLINE_MESSAGE, errorMessage } from './networkError'
 
@@ -100,18 +100,18 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   }, [])
 
   async function openShared(share: SavedShare) {
-    if (!share.deck) return
     try {
-      const html = await fetchSharedHtml(share.deck)
-      setOpenDeck({ title: share.deck.title, html: viewingHtml(html) })
+      const { title, html } = await openSavedShare(userId, share)
+      setOpenDeck({ title, html: viewingHtml(html) })
     } catch (err) {
-      setHomeError(errorMessage(err))
+      setHomeError(err instanceof Error && err.message === MESSAGES.notShared ? MESSAGES.notShared : errorMessage(err))
     }
   }
 
   async function removeShared(token: string) {
+    const share = savedShares.find((s) => s.token === token)
     setSavedShares((prev) => prev.filter((s) => s.token !== token))
-    await removeSavedShare(token).catch((err) => setHomeError(errorMessage(err)))
+    await removeSavedShare(share ?? { token, copyPath: null }).catch((err) => setHomeError(errorMessage(err)))
   }
 
   // A photo that finishes uploading in the background is now in Supabase

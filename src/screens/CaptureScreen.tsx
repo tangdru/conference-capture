@@ -135,7 +135,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
       items: s.items.map((i) => (i.id === id && i.type === 'note' ? { ...i, text } : i)),
     }))
     try {
-      await db.updateNoteText(id, text)
+      await db.updateNoteText(session.id, id, text)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save note')
     }
@@ -148,7 +148,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
     // again next time, without it.
     if (item.type === 'photo') void forgetCachedDeck(session.id)
     try {
-      await db.deleteTimelineItem(item)
+      await db.deleteTimelineItem(session.id, item)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to delete')
     }
@@ -177,7 +177,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
       items: s.items.map((i) => (i.id === item.id ? { ...i, excluded } : i)),
     }))
     try {
-      await db.setItemExcluded(item.id, excluded)
+      await db.setItemExcluded(session.id, item.id, excluded)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save')
     }
@@ -191,7 +191,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
       items: s.items.map((i) => (i.id === item.id ? { ...i, starred } : i)),
     }))
     try {
-      await db.setItemStarred(item.id, starred)
+      await db.setItemStarred(session.id, item.id, starred)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save')
     }
@@ -241,7 +241,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
     }))
     try {
       if (converting) await db.convertToTimeOrder(session.id, nudged)
-      await db.placeItem(movedId, timestamp)
+      await db.placeItem(session.id, movedId, timestamp)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save order')
     }

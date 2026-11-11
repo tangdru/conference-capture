@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
+import type { LoadedSessions, SyncCursor } from './db'
 import type { Session, TimelineItemData } from './types'
 
 // The sessions last loaded, kept on the phone so they show the moment the app
@@ -17,14 +18,16 @@ function keyFor(userId: string): string {
   return `cc-sessions-${userId}`
 }
 
-export async function readCachedSessions(userId: string): Promise<Session[] | null> {
+/** The sessions saved on the phone, and where loading left off (null: load
+ * everything next time). */
+export async function readCachedSessions(userId: string): Promise<LoadedSessions | null> {
   try {
     const text = NATIVE
       ? (await Filesystem.readFile({ path: fileFor(userId), directory: Directory.Library, encoding: Encoding.UTF8 })).data
       : localStorage.getItem(keyFor(userId))
     if (typeof text !== 'string' || !text) return null
-    const saved = JSON.parse(text) as { version?: number; sessions?: Session[] }
-    return saved.version === VERSION && Array.isArray(saved.sessions) ? saved.sessions : null
+    const saved = JSON.parse(text) as { version?: number; sessions?: Session[]; cursor?: SyncCursor }
+    return saved.version === VERSION && Array.isArray(saved.sessions) ? { sessions: saved.sessions, cursor: saved.cursor ?? null } : null
   } catch {
     // Nothing saved yet, or unreadable: load as usual.
     return null
@@ -35,8 +38,8 @@ let writing: Promise<void> = Promise.resolve()
 
 /** Saves in the background, one write at a time; a failed save only means
  * the next open waits for the load, as it always used to. */
-export function saveCachedSessions(userId: string, sessions: Session[]): Promise<void> {
-  const data = JSON.stringify({ version: VERSION, savedAt: Date.now(), sessions: sessions.map(forStorage) })
+export function saveCachedSessions(userId: string, { sessions, cursor }: LoadedSessions): Promise<void> {
+  const data = JSON.stringify({ version: VERSION, savedAt: Date.now(), cursor, sessions: sessions.map(forStorage) })
   writing = writing.then(async () => {
     try {
       if (NATIVE) {

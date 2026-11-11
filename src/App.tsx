@@ -21,6 +21,7 @@ import { DeleteAccountSheet } from './components/DeleteAccountSheet'
 import { shouldAutoStartHomeTour, startHomeTour } from './tour'
 import { onPhotoUploaded, pendingPhotos, syncPhotoUploadAuth } from './photoUploads'
 import { startOutbox } from './itemOutbox'
+import { startDeckUploads, uploadDeckLater } from './deckUploads'
 import { OFFLINE_MESSAGE, errorMessage, isNetworkError } from './networkError'
 
 /** How many ready presentations to keep on the phone ahead of being opened. */
@@ -49,6 +50,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
 
   useEffect(() => syncPhotoUploadAuth(), [])
   useEffect(() => startOutbox(), [])
+  useEffect(() => startDeckUploads(), [])
 
   // A photo that finishes uploading in the background is now in Supabase
   // like any other.
@@ -65,24 +67,32 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     [],
   )
 
-  // The copy saved on the phone shows at once; the full load replaces it.
+  // What the last load from Supabase (or the copy saved on the phone) held,
+  // and where it left off: the next load asks only for what changed since.
+  const loadedRef = useRef<db.LoadedSessions | null>(null)
+
+  // The copy saved on the phone shows at once; a load of what changed since
+  // then follows.
   useEffect(() => {
     let cancelled = false
     let fresh = false
     let showingSaved = false
-    void readCachedSessions(userId).then(async (saved) => {
-      if (!saved || cancelled || fresh) return
-      const shown = await withPending(saved)
+    loadedRef.current = null
+    const saved = readCachedSessions(userId)
+    void saved.then(async (copy) => {
+      if (!copy || cancelled || fresh) return
+      const shown = await withPending(copy.sessions)
       if (cancelled || fresh) return
       showingSaved = true
       setSessions(shown)
     })
     async function load(attempt: number) {
       try {
-        const loaded = await db.fetchSessions(userId)
-        const shown = await withPending(loaded)
+        const loaded = await db.loadSessions(userId, loadedRef.current ?? (await saved))
+        const shown = await withPending(loaded.sessions)
         if (cancelled) return
         fresh = true
+        loadedRef.current = loaded
         setSessions(shown)
         void saveCachedSessions(userId, loaded)
       } catch (err) {
@@ -114,8 +124,8 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   sessionsRef.current = sessions
   useEffect(() => {
     function onHide() {
-      if (document.visibilityState === 'hidden' && sessionsRef.current) {
-        void saveCachedSessions(userId, sessionsRef.current)
+      if (document.visibilityState === 'hidden' && sessionsRef.current && loadedRef.current) {
+        void saveCachedSessions(userId, { sessions: sessionsRef.current, cursor: loadedRef.current.cursor })
       }
     }
     document.addEventListener('visibilitychange', onHide)
@@ -239,20 +249,21 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
 
   /** Sessions as stored, plus what's still on the phone waiting to be sent. */
   async function fetchSessionsWithPending(): Promise<Session[]> {
-    const loaded = await db.fetchSessions(userId)
+    const loaded = await db.loadSessions(userId, loadedRef.current)
+    loadedRef.current = loaded
     void saveCachedSessions(userId, loaded)
-    return withPending(loaded)
+    return withPending(loaded.sessions)
   }
 
   /** Sessions plus what's still on the phone waiting to be sent. */
   async function withPending(loaded: Session[]): Promise<Session[]> {
-    const [photos, items] = await Promise.all([
+    const [photos, queued] = await Promise.all([
       pendingPhotos().catch(() => new Map<string, PhotoItem[]>()),
-      db.pendingItems(),
+      db.withQueued(loaded),
     ])
-    return loaded.map((s) => {
+    return queued.map((s) => {
       const ids = new Set(s.items.map((i) => i.id))
-      const waiting = [...(photos.get(s.id) ?? []), ...(items.get(s.id) ?? [])].filter((p) => !ids.has(p.id))
+      const waiting = (photos.get(s.id) ?? []).filter((p) => !ids.has(p.id))
       return waiting.length ? { ...s, items: [...s.items, ...waiting].sort(
         (a, b) => positionOf(a) - positionOf(b) || a.timestamp - b.timestamp,
       ) } : s
@@ -329,12 +340,9 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     // Older pages may have a stray "```html" at the top; tidied and saved back.
     const html = cleanDeckHtml(fetched)
     const compacted = await compactDeckPhotos(html)
-    if (compacted !== fetched) {
-      // Skip the save while a rebuild runs: it would overwrite the new page.
-      const { deckStatus } = await db.fetchSessionDeckState(session.id).catch(() => ({ deckStatus: null }))
-      if (deckStatus === 'ready') void db.replaceDeckHtml(deckPath, compacted).catch(() => {})
-    }
-    if (!hasPhotoLinks(compacted)) void saveCachedDeck(session.id, session.deckGeneratedAt, compacted)
+    // Saved on the phone first: the upload back reads it from there.
+    if (!hasPhotoLinks(compacted)) await saveCachedDeck(session.id, session.deckGeneratedAt, compacted)
+    if (compacted !== fetched) void uploadDeckLater(session, deckPath, compacted)
     return compacted
   }
 

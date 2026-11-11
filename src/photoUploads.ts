@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core'
 import { supabase } from './supabaseClient'
 import { PhotoUploads } from './native/photoUploads'
 import { blobToBase64 } from './native/slideScanner'
+import { onSessionSent } from './itemOutbox'
 import type { PhotoItem } from './types'
 
 // Photos in the native app upload through iOS's background transfer service
@@ -21,9 +22,16 @@ export function syncPhotoUploadAuth(): () => void {
   const send = (token: string | undefined) => {
     if (token) void PhotoUploads.setAuth({ token, apikey, storageUrl: `${url}/storage/v1`, restUrl: `${url}/rest/v1` })
   }
-  void supabase.auth.getSession().then(({ data }) => send(data.session?.access_token))
+  const resend = () => void supabase.auth.getSession().then(({ data }) => send(data.session?.access_token))
+  resend()
   const { data } = supabase.auth.onAuthStateChange((_event, session) => send(session?.access_token))
-  return () => data.subscription.unsubscribe()
+  // A photo taken in a session started with no signal can't be saved until
+  // the session reaches Supabase; handing the token over again restarts it.
+  const off = onSessionSent(resend)
+  return () => {
+    data.subscription.unsubscribe()
+    off()
+  }
 }
 
 function base64ToObjectUrl(data: string): Promise<string> {

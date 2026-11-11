@@ -1,7 +1,10 @@
 import { supabase, PHOTOS_BUCKET, VIDEOS_BUCKET, DECKS_BUCKET } from './supabaseClient'
 import { cancelPhotoUploads } from './photoUploads'
 import { removeClip, removeSessionClips } from './clips'
-import { dropQueuedRow, dropQueuedSession, flushOutbox, patchQueuedRow, queuedRows, queueRow } from './itemOutbox'
+import {
+  dropQueuedSession, flushOutbox, queuedEntries, queueItemDelete, queueItemPatch, queueRow, queueSession,
+  queueSessionDelete, queueSessionPatch, type ItemPatch, type QueuedRow, type SessionPatch, type StoredFile,
+} from './itemOutbox'
 import type { DeckStatus, EnrichmentItemData, HighlightItem, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData, TranscriptItem, VideoItem } from './types'
 
 const ITEM_COLUMNS = 'id, session_id, type, subtype, payload, text, caption, photo_path, video_path, duration_ms, item_timestamp, added_later, excluded, starred, position'
@@ -198,80 +201,287 @@ async function allPages<T>(
   }
 }
 
-export async function fetchSessions(userId: string): Promise<Session[]> {
-  const [{ data: sessionRows, error: sessionsError }, { data: itemRows, error: itemsError }] = await Promise.all([
-    supabase
-      .from('cc_sessions')
-      .select(SESSION_COLUMNS)
-      .eq('owner_id', userId)
-      .order('started_at', { ascending: false }),
-    allPages<ItemRow>((from, to) => supabase
-      .from('cc_timeline_items')
-      .select(ITEM_COLUMNS)
-      .eq('owner_id', userId)
-      .order('position', { ascending: true, nullsFirst: false })
-      .order('item_timestamp', { ascending: true })
-      .order('id', { ascending: true })
-      .range(from, to)),
-  ])
+/** Where loading left off: the server's time of the newest change seen. */
+export type SyncCursor = string | null
 
-  if (sessionsError) throw sessionsError
+export interface LoadedSessions {
+  sessions: Session[]
+  cursor: SyncCursor
+}
+
+// A saved copy older than this is reloaded in full, so anything that ever
+// went astray (a change the server refused, say) can't linger for long.
+const FULL_RELOAD_MS = 24 * 60 * 60 * 1000
+// Asks again for a little before the cursor: a change saved while the last
+// load was running can carry a time just before what that load saw.
+const CURSOR_OVERLAP_MS = 2 * 60 * 1000
+
+function positionOf(item: TimelineItemData): number {
+  return 'position' in item && item.position != null ? item.position : Infinity
+}
+
+/** The server's order: position (older builds), then time, then id. */
+function sortItems(items: TimelineItemData[]): TimelineItemData[] {
+  return items.sort((a, b) =>
+    positionOf(a) - positionOf(b) || a.timestamp - b.timestamp || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+}
+
+function cursorAge(cursor: SyncCursor): number {
+  return cursor ? Date.now() - new Date(cursor).getTime() : Infinity
+}
+
+function later(a: SyncCursor, b: string | null | undefined): SyncCursor {
+  if (!b) return a
+  return !a || new Date(b).getTime() > new Date(a).getTime() ? b : a
+}
+
+/** Postgres or PostgREST saying a column or table isn't there (the database
+ * hasn't had the change that tracks edits yet). */
+function isMissingSchema(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code ?? ''
+  return code === '42703' || code === '42P01' || code === 'PGRST204' || code === 'PGRST205'
+}
+
+async function fetchSessionRows(userId: string): Promise<SessionRow[]> {
+  const { data, error } = await supabase
+    .from('cc_sessions')
+    .select(SESSION_COLUMNS)
+    .eq('owner_id', userId)
+    .order('started_at', { ascending: false })
+  if (error) throw error
+  return data ?? []
+}
+
+type ItemRowWithTime = ItemRow & { updated_at?: string }
+
+/** Every session with every entry. */
+async function fetchEverything(userId: string): Promise<LoadedSessions> {
+  const itemPages = (columns: string) => allPages<ItemRowWithTime>((from, to) => supabase
+    .from('cc_timeline_items')
+    .select(columns)
+    .eq('owner_id', userId)
+    .order('position', { ascending: true, nullsFirst: false })
+    .order('item_timestamp', { ascending: true })
+    .order('id', { ascending: true })
+    .range(from, to) as unknown as PromiseLike<{ data: ItemRowWithTime[] | null; error: unknown }>)
+  const [sessionRows, firstTry] = await Promise.all([fetchSessionRows(userId), itemPages(`${ITEM_COLUMNS}, updated_at`)])
+  let { data: itemRows, error: itemsError } = firstTry
+  let tracked = true
+  if (itemsError && isMissingSchema(itemsError)) {
+    tracked = false
+    ;({ data: itemRows, error: itemsError } = await itemPages(ITEM_COLUMNS))
+  }
   if (itemsError) throw itemsError
 
+  let cursor: SyncCursor = null
   const itemsBySession = new Map<string, TimelineItemData[]>()
-  for (const row of itemRows ?? []) {
+  for (const row of itemRows) {
+    if (tracked) cursor = later(cursor, row.updated_at)
     const item = itemFromRow(row)
     if (!item) continue
     const list = itemsBySession.get(row.session_id) ?? []
     list.push(item)
     itemsBySession.set(row.session_id, list)
   }
-
-  return (sessionRows ?? []).map((row) => sessionFromRow(row, itemsBySession.get(row.id) ?? []))
-}
-
-/** Transcript lines and "Remember this" taps still on the phone waiting to be
- * sent, by session. */
-export async function pendingItems(): Promise<Map<string, TimelineItemData[]>> {
-  const bySession = new Map<string, TimelineItemData[]>()
-  for (const row of await queuedRows()) {
-    const timestamp = new Date(row.item_timestamp).getTime()
-    const shared = { id: row.id, timestamp, excluded: row.excluded }
-    const item: TimelineItemData = row.type === 'transcript'
-      ? { ...shared, type: 'transcript', text: row.text ?? '', durationMs: row.duration_ms ?? 0, starred: row.starred }
-      : { ...shared, type: 'highlight' }
-    bySession.set(row.session_id, [...(bySession.get(row.session_id) ?? []), item])
+  // With nothing loaded there's nothing to compare against: start from now.
+  if (tracked && !cursor) cursor = new Date(Date.now() - CURSOR_OVERLAP_MS).toISOString()
+  return {
+    sessions: sessionRows.map((row) => sessionFromRow(row, itemsBySession.get(row.id) ?? [])),
+    cursor,
   }
-  return bySession
 }
 
+/** Sessions as stored on the server. Given what was loaded last time, asks
+ * only for entries added, changed or deleted since then -- the session list
+ * itself is small and always comes whole -- instead of every entry again. */
+export async function loadSessions(userId: string, previous?: LoadedSessions | null): Promise<LoadedSessions> {
+  if (!previous?.cursor || cursorAge(previous.cursor) > FULL_RELOAD_MS) return fetchEverything(userId)
+  const since = new Date(new Date(previous.cursor).getTime() - CURSOR_OVERLAP_MS).toISOString()
+  try {
+    const [sessionRows, changed, deleted] = await Promise.all([
+      fetchSessionRows(userId),
+      allPages<ItemRowWithTime>((from, to) => supabase
+        .from('cc_timeline_items')
+        .select(`${ITEM_COLUMNS}, updated_at`)
+        .eq('owner_id', userId)
+        .gt('updated_at', since)
+        .order('updated_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{ data: ItemRowWithTime[] | null; error: unknown }>),
+      allPages<{ id: string; deleted_at: string }>((from, to) => supabase
+        .from('cc_deleted_items')
+        .select('id, deleted_at')
+        .eq('owner_id', userId)
+        .gt('deleted_at', since)
+        .order('deleted_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to)),
+    ])
+    if (changed.error) throw changed.error
+    if (deleted.error) throw deleted.error
+
+    let cursor: SyncCursor = previous.cursor
+    const gone = new Set<string>()
+    for (const row of deleted.data) {
+      gone.add(row.id)
+      cursor = later(cursor, row.deleted_at)
+    }
+    const changedBySession = new Map<string, Map<string, TimelineItemData>>()
+    for (const row of changed.data) {
+      cursor = later(cursor, row.updated_at)
+      const item = itemFromRow(row)
+      if (!item) continue
+      const map = changedBySession.get(row.session_id) ?? new Map<string, TimelineItemData>()
+      map.set(item.id, item)
+      changedBySession.set(row.session_id, map)
+    }
+
+    const before = new Map(previous.sessions.map((s) => [s.id, s]))
+    const sessions = sessionRows.map((row) => {
+      const updates = changedBySession.get(row.id)
+      const kept = (before.get(row.id)?.items ?? []).filter((i) => !gone.has(i.id) && !updates?.has(i.id))
+      const items = updates ? sortItems([...kept, ...updates.values()]) : kept
+      return sessionFromRow(row, items)
+    })
+    return { sessions, cursor }
+  } catch (err) {
+    // The database doesn't track changes yet: load everything, as before.
+    if (isMissingSchema(err)) return fetchEverything(userId)
+    throw err
+  }
+}
+
+/** Sessions plus everything still on the phone waiting to be sent: sessions
+ * started with no signal, new entries, and edits and deletions not yet made
+ * on the server -- so the app shows what the user did, not what Supabase has
+ * heard so far. */
+export async function withQueued(sessions: Session[]): Promise<Session[]> {
+  const entries = await queuedEntries()
+  if (entries.length === 0) return sessions
+  let result = [...sessions]
+  const byId = () => new Map(result.map((s, i) => [s.id, i]))
+  for (const e of entries) {
+    const index = byId()
+    switch (e.op) {
+      case 'session':
+        if (!index.has(e.row.id)) result.unshift(sessionFromRow(newSessionRow(e.row), []))
+        else result[index.get(e.row.id)!] = applySessionPatch(result[index.get(e.row.id)!], e.row)
+        break
+      case 'patchSession':
+        if (index.has(e.id)) result[index.get(e.id)!] = applySessionPatch(result[index.get(e.id)!], e.patch)
+        break
+      case 'deleteSession':
+        result = result.filter((s) => s.id !== e.id)
+        break
+      case 'item': {
+        const i = index.get(e.row.session_id)
+        if (i === undefined) break
+        const s = result[i]
+        const item = queuedItem(e.row)
+        const items = s.items.some((x) => x.id === item.id)
+          ? s.items.map((x) => (x.id === item.id ? { ...x, ...item } as TimelineItemData : x))
+          : sortItems([...s.items, item])
+        result[i] = { ...s, items }
+        break
+      }
+      case 'patchItem': {
+        const i = index.get(e.sessionId)
+        if (i === undefined) break
+        const s = result[i]
+        result[i] = { ...s, items: sortItems(s.items.map((x) => (x.id === e.id ? applyItemPatch(x, e.patch) : x))) }
+        break
+      }
+      case 'deleteItem': {
+        const i = index.get(e.sessionId)
+        if (i === undefined) break
+        result[i] = { ...result[i], items: result[i].items.filter((x) => x.id !== e.id) }
+        break
+      }
+    }
+  }
+  return result
+}
+
+function applySessionPatch(s: Session, p: SessionPatch): Session {
+  const time = (v: string | null | undefined) => (v ? new Date(v).getTime() : null)
+  return {
+    ...s,
+    ...(p.title !== undefined && { title: p.title }),
+    ...(p.status !== undefined && { status: p.status as SessionStatus }),
+    ...(p.accumulated_ms !== undefined && { accumulatedMs: p.accumulated_ms }),
+    ...(p.live_span_started_at !== undefined && { liveSpanStartedAt: time(p.live_span_started_at) }),
+    ...(p.updated_at !== undefined && { updatedAt: Math.max(s.updatedAt, time(p.updated_at) ?? 0) }),
+    ...(p.pinned_at !== undefined && { pinnedAt: time(p.pinned_at) }),
+  }
+}
+
+function applyItemPatch(item: TimelineItemData, p: ItemPatch): TimelineItemData {
+  const next = { ...item } as TimelineItemData & { text?: string; position?: number }
+  if (p.text !== undefined && 'text' in next) next.text = p.text
+  if (p.starred !== undefined) (next as { starred?: boolean }).starred = p.starred || undefined
+  if (p.excluded !== undefined) next.excluded = p.excluded || undefined
+  if (p.item_timestamp !== undefined) next.timestamp = new Date(p.item_timestamp).getTime()
+  if (p.position !== undefined && 'position' in next) next.position = p.position ?? undefined
+  return next
+}
+
+function queuedItem(row: QueuedRow): TimelineItemData {
+  const timestamp = new Date(row.item_timestamp).getTime()
+  const shared = { id: row.id, timestamp, excluded: row.excluded || undefined }
+  if (row.type === 'transcript') {
+    return { ...shared, type: 'transcript', text: row.text ?? '', durationMs: row.duration_ms ?? 0, starred: row.starred || undefined }
+  }
+  if (row.type === 'note') {
+    return { ...shared, type: 'note', text: row.text ?? '', starred: row.starred || undefined, position: row.position ?? undefined }
+  }
+  return { ...shared, type: 'highlight' }
+}
+
+/** Starts a session on the phone at once -- no signal needed. It reaches
+ * Supabase through the outbox, ahead of anything captured in it. */
 export async function createSession(userId: string): Promise<Session> {
   const now = new Date().toISOString()
-  const { data, error } = await supabase
-    .from('cc_sessions')
-    .insert({
-      owner_id: userId,
-      title: 'Session',
-      status: 'recording',
-      started_at: now,
-      accumulated_ms: 0,
-      live_span_started_at: now,
-    })
-    .select(SESSION_COLUMNS)
-    .single()
+  const row = {
+    id: crypto.randomUUID(),
+    owner_id: userId,
+    title: 'Session',
+    status: 'recording' as SessionStatus,
+    started_at: now,
+    accumulated_ms: 0,
+    live_span_started_at: now,
+    updated_at: now,
+  }
+  await queueSession(row)
+  return sessionFromRow(newSessionRow(row), [])
+}
 
-  if (error) throw error
-  return sessionFromRow(data, [])
+/** A session row as the server would return it, for one not sent yet. */
+function newSessionRow(row: { id: string; title: string; status: string; started_at: string; accumulated_ms: number; live_span_started_at: string | null; updated_at: string; pinned_at?: string | null }): SessionRow {
+  return {
+    id: row.id,
+    title: row.title,
+    status: row.status as SessionStatus,
+    started_at: row.started_at,
+    accumulated_ms: row.accumulated_ms,
+    live_span_started_at: row.live_span_started_at,
+    deck_status: 'none',
+    deck_path: null,
+    deck_error: null,
+    deck_generated_at: null,
+    deck_heartbeat_at: null,
+    enrichment_error: null,
+    last_enriched_at: null,
+    updated_at: row.updated_at,
+    pinned_at: row.pinned_at ?? null,
+    deck_cover_photo_id: null,
+    deck_read_minutes: null,
+  }
 }
 
 /** Pins or unpins a session. Only the pin changes: not the session's last
  * activity, so pinning doesn't reorder the list. */
 export async function setSessionPinned(sessionId: string, pinnedAt: number | null): Promise<void> {
-  const { error } = await supabase
-    .from('cc_sessions')
-    .update({ pinned_at: pinnedAt === null ? null : new Date(pinnedAt).toISOString() })
-    .eq('id', sessionId)
-  if (error) throw error
+  await queueSessionPatch(sessionId, { pinned_at: pinnedAt === null ? null : new Date(pinnedAt).toISOString() })
 }
 
 export async function updateSession(
@@ -283,16 +493,15 @@ export async function updateSession(
     liveSpanStartedAt: number | null
   }>,
 ): Promise<void> {
-  const row: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  const row: SessionPatch = { updated_at: new Date().toISOString() }
   if (patch.title !== undefined) row.title = patch.title
   if (patch.status !== undefined) row.status = patch.status
   if (patch.accumulatedMs !== undefined) row.accumulated_ms = patch.accumulatedMs
   if (patch.liveSpanStartedAt !== undefined) {
     row.live_span_started_at = patch.liveSpanStartedAt ? new Date(patch.liveSpanStartedAt).toISOString() : null
   }
-
-  const { error } = await supabase.from('cc_sessions').update(row).eq('id', sessionId)
-  if (error) throw error
+  // Pausing and resuming wait on the phone when there's no signal.
+  await queueSessionPatch(sessionId, row)
 }
 
 /** Permanently deletes the signed-in account and everything in it, on the
@@ -317,42 +526,29 @@ export async function deleteAccount(sessionIds: string[]): Promise<void> {
   await supabase.auth.signOut({ scope: 'local' })
 }
 
+/** Deletes a session, its entries (the database removes them with it) and
+ * its files -- from the phone at once, from Supabase when there's signal. */
 export async function deleteSession(session: Session): Promise<void> {
   await cancelPhotoUploads({ sessionId: session.id })
-  dropQueuedSession(session.id)
   await removeSessionClips(session.id)
-  const photoPaths = session.items
-    .filter((i): i is PhotoItem => i.type === 'photo')
-    .map((i) => i.photoPath)
-  if (photoPaths.length > 0) {
-    // Best-effort -- orphaned storage objects are a minor cleanup issue,
-    // not something that should block the session disappearing for the user.
-    await supabase.storage.from(PHOTOS_BUCKET).remove(photoPaths)
-  }
-  const videoPaths = session.items
-    .filter((i): i is VideoItem => i.type === 'video')
-    .map((i) => i.videoPath)
-  if (videoPaths.length > 0) {
-    await supabase.storage.from(VIDEOS_BUCKET).remove(videoPaths)
-  }
-  if (session.deckPath) {
-    await supabase.storage.from(DECKS_BUCKET).remove([session.deckPath])
-  }
-  await supabase.from('cc_timeline_items').delete().eq('session_id', session.id)
-  const { error } = await supabase.from('cc_sessions').delete().eq('id', session.id)
-  if (error) throw error
+  const files: StoredFile[] = [
+    ...session.items.flatMap((i) => filesOf(i)),
+    ...(session.deckPath ? [{ bucket: DECKS_BUCKET, path: session.deckPath }] : []),
+  ]
+  await queueSessionDelete(session.id, files)
+}
+
+function filesOf(item: TimelineItemData): StoredFile[] {
+  if (item.type === 'photo' && item.photoPath) return [{ bucket: PHOTOS_BUCKET, path: item.photoPath }]
+  if (item.type === 'video' && item.videoPath) return [{ bucket: VIDEOS_BUCKET, path: item.videoPath }]
+  return []
 }
 
 export async function addNote(sessionId: string, userId: string, text: string): Promise<NoteItem> {
-  const now = new Date().toISOString()
-  const { data, error } = await supabase
-    .from('cc_timeline_items')
-    .insert({ session_id: sessionId, owner_id: userId, type: 'note', text, item_timestamp: now })
-    .select('id, item_timestamp')
-    .single()
-
-  if (error) throw error
-  return { id: data.id, type: 'note', text, timestamp: new Date(data.item_timestamp).getTime() }
+  const id = crypto.randomUUID()
+  const timestamp = Date.now()
+  await queueRow({ id, session_id: sessionId, owner_id: userId, type: 'note', text, item_timestamp: new Date(timestamp).toISOString() })
+  return { id, type: 'note', text, timestamp }
 }
 
 export async function addHighlight(sessionId: string, userId: string): Promise<HighlightItem> {
@@ -362,32 +558,23 @@ export async function addHighlight(sessionId: string, userId: string): Promise<H
   return { id, type: 'highlight', timestamp }
 }
 
-export async function updateNoteText(itemId: string, text: string): Promise<void> {
-  const { error } = await supabase.from('cc_timeline_items').update({ text }).eq('id', itemId)
-  if (error) throw error
+export async function updateNoteText(sessionId: string, itemId: string, text: string): Promise<void> {
+  await queueItemPatch(itemId, sessionId, { text })
 }
 
-export async function setItemStarred(itemId: string, starred: boolean): Promise<void> {
-  if (patchQueuedRow(itemId, { starred })) return
-  const { error } = await supabase.from('cc_timeline_items').update({ starred }).eq('id', itemId)
-  if (error) throw error
+export async function setItemStarred(sessionId: string, itemId: string, starred: boolean): Promise<void> {
+  await queueItemPatch(itemId, sessionId, { starred })
 }
 
-export async function setItemExcluded(itemId: string, excluded: boolean): Promise<void> {
-  if (patchQueuedRow(itemId, { excluded })) return
-  const { error } = await supabase.from('cc_timeline_items').update({ excluded }).eq('id', itemId)
-  if (error) throw error
+export async function setItemExcluded(sessionId: string, itemId: string, excluded: boolean): Promise<void> {
+  await queueItemPatch(itemId, sessionId, { excluded })
 }
 
 /** The user dragged a note or photo to a new spot. A timeline is in time
  * order, so the entry moves to that moment in the talk, and is marked as
  * placed by the user: Sparkle never moves it again. */
-export async function placeItem(itemId: string, timestamp: number): Promise<void> {
-  const { error } = await supabase
-    .from('cc_timeline_items')
-    .update({ item_timestamp: new Date(timestamp).toISOString(), placement_locked: true })
-    .eq('id', itemId)
-  if (error) throw error
+export async function placeItem(sessionId: string, itemId: string, timestamp: number): Promise<void> {
+  await queueItemPatch(itemId, sessionId, { item_timestamp: new Date(timestamp).toISOString(), placement_locked: true })
 }
 
 /** A session last arranged by an older build, which saved a position on
@@ -412,22 +599,15 @@ export async function convertToTimeOrder(sessionId: string, times: Map<string, n
   if (cleared.error) throw cleared.error
 }
 
-export async function deleteTimelineItem(item: TimelineItemData): Promise<void> {
+export async function deleteTimelineItem(sessionId: string, item: TimelineItemData): Promise<void> {
   if (item.type === 'highlight') await removeClip(item.id)
-  if (dropQueuedRow(item.id)) return
   if (item.type === 'photo' && item.uploading) await cancelPhotoUploads({ id: item.id })
-  if (item.type === 'photo') {
-    // Best-effort -- an orphaned storage object is a minor cleanup issue,
-    // not something that should block the item disappearing for the user.
-    await supabase.storage.from(PHOTOS_BUCKET).remove([item.photoPath])
-  } else if (item.type === 'video') {
-    await supabase.storage.from(VIDEOS_BUCKET).remove([item.videoPath])
-  }
-  const { error } = await supabase.from('cc_timeline_items').delete().eq('id', item.id)
-  if (error) throw error
+  await queueItemDelete(item.id, sessionId, filesOf(item))
 }
 
 export async function addPhoto(sessionId: string, userId: string, blob: Blob): Promise<PhotoItem> {
+  // A session started with no signal must reach Supabase before its photos.
+  await flushOutbox()
   const path = `${userId}/${sessionId}/${crypto.randomUUID()}.jpg`
 
   const { error: uploadError } = await supabase.storage
@@ -509,6 +689,7 @@ export async function addVideo(
   blob: Blob,
   durationMs: number,
 ): Promise<VideoItem> {
+  await flushOutbox()
   const extension = blob.type.includes('mp4') ? 'mp4' : 'webm'
   const path = `${userId}/${sessionId}/${crypto.randomUUID()}.${extension}`
 

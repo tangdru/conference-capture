@@ -37,7 +37,10 @@ type WorkerMessage = WorkerDoneMessage | WorkerErrorMessage
 interface UseAmbientTranscriptionOptions {
   /** Capture only runs while this is true -- pause it alongside the session's own recording state. */
   active: boolean
-  onSegment: (text: string, startedAt: number, durationMs: number) => void
+  /** The session being heard. Changing it restarts listening, and each
+   * segment says which session it was heard for. */
+  sessionId: string | null
+  onSegment: (text: string, startedAt: number, durationMs: number, sessionId: string) => void
   /** Words heard so far in the segment in progress -- native build only. */
   onPartial?: (text: string) => void
   onError: (message: string) => void
@@ -52,7 +55,7 @@ interface UseAmbientTranscriptionOptions {
  * worker are kept alive until that final chunk's result actually comes
  * back (or a bounded safety timeout elapses), so the last few seconds of
  * a session are never silently lost. */
-export function useAmbientTranscription({ active, onSegment, onPartial, onError }: UseAmbientTranscriptionOptions): void {
+export function useAmbientTranscription({ active, sessionId, onSegment, onPartial, onError }: UseAmbientTranscriptionOptions): void {
   const onSegmentRef = useRef(onSegment)
   const onPartialRef = useRef(onPartial)
   const onErrorRef = useRef(onError)
@@ -63,14 +66,15 @@ export function useAmbientTranscription({ active, onSegment, onPartial, onError 
   }, [onSegment, onPartial, onError])
 
   useEffect(() => {
-    if (!active) return
+    if (!active || !sessionId) return
+    const heardFor: string = sessionId
 
     // Native build: Apple's Speech framework does the whole pipeline
     // (capture, segmenting, transcription), and keeps going while the phone
     // is locked. Everything below is the web fallback.
     if (Capacitor.isNativePlatform()) {
       return startNativeTranscription(
-        (segment) => onSegmentRef.current(segment.text, segment.startedAt, segment.durationMs),
+        (segment) => onSegmentRef.current(segment.text, segment.startedAt, segment.durationMs, heardFor),
         (text) => onPartialRef.current?.(text),
         (message) => onErrorRef.current(message),
       )
@@ -118,7 +122,7 @@ export function useAmbientTranscription({ active, onSegment, onPartial, onError 
       if (!entry) return
       pending.delete(message.id)
       if (message.status === 'done' && message.text) {
-        onSegmentRef.current(message.text, entry.startedAt, Date.now() - entry.startedAt)
+        onSegmentRef.current(message.text, entry.startedAt, Date.now() - entry.startedAt, heardFor)
       }
       // Errors are dropped silently -- ambient transcription is best-effort
       // background enrichment, not something worth interrupting capture for.
@@ -200,7 +204,7 @@ export function useAmbientTranscription({ active, onSegment, onPartial, onError 
         maybeTeardown()
       }
     }
-  }, [active])
+  }, [active, sessionId])
 }
 
 /** Starts the native plugin and returns the effect cleanup. stop() flushes the

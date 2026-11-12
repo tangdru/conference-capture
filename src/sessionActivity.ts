@@ -25,3 +25,11 @@ export function isSessionActive(session: Session, now: number): boolean {
   }
   return false
 }
+
+/** Time recorded so far: earlier spans plus the one running now. */
+export function elapsedFor(session: Session, now: number): number {
+  const live = session.status === 'recording' && session.liveSpanStartedAt
+    ? now - session.liveSpanStartedAt
+    : 0
+  return session.accumulatedMs + live
+}

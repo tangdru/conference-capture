@@ -27,6 +27,9 @@ import { startClipUploads } from './audioClips'
 import { nextSessionTitle } from './sessionTitle'
 import { listSavedShares, lookupShared, openSavedShare, removeSavedShare, saveShare, prepareShareLink, publishShare, stopSharing, tokenFromLink, sharedWithClips, noteSharedWithClips, type SavedShare } from './sharing'
 import { getSessionOptions } from './sessionOptions'
+import { useAmbientTranscription } from './hooks/useAmbientTranscription'
+import { useRecordingActivity } from './hooks/useRecordingActivity'
+import { elapsedFor } from './sessionActivity'
 import { App as CapApp } from '@capacitor/app'
 import { MESSAGES, OFFLINE_MESSAGE, errorMessage } from './networkError'
 
@@ -598,6 +601,83 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     if (shouldAutoStartHomeTour(sessions.length)) window.setTimeout(startHomeTour, 700)
   }, [sessions, route.screen])
 
+  // The talk being recorded keeps being heard while you look at the sessions
+  // list or anything else -- leaving its screen used to stop the mic. Only a
+  // session that recorded in this run of the app counts: one left "recording"
+  // when the app was closed doesn't start the mic by itself on the next open.
+  const openSessionId = route.screen === 'capture' ? route.sessionId : null
+  const shownSession = openSessionId ? sessions?.find((s) => s.id === openSessionId) : undefined
+  const [liveId, setLiveId] = useState<string | null>(null)
+  useEffect(() => {
+    if (shownSession?.status === 'recording') setLiveId(shownSession.id)
+  }, [shownSession?.id, shownSession?.status])
+  const liveSession = (liveId && sessions?.find((s) => s.id === liveId)) || null
+  const listening = liveSession?.status === 'recording'
+
+  // Words heard so far in the segment in progress, shown in the session.
+  const [liveText, setLiveText] = useState('')
+  const [transcriptionError, setTranscriptionError] = useState<{ message: string } | null>(null)
+  useEffect(() => {
+    if (!listening) setLiveText('')
+  }, [listening])
+
+  const onSegment = useCallback(
+    (text: string, startedAt: number, durationMs: number, sessionId: string) => {
+      // duration_ms is an integer column; a source can report fractions.
+      void db.addTranscriptSegment(sessionId, userId, text, startedAt, Math.round(durationMs)).then((item) => {
+        updateSessionLocally(sessionId, (s) => ({ ...s, items: [...s.items, item] }))
+      })
+      setLiveText('')
+    },
+    [userId],
+  )
+  const onTranscriptionError = useCallback((message: string) => setTranscriptionError({ message }), [])
+  useAmbientTranscription({
+    active: listening,
+    sessionId: liveId,
+    onSegment,
+    onPartial: setLiveText,
+    onError: onTranscriptionError,
+  })
+
+  /** Pause recording. Bumps updatedAt locally too, as the server does, so
+   * the session still counts as just active. */
+  async function pauseSession(id: string) {
+    const session = sessionsRef.current?.find((s) => s.id === id)
+    if (!session || session.status !== 'recording') return
+    const accumulatedMs = elapsedFor(session, Date.now())
+    updateSessionLocally(id, (s) => ({ ...s, status: 'suspended', accumulatedMs, liveSpanStartedAt: null, updatedAt: Date.now() }))
+    await db.updateSession(id, { status: 'suspended', accumulatedMs, liveSpanStartedAt: null })
+  }
+
+  async function resumeSession(id: string) {
+    const session = sessionsRef.current?.find((s) => s.id === id)
+    if (!session || session.status !== 'suspended') return
+    const liveSpanStartedAt = Date.now()
+    setLiveId(id)
+    updateSessionLocally(id, (s) => ({ ...s, status: 'recording', liveSpanStartedAt, updatedAt: Date.now() }))
+    await db.updateSession(id, { status: 'recording', liveSpanStartedAt })
+  }
+
+  // Lock Screen / Dynamic Island: up while recording on any screen. Once
+  // paused it stays (with Resume) while the session is open, or when it was
+  // paused from the Lock Screen itself, until you next move between screens.
+  // Its buttons can arrive late (the app was asleep), so pause/resume ignore
+  // one that no longer applies.
+  const [pausedFromActivity, setPausedFromActivity] = useState<string | null>(null)
+  useEffect(() => setPausedFromActivity(null), [route])
+  const keepPaused = liveSession?.status === 'suspended' && (openSessionId === liveSession.id || pausedFromActivity === liveSession.id)
+  const activitySession = liveSession && (listening || keepPaused) ? liveSession : null
+  useRecordingActivity(
+    activitySession,
+    () => {
+      if (!liveId) return
+      setPausedFromActivity(liveId)
+      pauseSession(liveId).catch((err: unknown) => setHomeError(errorMessage(err)))
+    },
+    () => { if (liveId) resumeSession(liveId).catch((err: unknown) => setHomeError(errorMessage(err))) },
+  )
+
   if (sessions === null) {
     return loadError ? (
       <div className="load-error">Couldn't load your sessions: {loadError}</div>
@@ -618,6 +698,10 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         userId={userId}
         focusItemId={route.focusItemId}
         onUpdateLocal={(updater) => updateSessionLocally(session.id, updater)}
+        liveText={session.id === liveId ? liveText : ''}
+        transcriptionError={session.id === liveId ? transcriptionError : null}
+        onPause={() => pauseSession(session.id)}
+        onResume={() => resumeSession(session.id)}
         onBack={() => setRoute({ screen: 'home' })}
       />
     )

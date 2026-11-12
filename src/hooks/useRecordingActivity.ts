@@ -3,11 +3,11 @@ import { Capacitor } from '@capacitor/core'
 import { RecordingActivity } from '../native/recordingActivity'
 import type { Session } from '../types'
 
-/** Mirrors the open session's recording state into a Live Activity (Lock
+/** Mirrors the live session's recording state into a Live Activity (Lock
  * Screen and Dynamic Island) and hands its Pause / Resume button back. Up
- * from the first time it records while the session is open, through pauses,
- * and gone when the session is closed or ends. Native build only. */
-export function useRecordingActivity(session: Session, onPause: () => void, onResume: () => void): void {
+ * while it records (on any screen) and through pauses; gone once `session`
+ * is null. Native build only. */
+export function useRecordingActivity(session: Session | null, onPause: () => void, onResume: () => void): void {
   const handlersRef = useRef({ onPause, onResume })
   useEffect(() => {
     handlersRef.current = { onPause, onResume }
@@ -15,12 +15,12 @@ export function useRecordingActivity(session: Session, onPause: () => void, onRe
 
   const native = Capacitor.isNativePlatform()
   const shownRef = useRef(false)
-  const recording = session.status === 'recording'
-  const paused = session.status === 'suspended'
+  const recording = session?.status === 'recording'
+  const paused = session?.status === 'suspended'
 
   useEffect(() => {
     if (!native) return
-    if (recording || (paused && shownRef.current)) {
+    if (session && (recording || (paused && shownRef.current))) {
       shownRef.current = true
       void RecordingActivity.update({
         sessionId: session.id,
@@ -33,16 +33,15 @@ export function useRecordingActivity(session: Session, onPause: () => void, onRe
       shownRef.current = false
       void RecordingActivity.end().catch(() => {})
     }
-  }, [native, recording, paused, session.id, session.title, session.accumulatedMs, session.liveSpanStartedAt])
+  }, [native, recording, paused, session?.id, session?.title, session?.accumulatedMs, session?.liveSpanStartedAt])
 
-  // Closing the session ends it.
   useEffect(() => {
     if (!native) return
     return () => {
       if (shownRef.current) void RecordingActivity.end().catch(() => {})
       shownRef.current = false
     }
-  }, [native, session.id])
+  }, [native])
 
   useEffect(() => {
     if (!native) return

@@ -15,9 +15,7 @@ import { CameraViewfinder } from '../components/CameraViewfinder'
 import { PhotoViewer } from '../components/PhotoViewer'
 import { VideoViewer } from '../components/VideoViewer'
 import { AskSheet, type AskTurn } from '../components/AskSheet'
-import { useAmbientTranscription } from '../hooks/useAmbientTranscription'
 import { useWakeLock } from '../hooks/useWakeLock'
-import { useRecordingActivity } from '../hooks/useRecordingActivity'
 import * as db from '../db'
 import { forgetCachedDeck } from '../deckCache'
 import { SlideScanner, blobToBase64 } from '../native/slideScanner'
@@ -25,6 +23,7 @@ import { backgroundUploads, queuePhoto } from '../photoUploads'
 import { canRecordClips, commitClipTrims, recordClip, setClipTrim, stopClip, useActiveClip } from '../audioClips'
 import { ClipButton } from '../components/ClipButton'
 import { useSessionOptions } from '../sessionOptions'
+import { elapsedFor } from '../sessionActivity'
 import './CaptureScreen.css'
 
 interface CaptureScreenProps {
@@ -33,17 +32,19 @@ interface CaptureScreenProps {
   /** Scroll to and flash this item on opening (from a search hit). */
   focusItemId?: string
   onUpdateLocal: (updater: (session: Session) => Session) => void
+  /** Words heard so far in the transcript segment in progress. Listening is
+   * run by the app, so it carries on when you leave this screen. */
+  liveText: string
+  /** Latest problem with listening, to show here. */
+  transcriptionError: { message: string } | null
+  onPause: () => Promise<void>
+  onResume: () => Promise<void>
   onBack: () => void
 }
 
-function elapsedFor(session: Session, now: number): number {
-  const live = session.status === 'recording' && session.liveSpanStartedAt
-    ? now - session.liveSpanStartedAt
-    : 0
-  return session.accumulatedMs + live
-}
-
-export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onBack }: CaptureScreenProps) {
+export function CaptureScreen({
+  session, userId, focusItemId, onUpdateLocal, liveText, transcriptionError, onPause, onResume, onBack,
+}: CaptureScreenProps) {
   const [now, setNow] = useState(Date.now())
   const [cameraOpen, setCameraOpen] = useState(false)
   const [askOpen, setAskOpen] = useState(false)
@@ -58,8 +59,6 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
   const [activeId, setActiveId] = useState<string | 'new' | null>(null)
   // Briefly true after "Remember this", as its confirmation.
   const [remembered, setRemembered] = useState(false)
-  // Words heard so far in the transcript segment that's still in progress.
-  const [liveText, setLiveText] = useState('')
   // Photos that failed to save -- kept in memory (not just dropped) so a bad
   // connection doesn't lose the actual capture. Retried on demand and
   // automatically once the browser reports it's back online.
@@ -77,8 +76,8 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
   useWakeLock(session.status === 'recording')
 
   useEffect(() => {
-    if (session.status !== 'recording') setLiveText('')
-  }, [session.status])
+    if (transcriptionError) setSaveError(transcriptionError.message)
+  }, [transcriptionError])
 
   const elapsedMs = elapsedFor(session, now)
   const viewingPhoto = session.items.find(
@@ -427,52 +426,13 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
     }
   }, [])
 
-  async function commitTranscriptSegment(text: string, startedAt: number, durationMs: number) {
-    // duration_ms is an integer column -- round in case a capture source
-    // reports fractional milliseconds.
-    const item = await db.addTranscriptSegment(session.id, userId, text, startedAt, Math.round(durationMs))
-    onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
-    setLiveText('')
+  function stop() {
+    onPause().catch((err: unknown) => setSaveError(errorMessage(err)))
   }
 
-  useAmbientTranscription({
-    active: session.status === 'recording',
-    onSegment: commitTranscriptSegment,
-    onPartial: setLiveText,
-    onError: setSaveError,
-  })
-
-  async function stop() {
-    const accumulatedMs = elapsedFor(session, Date.now())
-    // Bump updatedAt locally too, matching what the server sets -- otherwise
-    // the in-memory session (reused across navigation until the next full
-    // fetchSessions) still looks stale to isSessionActive even though the
-    // user just interacted with it.
-    onUpdateLocal((s) => ({ ...s, status: 'suspended', accumulatedMs, liveSpanStartedAt: null, updatedAt: Date.now() }))
-    try {
-      await db.updateSession(session.id, { status: 'suspended', accumulatedMs, liveSpanStartedAt: null })
-    } catch (err) {
-      setSaveError(errorMessage(err))
-    }
+  function resume() {
+    onResume().catch((err: unknown) => setSaveError(errorMessage(err)))
   }
-
-  async function resume() {
-    const liveSpanStartedAt = Date.now()
-    onUpdateLocal((s) => ({ ...s, status: 'recording', liveSpanStartedAt, updatedAt: Date.now() }))
-    try {
-      await db.updateSession(session.id, { status: 'recording', liveSpanStartedAt })
-    } catch (err) {
-      setSaveError(errorMessage(err))
-    }
-  }
-
-  // Lock Screen / Dynamic Island. Its buttons can arrive late (the app was
-  // asleep), so ignore one that no longer applies.
-  useRecordingActivity(
-    session,
-    () => { if (session.status === 'recording') void stop() },
-    () => { if (session.status === 'suspended') void resume() },
-  )
 
   return (
     <div className="capture-screen" style={{ height: `calc(100dvh - ${keyboardHeight}px)` }}>

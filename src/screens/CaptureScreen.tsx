@@ -24,6 +24,7 @@ import { SlideScanner, blobToBase64 } from '../native/slideScanner'
 import { backgroundUploads, queuePhoto } from '../photoUploads'
 import { canRecordClips, recordClip, setClipTrim, stopClip, useActiveClip } from '../audioClips'
 import { ClipButton } from '../components/ClipButton'
+import { isSessionActive } from '../sessionActivity'
 import './CaptureScreen.css'
 
 interface CaptureScreenProps {
@@ -586,7 +587,8 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
             </button>
           )}
           {session.status === 'recording' && canRecordClips && <ClipButton className="clip-btn" onTap={tapClip} />}
-          {session.items.some((i) => i.type === 'transcript' || i.type === 'note' || i.type === 'photo') && (
+          {/* Ask is for after the talk: hidden while it's a live session. */}
+          {!isSessionActive(session, now) && session.items.some((i) => i.type === 'transcript' || i.type === 'note' || i.type === 'photo') && (
             <button className="ask-btn" onClick={() => setAskOpen(true)} aria-label="Ask about this session">
               <svg className="inline-icon" viewBox="2.2 2.7 19.6 18.6" fill="none" aria-hidden="true">
                 <path

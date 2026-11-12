@@ -15,6 +15,17 @@ Friends had build 64, which App Store Connect shows was also sent).
 
 ---
 
+## Build 69 — internal
+
+What to Test:
+
+```
+- Live transcription keeps going when you leave a recording session. Start a session, go back to the sessions list (or open another session or a presentation) for a minute while someone talks, then come back: the transcript should have no gap.
+- The Lock Screen / Dynamic Island recording stays up while you browse, and its Pause works from any screen.
+- Pausing still stops the mic. Leaving a paused session still removes the Lock Screen recording.
+- Opening the app doesn't start listening by itself, even if a session was left on REC.
+```
+
 ## Build 68 — internal, Friends
 
 The Friends notes below (builds 64–68) are build 68's What to Test in App

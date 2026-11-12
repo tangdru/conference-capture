@@ -15,6 +15,16 @@ Friends had build 64, which App Store Connect shows was also sent).
 
 ---
 
+## Build 71 — internal
+
+What to Test:
+
+```
+- The camera opens again after you close it, in the same session or a new one (in 70 it only opened once until the app was restarted).
+- Turn the phone sideways: the star slides behind the shutter to its other side, instead of over it, and turns to stay upright as you hold the phone.
+- Everything from build 70's camera still applies.
+```
+
 ## Build 70 — internal
 
 What to Test:

@@ -14,6 +14,18 @@ changes.
 
 ---
 
+## Build 67 — internal
+
+What to Test:
+
+```
+- New "Session options" at the top of the menu, saved to your account. Two switches for the buttons beside the camera while a talk records: Remember this (on) shows the star; Chui's audio (off) shows the clip button. With the star off, the clip button takes its spot. Nothing captured is removed.
+- New sessions are named with month/day: "Session 1 : 11/12".
+- Sparkle names the first author on the title slide as the speaker when the talk doesn't say who's speaking (new and rebuilt presentations).
+```
+
+---
+
 ## Build 66 — internal
 
 What to Test:

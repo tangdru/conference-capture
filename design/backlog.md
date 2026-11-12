@@ -32,6 +32,59 @@ on the native app is in `native-app-migration.md`.
   the 20 images Claude sees per presentation. Shares the upload path with
   the planned audio clips (`audio-clips-plan` notes). (Requested 2026-11-10.)
 
+## Session options
+
+Menu → Session options (account-wide, saved in
+`cc_user_settings.session_options`, `src/sessionOptions.ts`). Built in
+build 67 (2026-11-12): **Remember this** (on: shows the star) and **Chui's
+audio** (off: hides the clip button). Turning an option off only hides or
+stops something; it never removes anything already captured. Ideas
+discussed 2026-11-12, not scheduled:
+
+*Buttons in the session bar*
+- **Ask during a live session.** Hide Ask while a talk is live, so it isn't
+  there while you're trying to listen.
+
+*What runs during a talk*
+- **Live transcript.** Turn ambient transcription off for a session that's
+  only notes and photos (battery, privacy). Suggested as the next one to add.
+- **Show transcript while live.** Keep transcribing but hide the scrolling
+  text so it's less distracting.
+- **Leave the live spot after a pause.** Fixed at 3 minutes today.
+
+*Around the session*
+- **Build the presentation when a session ends.** Start Sparkle automatically
+  instead of waiting for a tap.
+- **Date format in new session names.** MM/DD (current, since build 67) or
+  DD/MM.
+
+*Chui's audio (clips)* — today a clip keeps 15 s before the tap and 45 s
+after, can be trimmed, uploads, and plays in presentations with a caption.
+- **Clip length**, or split into:
+  - **Look-back length**: how far before the tap (15 s now; some will want
+    30). The most important of the clip settings to catch the moment.
+  - **Look-ahead length**: how long it keeps recording after the tap (45 s
+    now).
+- **Snap to sentences.** Trim the clip to whole sentences using the
+  transcript, so it doesn't start or end mid-word.
+- **Voice boost.** Reduce room noise and echo so the speaker is clearer.
+- **Quote with each clip.** Save the clip's transcribed words as a note
+  under it, so it shows up in search and Ask.
+- **Upload on Wi-Fi only.** Hold clips on the phone until Wi-Fi, to save
+  mobile data at the venue.
+- **Keep only the trimmed part.** When a clip is trimmed, discard the rest
+  of the audio (less storage, less of the speaker's voice kept).
+
+*Clips in presentations* (may belong in Presentation options instead)
+- **Include clips in presentations.** Keep clips for yourself without
+  putting them in the deck.
+- **Clips in shared links.** Whether people with a shared link can play the
+  speaker's voice. A privacy and consent question, since it's someone else's
+  recording. Suggested as the first clip setting to add.
+
+Open naming question: once capture settings and presentation settings both
+exist, the menu might simply say "Options" with two sections.
+
 ## Native iOS
 
 - **"Presentation ready" notification.** Generation takes minutes and is

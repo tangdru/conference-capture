@@ -15,6 +15,16 @@ Friends had build 64, which App Store Connect shows was also sent).
 
 ---
 
+## Build 73 — internal
+
+What to Test:
+
+```
+- Tap the camera button: the camera fades in at once (no pause, no slide up from the bottom), and the live picture fades in a moment later.
+- Swipe down to close: it fades out.
+- Take a few photos, close and reopen a couple of times to make sure nothing sticks.
+```
+
 ## Build 72 — internal
 
 What to Test:

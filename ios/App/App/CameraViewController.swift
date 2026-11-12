@@ -288,7 +288,13 @@ final class CameraViewController: UIViewController {
     }
 
     private func buildBottomBar() {
-        // 68pt disc inside an 80pt ring, the Camera app's shutter size.
+        // 68pt disc inside an 80pt ring, the Camera app's shutter size. The
+        // gap between them is the background colour, as on the web, so a star
+        // passing behind doesn't show through it.
+        let backing = CAShapeLayer()
+        backing.path = UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: 80, height: 80)).cgPath
+        backing.fillColor = Palette.background.cgColor
+        shutter.layer.addSublayer(backing)
         let ring = CAShapeLayer()
         ring.path = UIBezierPath(ovalIn: CGRect(x: 1.5, y: 1.5, width: 77, height: 77)).cgPath
         ring.strokeColor = Palette.accent.cgColor
@@ -330,6 +336,9 @@ final class CameraViewController: UIViewController {
         clipButton.addSubview(clipCount)
         clipButton.addTarget(self, action: #selector(clipTapped), for: .touchUpInside)
         view.addSubview(clipButton)
+        // The star crosses the shutter when the phone turns sideways the other
+        // way; it passes behind it, not over it.
+        view.bringSubviewToFront(shutter)
 
         hint.textAlignment = .center
         drawHint()
@@ -534,6 +543,10 @@ final class CameraViewController: UIViewController {
             next = g.y < 0 ? 0 : 180
         }
         guard next != tilt else { return }
+        applyTilt(next)
+    }
+
+    private func applyTilt(_ next: Int) {
         tilt = next
         UIView.animate(withDuration: 0.3) {
             let t = self.iconTransform

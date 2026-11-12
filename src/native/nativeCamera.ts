@@ -14,6 +14,8 @@ export interface NativeCameraOptions {
 /** Bridge to ios/App/App/NativeCameraPlugin.swift -- the native camera
  * screen (CameraViewController), only present in the native build. */
 interface NativeCameraPlugin {
+  /** Sets the camera up ahead of time so it opens at once; it stays off. */
+  prepare(): Promise<void>
   /** Opens the camera over the app. Rejects with code UNAVAILABLE when
    * there's no camera to use. */
   open(options: NativeCameraOptions): Promise<void>

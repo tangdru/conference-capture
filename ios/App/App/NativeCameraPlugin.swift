@@ -14,6 +14,7 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "NativeCameraPlugin"
     public let jsName = "NativeCamera"
     public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "prepare", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "open", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "update", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "close", returnType: CAPPluginReturnPromise),
@@ -26,6 +27,13 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin {
     private static var shotsDir: URL {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("camera-shots", isDirectory: true)
+    }
+
+    /// Sets the camera up ahead of time (a session screen opened), so it
+    /// opens at once later. The camera itself stays off.
+    @objc func prepare(_ call: CAPPluginCall) {
+        CameraEngine.shared.prepare()
+        call.resolve()
     }
 
     /// {showRemember, showClip, remembered, clipEndsAt}: opens the camera.
@@ -59,10 +67,15 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin {
                 }
             }
             self.camera = camera
-            host.present(camera, animated: true) {
-                if !settled {
-                    settled = true
-                    call.resolve()
+            // The camera is switched on first and the screen slides up once
+            // it's running, so it opens onto the live picture, not black.
+            camera.start {
+                guard !settled else { return }
+                host.present(camera, animated: true) {
+                    if !settled {
+                        settled = true
+                        call.resolve()
+                    }
                 }
             }
         }

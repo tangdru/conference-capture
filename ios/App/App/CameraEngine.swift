@@ -12,6 +12,10 @@ import UIKit
 /// lens, 0.5 the ultra-wide. The device's own zoom factor starts at the
 /// widest lens, so they're scaled by `wideFactor`.
 final class CameraEngine: NSObject, AVCapturePhotoCaptureDelegate {
+    /// One camera for the app, set up once and reused: setting it up (finding
+    /// the lenses, wiring them in) is what made the screen open to black.
+    static let shared = CameraEngine()
+
     enum Failure: Error {
         case denied
         case unavailable(String)
@@ -39,6 +43,16 @@ final class CameraEngine: NSObject, AVCapturePhotoCaptureDelegate {
     private(set) var standIn: UIImage?
 
     // MARK: - Starting and stopping
+
+    /// Sets the camera up ahead of time (when a session opens), so opening it
+    /// later is only switching it on. Only once camera access is already
+    /// granted -- this never asks for it -- and the camera stays off.
+    func prepare() {
+        guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { return }
+        queue.async {
+            if !self.configured { try? self.configure() }
+        }
+    }
 
     func start(completion: @escaping (Result<Info, Failure>) -> Void) {
         AVCaptureDevice.requestAccess(for: .video) { granted in

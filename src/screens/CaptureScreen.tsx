@@ -455,6 +455,7 @@ export function CaptureScreen({
   }
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return
+    void NativeCamera.prepare().catch(() => {})
     const handles = Promise.all([
       NativeCamera.addListener('photo', ({ path }) => cameraHandlers.current.photo(path)),
       NativeCamera.addListener('photoFailed', () => setSaveError("Couldn't save this photo")),

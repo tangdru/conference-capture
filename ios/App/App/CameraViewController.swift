@@ -30,7 +30,7 @@ final class CameraViewController: UIViewController {
     /// The camera couldn't open (other than a denied permission).
     var onUnavailable: ((String) -> Void)?
 
-    private let engine = CameraEngine()
+    private let engine = CameraEngine.shared
 
     // Design tokens (src/index.css).
     private enum Palette {
@@ -107,11 +107,19 @@ final class CameraViewController: UIViewController {
         drawStar()
         clipTick()
         haptic.prepare()
+    }
 
+    /// Switches the camera on, then calls `ready` -- the plugin shows this
+    /// screen only then, so it opens straight onto the live picture. Also
+    /// called back when access is off (the screen says so). If there's no
+    /// camera at all, `onUnavailable` instead.
+    func start(ready: @escaping () -> Void) {
+        loadViewIfNeeded()
         engine.start { [weak self] result in
             guard let self = self else { return }
             switch result {
             case let .success(info):
+                defer { ready() }
                 self.lenses = info.lenses
                 self.zoom = info.zoom
                 self.zoomRange = info.minZoom...info.maxZoom
@@ -127,6 +135,7 @@ final class CameraViewController: UIViewController {
                 self.buildLenses()
                 self.view.setNeedsLayout()
             case .failure(.denied):
+                defer { ready() }
                 self.errorLabel.text = "Camera access is off -- turn it on in Settings > Conference Capture."
                 self.errorLabel.isHidden = false
             case let .failure(.unavailable(message)):

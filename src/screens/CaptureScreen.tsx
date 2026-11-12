@@ -22,7 +22,7 @@ import * as db from '../db'
 import { forgetCachedDeck } from '../deckCache'
 import { SlideScanner, blobToBase64 } from '../native/slideScanner'
 import { backgroundUploads, queuePhoto } from '../photoUploads'
-import { canRecordClips, recordClip, setClipTrim, stopClip, useActiveClip } from '../audioClips'
+import { canRecordClips, commitClipTrims, recordClip, setClipTrim, stopClip, useActiveClip } from '../audioClips'
 import { ClipButton } from '../components/ClipButton'
 import { useSessionOptions } from '../sessionOptions'
 import './CaptureScreen.css'
@@ -122,6 +122,22 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
   // Which buttons the account's Session options show beside the camera.
   const sessionOptions = useSessionOptions()
   const showClip = canRecordClips && sessionOptions.chuisAudio
+
+  // Keep only the trimmed part (Session options): applied on leaving the
+  // session, so the trim handles can still reach out while you're in it.
+  const latestItems = useRef(session.items)
+  latestItems.current = session.items
+  const latestUpdate = useRef(onUpdateLocal)
+  latestUpdate.current = onUpdateLocal
+  useEffect(() => {
+    const sessionId = session.id
+    return () => {
+      const audio = latestItems.current.filter((i): i is AudioItem => i.type === 'audio')
+      void commitClipTrims(sessionId, audio, (next) =>
+        latestUpdate.current((s) => ({ ...s, items: s.items.map((i) => (i.id === next.id ? next : i)) })),
+      )
+    }
+  }, [session.id])
   /** The clip button: starts a clip, or stops the one counting down. */
   async function tapClip() {
     if (Capacitor.isNativePlatform()) void Haptics.impact({ style: ImpactStyle.Medium })

@@ -20,7 +20,22 @@ interface ClipsPlugin {
   capture(options: { id: string; sessionId: string }): Promise<{ clip?: ClipInfo }>
   /** The clip button: `before` seconds already heard plus `after` more, with
    * `margin` spare either side. Settles when saved; no clip if not listening. */
-  record(options: { id: string; sessionId: string; before: number; after: number; margin: number }): Promise<{ clip?: ClipInfo }>
+  record(options: {
+    id: string
+    sessionId: string
+    before: number
+    after: number
+    margin: number
+    /** Move the trim edges to the nearest pause in speech. */
+    snap?: boolean
+    /** Clean up room noise in the saved clip (never the live mic). */
+    boost?: boolean
+  }): Promise<{ clip?: ClipInfo }>
+  /** Keep only the trimmed part: deletes the spare audio either side, so the
+   * clip is just its kept part. No clip: gone, or still recording. */
+  commitTrim(options: { id: string }): Promise<{ clip?: ClipInfo }>
+  /** Whether there's a connection, and whether it's Wi-Fi (not metered). */
+  network(): Promise<{ connected: boolean; unmetered: boolean }>
   /** Ends the clip being recorded now. */
   stopRecording(): Promise<void>
   setTrim(options: { id: string; startMs: number; endMs: number }): Promise<void>

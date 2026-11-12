@@ -4,16 +4,18 @@ import { supabase, VIDEOS_BUCKET } from './supabaseClient'
 import * as db from './db'
 import { Clips } from './native/clips'
 import { forgetClipUpload, noteClipSaved, pendingClipUploads, setPendingClipUploads, trimClip, type ClipUpload } from './clips'
+import { getSessionOptions } from './sessionOptions'
 import type { AudioItem } from './types'
 
-// The clip button. A tap keeps the 15 seconds already heard and records 45
-// more, with 15 seconds spare either side so the trim handles can also reach
-// out. The kept part is cut to its own file on the phone and uploaded (again
-// after each trim); the presentation plays that file.
+// The clip button. A tap keeps the seconds already heard and records on for
+// a set time (both set in Session options → Chui's audio; 5 and 44 by
+// default), with 15 seconds spare either side so the trim handles can also
+// reach out. The kept part is cut to its own file on the phone and uploaded
+// (again after each trim); the presentation plays that file.
 
-export const CLIP_BEFORE_S = 15
-export const CLIP_AFTER_S = 45
 const CLIP_MARGIN_S = 15
+/** A clip set to 0 before and 0 after still keeps this much. */
+const CLIP_MIN_AFTER_S = 1
 
 const native = Capacitor.isNativePlatform()
 /** Only the phone can record (it holds the listening mic). */
@@ -52,10 +54,21 @@ export async function recordClip(
   userId: string,
   onChange: (item: AudioItem | null, id: string) => void,
 ): Promise<string> {
+  const options = getSessionOptions()
+  const before = options.clipBeforeS
+  const after = before + options.clipAfterS < CLIP_MIN_AFTER_S ? CLIP_MIN_AFTER_S : options.clipAfterS
   const item = await db.addAudioClip(sessionId, userId)
   onChange(item, item.id)
-  setActive({ id: item.id, endsAt: Date.now() + CLIP_AFTER_S * 1000 })
-  void Clips.record({ id: item.id, sessionId, before: CLIP_BEFORE_S, after: CLIP_AFTER_S, margin: CLIP_MARGIN_S })
+  setActive({ id: item.id, endsAt: Date.now() + after * 1000 })
+  void Clips.record({
+    id: item.id,
+    sessionId,
+    before,
+    after,
+    margin: CLIP_MARGIN_S,
+    snap: options.snapToSentences,
+    boost: options.voiceBoost,
+  })
     .catch(() => ({ clip: undefined }))
     .then(async ({ clip }) => {
       if (active?.id === item.id) setActive(null)
@@ -85,6 +98,38 @@ export async function recordClip(
 export function stopClip(): void {
   setActive(null)
   if (native) void Clips.stopRecording().catch(() => {})
+}
+
+/** Keep only the trimmed part (Session options): on leaving a session, each
+ * trimmed clip's audio outside its trim is deleted from the phone. The
+ * uploaded cut doesn't change, so nothing uploads again. */
+export async function commitClipTrims(
+  sessionId: string,
+  items: AudioItem[],
+  onChange: (item: AudioItem) => void,
+): Promise<void> {
+  if (!native || !getSessionOptions().keepTrimmedOnly) return
+  for (const item of items) {
+    if (item.recording || active?.id === item.id) continue
+    if (item.trimStartMs <= 0 && item.trimEndMs >= item.durationMs) continue
+    try {
+      const { clip } = await Clips.commitTrim({ id: item.id })
+      if (!clip) continue
+      noteClipSaved(clip)
+      const next: AudioItem = {
+        ...item,
+        startedAt: clip.startedAt,
+        durationMs: clip.durationMs,
+        trimStartMs: 0,
+        trimEndMs: clip.durationMs,
+        peaks: clip.peaks,
+      }
+      onChange(next)
+      await db.updateAudioClip(sessionId, next)
+    } catch {
+      // Left as it was; tried again next time the session is left.
+    }
+  }
 }
 
 /** A new trim: saved, and the kept part uploaded again. */
@@ -124,8 +169,23 @@ export function startClipUploads(listener: UploadedListener): () => void {
   }
 }
 
+/** Upload on Wi-Fi only (Session options): false while on mobile data. */
+async function mayUploadNow(): Promise<boolean> {
+  if (!getSessionOptions().wifiOnlyUploads) return true
+  try {
+    return (await Clips.network()).unmetered
+  } catch {
+    return true
+  }
+}
+
 async function runUploads(): Promise<void> {
   if (running || !native) return
+  if (!(await mayUploadNow())) {
+    window.clearTimeout(timer)
+    if (pendingClipUploads().length) timer = window.setTimeout(() => void runUploads(), 2 * 60_000)
+    return
+  }
   running = true
   queuedDuringRun = false
   window.clearTimeout(timer)

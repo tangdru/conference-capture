@@ -128,6 +128,31 @@ export async function publishShare(
   throw lastError
 }
 
+// Whether each session's shared page was last uploaded with its audio clips
+// (Session options), so changing that setting uploads the page again on the
+// next share. Pages shared before the setting existed had their clips.
+const SHARED_CLIPS_KEY = 'cc-shared-clips'
+
+function sharedClips(): Record<string, boolean> {
+  try {
+    return JSON.parse(localStorage.getItem(SHARED_CLIPS_KEY) ?? '{}') as Record<string, boolean>
+  } catch {
+    return {}
+  }
+}
+
+export function sharedWithClips(sessionId: string): boolean {
+  return sharedClips()[sessionId] ?? true
+}
+
+export function noteSharedWithClips(sessionId: string, withClips: boolean): void {
+  try {
+    localStorage.setItem(SHARED_CLIPS_KEY, JSON.stringify({ ...sharedClips(), [sessionId]: withClips }))
+  } catch {
+    // Only means the page may upload again next time.
+  }
+}
+
 /** Stops sharing a session: its link no longer opens. Best effort. */
 export async function stopSharing(userId: string, sessionId: string): Promise<void> {
   const { data } = await supabase.from('cc_shared_decks').select('token').eq('session_id', sessionId).maybeSingle()

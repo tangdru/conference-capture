@@ -177,6 +177,19 @@ export function hasShortVersion(html: string): boolean {
   return html.includes('cc-more')
 }
 
+/** The page without its audio clips (Session options: clips in shared
+ * presentations off): each clip's figure, caption and all. */
+export function withoutClips(html: string): string {
+  if (!/<audio[\s>]/i.test(html)) return html
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  doc.querySelectorAll('audio').forEach((audio) => {
+    const figure = audio.closest('figure')
+    ;(figure ?? audio).remove()
+  })
+  const doctype = /^\s*<!doctype[^>]*>/i.exec(html)?.[0] ?? '<!DOCTYPE html>'
+  return `${doctype}\n${doc.documentElement.outerHTML}`
+}
+
 /** The quick-share version: the TL;DR and each chapter's opening paragraph. */
 export function shortDeckHtml(html: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html')

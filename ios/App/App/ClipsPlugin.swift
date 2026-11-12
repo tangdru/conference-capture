@@ -1,5 +1,6 @@
 import AVFoundation
 import Capacitor
+import Network
 
 /// Audio clips. While a session listens, the last few minutes of the mic feed
 /// sit in memory and are overwritten as they age; nothing reaches disk unless
@@ -86,6 +87,10 @@ final class ClipRecorder {
         let keepFromSample: Int
         let keepToSample: Int
         let endSample: Int
+        /// Session options: move the trim edges to the nearest pause in speech,
+        /// and clean up room noise in the saved clip.
+        let snap: Bool
+        let boost: Bool
         let completion: (Clip?) -> Void
     }
     private var recording: Recording?
@@ -169,7 +174,7 @@ final class ClipRecorder {
     /// one while another is recording finishes that one first. `completion`
     /// gets nil when not listening (or nothing was heard).
     func record(id: String, sessionId: String, before: Double, after: Double, margin: Double,
-                completion: @escaping (Clip?) -> Void) {
+                snap: Bool = false, boost: Bool = false, completion: @escaping (Clip?) -> Void) {
         finishRecording()
         lock.lock()
         let listening = capturing
@@ -186,6 +191,7 @@ final class ClipRecorder {
             keepFromSample: max(tap - Int(Self.sampleRate * before), start),
             keepToSample: tap + Int(Self.sampleRate * after),
             endSample: tap + Int(Self.sampleRate * (after + margin)),
+            snap: snap, boost: boost,
             completion: completion)
         recordTimer = Timer.scheduledTimer(withTimeInterval: Self.checkSeconds, repeats: true) { [weak self] _ in
             guard let self, let recording = self.recording else { return }
@@ -218,13 +224,20 @@ final class ClipRecorder {
             return
         }
         let ms = { (sample: Int) in Int((Double(sample) / Self.sampleRate * 1000).rounded()) }
-        let trimStart = ms(max(recording.keepFromSample - start, 0))
+        var keepFrom = max(recording.keepFromSample - start, 0)
         // Stopped early: keep up to the stop.
-        let trimEnd = ms(min(recording.keepToSample, end) - start)
+        var keepTo = min(recording.keepToSample, end) - start
+        if recording.snap {
+            (keepFrom, keepTo) = Self.snapToPauses(samples, from: keepFrom, to: keepTo)
+        }
+        let trimStart = ms(keepFrom)
+        let trimEnd = ms(keepTo)
+        let boost = recording.boost
         let seconds = Double(samples.count + behind) / Self.sampleRate
         let startedAt = Int(((Date().timeIntervalSince1970 - seconds) * 1000).rounded())
         DispatchQueue.global(qos: .userInitiated).async {
-            let clip = Self.save(samples, id: recording.id, sessionId: recording.sessionId, startedAt: startedAt,
+            let clip = Self.save(boost ? Self.voiceBoost(samples) : samples, id: recording.id,
+                                 sessionId: recording.sessionId, startedAt: startedAt,
                                  trimStartMs: trimStart, trimEndMs: trimEnd)
             DispatchQueue.main.async { recording.completion(clip) }
         }
@@ -298,6 +311,100 @@ final class ClipRecorder {
             return buffer
         }
         return status == .error || output.frameLength == 0 ? nil : output
+    }
+
+    // MARK: - Snap to sentences
+
+    private static let snapReachSeconds = 2.5
+    private static let pauseWindowSeconds = 0.3
+    private static let frameSeconds = 0.02
+
+    /// Loudness of each 20 ms frame.
+    private static func frameEnergy(_ samples: [Float]) -> [Float] {
+        let size = Int(sampleRate * frameSeconds)
+        return stride(from: 0, to: samples.count, by: size).map { start in
+            let slice = samples[start..<min(start + size, samples.count)]
+            return slice.reduce(0) { $0 + $1 * $1 } / Float(max(slice.count, 1))
+        }
+    }
+
+    /// Moves each edge of the kept part to the quietest moment within reach
+    /// of it -- the gap between sentences -- so a clip doesn't start or stop
+    /// mid-word. Positions are sample indexes into `samples`.
+    static func snapToPauses(_ samples: [Float], from: Int, to: Int) -> (Int, Int) {
+        let energy = frameEnergy(samples)
+        guard energy.count > 2 else { return (from, to) }
+        let frame = Int(sampleRate * frameSeconds)
+        let window = max(Int(pauseWindowSeconds / frameSeconds), 1)
+        let reach = Int(snapReachSeconds / frameSeconds)
+        func quietest(near sample: Int, lowest: Int, highest: Int) -> Int {
+            let centre = sample / frame
+            let lo = max(centre - reach, lowest / frame, 0)
+            let hi = min(centre + reach, highest / frame, energy.count - 1)
+            guard hi > lo else { return sample }
+            var best = centre
+            var bestEnergy = Float.greatestFiniteMagnitude
+            for f in lo...hi {
+                let a = max(f - window / 2, 0), b = min(f + window / 2, energy.count - 1)
+                let mean = energy[a...b].reduce(0, +) / Float(b - a + 1)
+                // Ties go to the frame nearer the original edge.
+                if mean < bestEnergy || (mean == bestEnergy && abs(f - centre) < abs(best - centre)) {
+                    bestEnergy = mean
+                    best = f
+                }
+            }
+            return min(max(best * frame + frame / 2, lowest), highest)
+        }
+        let minKeep = Int(sampleRate * 1.0)
+        let newFrom = quietest(near: from, lowest: 0, highest: max(to - minKeep, 0))
+        let newTo = quietest(near: to, lowest: min(newFrom + minKeep, samples.count), highest: samples.count)
+        return newTo > newFrom ? (newFrom, newTo) : (from, to)
+    }
+
+    // MARK: - Voice boost
+
+    /// Cleans up the saved clip only (the live mic stays unprocessed, which
+    /// transcription needs): takes out rumble below the voice, and turns down
+    /// the room noise between words. Loudness is evened out afterwards by save().
+    static func voiceBoost(_ raw: [Float]) -> [Float] {
+        guard raw.count > 2 else { return raw }
+        // High-pass at ~100 Hz (one-pole pair): HVAC, footsteps, handling.
+        let rc = 1.0 / (2.0 * Double.pi * 100.0)
+        let dt = 1.0 / sampleRate
+        let alpha = Float(rc / (rc + dt))
+        var filtered = raw
+        for _ in 0..<2 {
+            var previousIn = filtered[0], previousOut: Float = 0
+            for i in 0..<filtered.count {
+                let input = filtered[i]
+                let out = alpha * (previousOut + input - previousIn)
+                previousIn = input
+                previousOut = out
+                filtered[i] = out
+            }
+        }
+        // Downward expander: frames near the noise floor are turned down,
+        // speech is left as it is. The floor is the quietest tenth of the clip.
+        let energy = frameEnergy(filtered)
+        let sorted = energy.sorted()
+        let floor = max(sorted[sorted.count / 10], 1e-10)
+        let frame = Int(sampleRate * frameSeconds)
+        var gains = energy.map { e -> Float in
+            let ratio = e / floor
+            if ratio >= 6 { return 1 }
+            if ratio <= 1.5 { return 0.25 }
+            return 0.25 + 0.75 * (ratio - 1.5) / 4.5
+        }
+        // Smoothed so the gain doesn't flutter: quick to open, slow to close.
+        for i in 1..<gains.count { gains[i] = max(gains[i], gains[i - 1] * 0.9) }
+        var out = filtered
+        for i in 0..<out.count {
+            let f = Float(i) / Float(frame)
+            let a = min(Int(f), gains.count - 1), b = min(a + 1, gains.count - 1)
+            let t = f - Float(a)
+            out[i] *= gains[a] * (1 - t) + gains[b] * t
+        }
+        return out
     }
 
     // MARK: - Saved clips
@@ -382,6 +489,54 @@ final class ClipRecorder {
             return json
         }()) else { return }
         try? data.write(to: infoURL(id), options: .atomic)
+    }
+
+    /// Keep only the trimmed part: the clip's audio becomes just the kept
+    /// part (the spare either side is deleted), and the trim covers all of it.
+    static func commitTrim(_ id: String, completion: @escaping ([String: Any]?) -> Void) {
+        guard var json = info(id), let durationMs = json["durationMs"] as? Int else {
+            completion(nil)
+            return
+        }
+        let startMs = json["trimStartMs"] as? Int ?? 0
+        let endMs = json["trimEndMs"] as? Int ?? durationMs
+        // Already just the kept part.
+        if startMs <= 0 && endMs >= durationMs {
+            completion(json)
+            return
+        }
+        exportTrimmed(id, startMs: startMs, endMs: endMs) { url in
+            guard let url, let file = try? AVAudioFile(forReading: url),
+                  let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)),
+                  (try? file.read(into: buffer)) != nil, let channel = buffer.floatChannelData?[0] else {
+                completion(nil)
+                return
+            }
+            let count = Int(buffer.frameLength)
+            let samples = Array(UnsafeBufferPointer(start: channel, count: count))
+            let perBar = max(count / peakCount, 1)
+            let peaks = stride(from: 0, to: count, by: perBar).prefix(peakCount).map { start in
+                samples[start..<min(start + perBar, count)].reduce(0) { max($0, abs($1)) }
+            }
+            let newDuration = Int((Double(count) / file.processingFormat.sampleRate * 1000).rounded())
+            do {
+                _ = try FileManager.default.replaceItemAt(audioURL(id), withItemAt: url)
+            } catch {
+                completion(nil)
+                return
+            }
+            json["durationMs"] = newDuration
+            json["trimStartMs"] = 0
+            json["trimEndMs"] = newDuration
+            json["peaks"] = peaks
+            json["startedAt"] = (json["startedAt"] as? Int ?? 0) + startMs
+            guard let data = try? JSONSerialization.data(withJSONObject: json),
+                  (try? data.write(to: infoURL(id), options: .atomic)) != nil else {
+                completion(nil)
+                return
+            }
+            completion(json)
+        }
     }
 
     static func audioURL(_ id: String) -> URL { directory.appendingPathComponent("\(id).m4a") }
@@ -488,6 +643,8 @@ public class ClipsPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "capture", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "record", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stopRecording", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "commitTrim", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "network", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setTrim", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "exportTrimmed", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "info", returnType: CAPPluginReturnPromise),
@@ -527,10 +684,50 @@ public class ClipsPlugin: CAPPlugin, CAPBridgedPlugin {
         let before = call.getDouble("before") ?? 15
         let after = call.getDouble("after") ?? 45
         let margin = call.getDouble("margin") ?? 15
+        let snap = call.getBool("snap") ?? false
+        let boost = call.getBool("boost") ?? false
         DispatchQueue.main.async {
-            ClipRecorder.shared.record(id: id, sessionId: sessionId, before: before, after: after, margin: margin) { clip in
+            ClipRecorder.shared.record(id: id, sessionId: sessionId, before: before, after: after, margin: margin,
+                                       snap: snap, boost: boost) { clip in
                 call.resolve(clip.map { ["clip": $0.json] } ?? [:])
             }
+        }
+    }
+
+    @objc func commitTrim(_ call: CAPPluginCall) {
+        guard let id = call.getString("id") else {
+            call.reject("Missing id")
+            return
+        }
+        DispatchQueue.main.async {
+            // Not the clip still recording.
+            if ClipRecorder.shared.recordingId == id {
+                call.resolve([:])
+                return
+            }
+            ClipRecorder.commitTrim(id) { json in
+                call.resolve(json.map { ["clip": $0] } ?? [:])
+            }
+        }
+    }
+
+    /// Whether the phone is on Wi-Fi (or another connection that isn't
+    /// metered), for "Upload on Wi-Fi only".
+    private let pathMonitor = NWPathMonitor()
+    private var pathMonitorStarted = false
+
+    @objc func network(_ call: CAPPluginCall) {
+        if !pathMonitorStarted {
+            pathMonitorStarted = true
+            pathMonitor.start(queue: DispatchQueue.global(qos: .utility))
+        }
+        // The first reading can take a moment after starting.
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.2) {
+            let path = self.pathMonitor.currentPath
+            call.resolve([
+                "connected": path.status == .satisfied,
+                "unmetered": path.status == .satisfied && !path.isExpensive && !path.isConstrained,
+            ])
         }
     }
 

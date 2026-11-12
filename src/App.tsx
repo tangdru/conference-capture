@@ -8,7 +8,7 @@ import type { PhotoItem, Session, TimelineItemData } from './types'
 import * as db from './db'
 import { clearCachedSessions, readCachedSessions, saveCachedSessions } from './sessionCache'
 import { cachedDeckKeys, clearCachedDecks, deckKey, readCachedDeck, saveCachedDeck } from './deckCache'
-import { cleanDeckHtml, compactDeckPhotos, viewingHtml, hasPhotoLinks, hasShortVersion, shortDeckHtml } from './deck'
+import { cleanDeckHtml, compactDeckPhotos, viewingHtml, hasPhotoLinks, hasShortVersion, shortDeckHtml, withoutClips } from './deck'
 import { AuthGate, signOut } from './auth/AuthGate'
 import { AddEmailSheet } from './auth/AddEmailSheet'
 import { HomeScreen } from './screens/HomeScreen'
@@ -25,7 +25,8 @@ import { onOutboxProblem, startOutbox } from './itemOutbox'
 import { startDeckUploads, uploadDeckLater } from './deckUploads'
 import { startClipUploads } from './audioClips'
 import { nextSessionTitle } from './sessionTitle'
-import { listSavedShares, lookupShared, openSavedShare, removeSavedShare, saveShare, prepareShareLink, publishShare, stopSharing, tokenFromLink, type SavedShare } from './sharing'
+import { listSavedShares, lookupShared, openSavedShare, removeSavedShare, saveShare, prepareShareLink, publishShare, stopSharing, tokenFromLink, sharedWithClips, noteSharedWithClips, type SavedShare } from './sharing'
+import { getSessionOptions } from './sessionOptions'
 import { App as CapApp } from '@capacitor/app'
 import { MESSAGES, OFFLINE_MESSAGE, errorMessage } from './networkError'
 
@@ -508,11 +509,18 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       if (kind === 'link') {
         // The link opens the share sheet straight away; the page uploads
         // behind it (and only if the presentation changed since last shared).
-        const link = await prepareShareLink(session.id, session.deckGeneratedAt)
+        const prepared = await prepareShareLink(session.id, session.deckGeneratedAt)
+        // Clips in shared presentations (Session options): when that changed
+        // since this link was last uploaded, upload the page again.
+        const withClips = getSessionOptions().clipsInShared
+        const link = { ...prepared, upToDate: prepared.upToDate && sharedWithClips(session.id) === withClips }
         const deckPath = session.deckPath
-        void publishShare(userId, session.id, session.title, link, () => loadDeckHtml(session, deckPath)).catch((err) =>
-          setHomeError(errorMessage(err)),
-        )
+        void publishShare(userId, session.id, session.title, link, async () => {
+          const html = await loadDeckHtml(session, deckPath)
+          return withClips ? html : withoutClips(html)
+        })
+          .then(() => noteSharedWithClips(session.id, withClips))
+          .catch((err) => setHomeError(errorMessage(err)))
         const url = link.url
         if (Capacitor.isNativePlatform()) {
           await Share.share({ title: session.title, url })
@@ -527,7 +535,8 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       const fullHtml = await loadDeckHtml(session, session.deckPath)
       const length = await chooseDeckLength(fullHtml)
       if (!length) return
-      const html = length === 'short' ? shortDeckHtml(fullHtml) : fullHtml
+      const chosen = length === 'short' ? shortDeckHtml(fullHtml) : fullHtml
+      const html = getSessionOptions().clipsInShared ? chosen : withoutClips(chosen)
       const baseName = session.title.replace(/[^\w\- ]+/g, '').trim() || 'presentation'
       const fileName = `${baseName}${length === 'short' ? ' - TLDR' : ''}.html`
       // Download: the page itself as a file, through the share sheet -- save

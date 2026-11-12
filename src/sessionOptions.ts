@@ -10,11 +10,36 @@ export interface SessionOptions {
   rememberThis: boolean
   /** The clip button ("Chui's audio"): keeps a minute of the speaker's voice. */
   chuisAudio: boolean
+  // Chui's audio settings (shown under it when it's on).
+  /** Seconds already heard that a clip keeps (0-60). */
+  clipBeforeS: number
+  /** Seconds a clip records on after the tap (0-120). */
+  clipAfterS: number
+  /** Start and end each clip at a pause in speech. */
+  snapToSentences: boolean
+  /** Clean up room noise in the saved clip. */
+  voiceBoost: boolean
+  /** Hold clip uploads until the phone is on Wi-Fi. */
+  wifiOnlyUploads: boolean
+  /** After trimming, delete the audio outside the trim (on leaving the session). */
+  keepTrimmedOnly: boolean
+  /** Whether shared presentations (link or download) play the clips. */
+  clipsInShared: boolean
 }
+
+export const CLIP_BEFORE_MAX_S = 60
+export const CLIP_AFTER_MAX_S = 120
 
 export const DEFAULT_SESSION_OPTIONS: SessionOptions = {
   rememberThis: true,
   chuisAudio: false,
+  clipBeforeS: 5,
+  clipAfterS: 44,
+  snapToSentences: false,
+  voiceBoost: false,
+  wifiOnlyUploads: false,
+  keepTrimmedOnly: true,
+  clipsInShared: false,
 }
 
 const STORAGE_KEY = 'cc-session-options'

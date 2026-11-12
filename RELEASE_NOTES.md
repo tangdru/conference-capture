@@ -14,6 +14,21 @@ changes.
 
 ---
 
+## Build 65 — internal
+
+What to Test:
+
+```
+- New mic button beside the star (session and camera, while listening): records a clip of the speaker -- 15 seconds before the tap and 45 after. The button counts down; tap it again to stop early.
+- Drag the handles on a clip's waveform to trim it. Play plays the kept part.
+- Presentations now include your clips: a play button with a one-line caption, in the chapter where it was said.
+- Remember this just marks the moment now (no audio). Older clips still play.
+- Share link opens the share sheet right away; the presentation uploads behind it.
+- The home list keeps its place when you come back from a presentation or session.
+```
+
+---
+
 ## Build 64 — internal
 
 What to Test:

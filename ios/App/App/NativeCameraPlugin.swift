@@ -35,7 +35,6 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin, AVCapturePhotoCapt
     private var pendingCapture: (call: CAPPluginCall, degrees: Int)?
     // The web view's look before the preview went behind it, to put back.
     private var savedWebViewLook: (opaque: Bool, background: UIColor?, scrollBackground: UIColor?)?
-    private var subjectAreaObserver: NSObjectProtocol?
 
     // MARK: - Bridge methods
 
@@ -63,6 +62,9 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin, AVCapturePhotoCapt
                     }
                 }
                 DispatchQueue.main.sync { self.showPreview(at: rect) }
+                // Each opening starts focused on the middle, not a spot
+                // tapped last time.
+                self.setFocus(at: CGPoint(x: 0.5, y: 0.5))
                 if !self.session.isRunning { self.session.startRunning() }
                 call.resolve(self.capabilities())
             }
@@ -99,8 +101,10 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin, AVCapturePhotoCapt
         }
     }
 
-    /// {x, y}: a tap in the preview, 0...1 across and down. Focuses and
-    /// exposes there until the scene changes, then goes back to continuous.
+    /// {x, y}: a tap in the preview, 0...1 across and down. Keeps focusing
+    /// and exposing on that spot (continuously, as the Camera app does) until
+    /// another tap or the camera closes -- a small move of the hand no longer
+    /// snaps focus back to the middle.
     @objc func focus(_ call: CAPPluginCall) {
         let x = call.getDouble("x") ?? 0.5
         let y = call.getDouble("y") ?? 0.5
@@ -109,7 +113,7 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin, AVCapturePhotoCapt
             let layerPoint = CGPoint(x: x * view.bounds.width, y: y * view.bounds.height)
             let point = view.previewLayer.captureDevicePointConverted(fromLayerPoint: layerPoint)
             self.sessionQueue.async {
-                self.setFocus(at: point, mode: .autoFocus, exposure: .autoExpose, watchForChange: true)
+                self.setFocus(at: point)
                 call.resolve()
             }
         }
@@ -138,7 +142,19 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin, AVCapturePhotoCapt
                 }
             }
             self.pendingCapture = (call, degrees)
-            self.photoOutput.capturePhoto(with: settings, delegate: self)
+            self.whenFocused(waited: 0) {
+                self.photoOutput.capturePhoto(with: settings, delegate: self)
+            }
+        }
+    }
+
+    /// Runs `take` once the lens has stopped moving, or after 0.8 s at most:
+    /// a shot taken mid-hunt (dim rooms, projected slides) comes out blurred.
+    private func whenFocused(waited: Int, _ take: @escaping () -> Void) {
+        let step = 40
+        guard let device = device, device.isAdjustingFocus, waited < 800 else { return take() }
+        sessionQueue.asyncAfter(deadline: .now() + .milliseconds(step)) {
+            self.whenFocused(waited: waited + step, take)
         }
     }
 
@@ -203,7 +219,7 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin, AVCapturePhotoCapt
         device.videoZoomFactor = wideFactor
         device.unlockForConfiguration()
         self.device = device
-        setFocus(at: CGPoint(x: 0.5, y: 0.5), mode: .continuousAutoFocus, exposure: .continuousAutoExposure, watchForChange: false)
+        setFocus(at: CGPoint(x: 0.5, y: 0.5))
         configured = true
     }
 
@@ -230,32 +246,16 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin, AVCapturePhotoCapt
         ]
     }
 
-    private func setFocus(
-        at point: CGPoint,
-        mode: AVCaptureDevice.FocusMode,
-        exposure: AVCaptureDevice.ExposureMode,
-        watchForChange: Bool
-    ) {
+    /// Continuous autofocus and exposure, centred on `point` (0...1 in the
+    /// sensor's coordinates).
+    private func setFocus(at point: CGPoint) {
         guard let device = device, (try? device.lockForConfiguration()) != nil else { return }
         if device.isFocusPointOfInterestSupported { device.focusPointOfInterest = point }
-        if device.isFocusModeSupported(mode) { device.focusMode = mode }
+        if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
         if device.isExposurePointOfInterestSupported { device.exposurePointOfInterest = point }
-        if device.isExposureModeSupported(exposure) { device.exposureMode = exposure }
-        device.isSubjectAreaChangeMonitoringEnabled = watchForChange
+        if device.isExposureModeSupported(.continuousAutoExposure) { device.exposureMode = .continuousAutoExposure }
+        device.isSubjectAreaChangeMonitoringEnabled = false
         device.unlockForConfiguration()
-
-        if watchForChange && subjectAreaObserver == nil {
-            subjectAreaObserver = NotificationCenter.default.addObserver(
-                forName: .AVCaptureDeviceSubjectAreaDidChange, object: device, queue: nil
-            ) { [weak self] _ in
-                self?.sessionQueue.async {
-                    self?.setFocus(
-                        at: CGPoint(x: 0.5, y: 0.5), mode: .continuousAutoFocus,
-                        exposure: .continuousAutoExposure, watchForChange: false
-                    )
-                }
-            }
-        }
     }
 
     // MARK: - Preview behind the web view

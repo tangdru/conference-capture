@@ -227,13 +227,15 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
   }, [])
 
   async function capture() {
-    if (NATIVE) void Haptics.impact({ style: ImpactStyle.Light })
     const degrees = NATIVE ? await DeviceTilt.getRotation().then((r) => r.degrees).catch(() => 0) : 0
     if (useNative) {
       setBlink(true)
       window.setTimeout(() => setBlink(false), 120)
       try {
         const { data } = await NativeCamera.capture({ flash, degrees })
+        // The tap of the haptic comes after the shot: before it, the nudge
+        // could set the lens refocusing just as the photo was taken.
+        void Haptics.impact({ style: ImpactStyle.Light })
         addShot(await fetch(`data:image/jpeg;base64,${data}`).then((r) => r.blob()))
       } catch {
         // A failed shot just doesn't appear in the strip; the camera stays open.
@@ -254,6 +256,7 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
     canvas.height = sideways ? width : height
     const ctx = canvas.getContext('2d')
     if (!ctx) return
+    if (NATIVE) void Haptics.impact({ style: ImpactStyle.Light })
     ctx.translate(canvas.width / 2, canvas.height / 2)
     ctx.rotate((degrees * Math.PI) / 180)
     ctx.drawImage(video, -width / 2, -height / 2, width, height)

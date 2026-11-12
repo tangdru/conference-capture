@@ -48,6 +48,8 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin {
             let camera = CameraViewController()
             self.apply(call, to: camera)
             camera.modalPresentationStyle = .fullScreen
+            // A quick fade, as the Camera app opens -- not a slide up.
+            camera.modalTransitionStyle = .crossDissolve
             camera.onPhoto = { [weak self] jpeg in self?.savePhoto(jpeg) }
             camera.onRemember = { [weak self] in self?.notifyListeners("remember", data: [:]) }
             camera.onClip = { [weak self] in self?.notifyListeners("clip", data: [:]) }
@@ -64,18 +66,20 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin {
                 if !settled {
                     settled = true
                     call.reject("Camera unavailable: \(message)", "UNAVAILABLE")
+                } else {
+                    // Already showing: the page falls back to the browser camera.
+                    self?.notifyListeners("unavailable", data: ["message": message])
                 }
             }
             self.camera = camera
-            // The camera is switched on first and the screen slides up once
-            // it's running, so it opens onto the live picture, not black.
-            camera.start {
-                guard !settled else { return }
-                host.present(camera, animated: true) {
-                    if !settled {
-                        settled = true
-                        call.resolve()
-                    }
+            // The screen shows at once, controls and all, while the camera
+            // switches on alongside; the live picture fades in on its first
+            // frame (CameraViewController.start).
+            camera.start {}
+            host.present(camera, animated: true) {
+                if !settled {
+                    settled = true
+                    call.resolve()
                 }
             }
         }

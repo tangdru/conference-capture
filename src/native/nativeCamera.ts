@@ -24,6 +24,8 @@ interface NativeCameraPlugin {
   /** A photo taken: a JPEG file (file:// URL), already turned upright. */
   addListener(event: 'photo', listener: (event: { path: string }) => void): Promise<PluginListenerHandle>
   addListener(event: 'photoFailed', listener: (event: { message: string }) => void): Promise<PluginListenerHandle>
+  /** The camera turned out unusable after its screen showed (it's closed). */
+  addListener(event: 'unavailable', listener: (event: { message: string }) => void): Promise<PluginListenerHandle>
   addListener(event: 'remember' | 'clip' | 'closed', listener: () => void): Promise<PluginListenerHandle>
 }
 

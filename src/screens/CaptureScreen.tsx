@@ -464,6 +464,11 @@ export function CaptureScreen({
       NativeCamera.addListener('closed', () => {
         nativeCameraUp.current = false
       }),
+      NativeCamera.addListener('unavailable', () => {
+        nativeCameraUp.current = false
+        setNativeCameraFailed(true)
+        setCameraOpen(true)
+      }),
     ])
     return () => {
       if (nativeCameraUp.current) void NativeCamera.close().catch(() => {})

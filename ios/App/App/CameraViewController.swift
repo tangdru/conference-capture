@@ -89,6 +89,7 @@ final class CameraViewController: UIViewController {
     private var clipTimer: Timer?
     private let haptic = UIImpactFeedbackGenerator(style: .light)
     private var captureInteraction: UIInteraction?
+    private var previewingObservation: NSKeyValueObservation?
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
@@ -127,9 +128,11 @@ final class CameraViewController: UIViewController {
                 if let standIn = self.engine.standIn {
                     self.standInView.image = standIn
                     self.standInView.isHidden = false
+                    self.revealPreview()
                 } else {
                     self.preview.previewLayer.session = self.engine.session
                     self.steadyPreview()
+                    self.revealOnFirstFrame()
                 }
                 self.flashButton.isHidden = self.flashModes.isEmpty
                 self.buildLenses()
@@ -214,6 +217,9 @@ final class CameraViewController: UIViewController {
         view.addSubview(stage)
 
         preview.previewLayer.videoGravity = .resizeAspectFill
+        // Hidden until the camera's first frame, then faded in.
+        preview.alpha = 0
+        standInView.alpha = 0
         stage.addSubview(preview)
         standInView.contentMode = .scaleAspectFill
         standInView.clipsToBounds = true
@@ -388,6 +394,30 @@ final class CameraViewController: UIViewController {
         }
         lensPill.isHidden = lenses.isEmpty
         drawLenses()
+    }
+
+    /// The live picture fades in once its first frame is drawn, rather than
+    /// the stage sitting black and then snapping to the picture.
+    private func revealOnFirstFrame() {
+        if #available(iOS 17.0, *) {
+            if preview.previewLayer.isPreviewing { return revealPreview() }
+            previewingObservation = preview.previewLayer.observe(\.isPreviewing, options: [.new]) { [weak self] layer, _ in
+                guard layer.isPreviewing else { return }
+                DispatchQueue.main.async {
+                    self?.previewingObservation = nil
+                    self?.revealPreview()
+                }
+            }
+        } else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { self.revealPreview() }
+        }
+    }
+
+    private func revealPreview() {
+        UIView.animate(withDuration: 0.18) {
+            self.preview.alpha = 1
+            self.standInView.alpha = 1
+        }
     }
 
     /// Steadies the preview against hand shake, as the Camera app does.

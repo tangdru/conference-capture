@@ -15,6 +15,19 @@ Friends had build 64, which App Store Connect shows was also sent).
 
 ---
 
+## Build 70 — internal
+
+What to Test:
+
+```
+- The camera is now a native iPhone screen. It should feel like the Camera app: no lag on the shutter, a steadier preview, faster repeat shots. Everything is where it was.
+- New: press volume up or down (or the Camera Control button) to take a photo while the camera is open.
+- Focus: tap the preview to focus; it now stays on the spot you tapped instead of jumping back to the middle. A photo waits for focus to settle before it's taken, and the shutter's tap comes after the photo.
+- Check it all still works: flash (off/auto/on), lens buttons and pinch zoom, the last 3 photos top-left (+N), hold a thumbnail to see it larger, Remember this and the clip button (with its countdown) while recording, swipe down to close.
+- Turn the phone sideways: the photo comes out landscape and the icons turn upright.
+- Photos still appear in the session at once, get straightened and read, and upload.
+```
+
 ## Build 69 — internal
 
 What to Test:

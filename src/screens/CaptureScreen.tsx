@@ -24,6 +24,7 @@ import { SlideScanner, blobToBase64 } from '../native/slideScanner'
 import { backgroundUploads, queuePhoto } from '../photoUploads'
 import { canRecordClips, recordClip, setClipTrim, stopClip, useActiveClip } from '../audioClips'
 import { ClipButton } from '../components/ClipButton'
+import { useSessionOptions } from '../sessionOptions'
 import './CaptureScreen.css'
 
 interface CaptureScreenProps {
@@ -118,6 +119,9 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
   }
 
   const activeClip = useActiveClip()
+  // Which buttons the account's Session options show beside the camera.
+  const sessionOptions = useSessionOptions()
+  const showClip = canRecordClips && sessionOptions.chuisAudio
   /** The clip button: starts a clip, or stops the one counting down. */
   async function tapClip() {
     if (Capacitor.isNativePlatform()) void Haptics.impact({ style: ImpactStyle.Medium })
@@ -576,7 +580,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
         </button>
 
         <div className="capture-actions__end">
-          {session.status === 'recording' && (
+          {session.status === 'recording' && sessionOptions.rememberThis && (
             <button
               className={`remember-btn${remembered ? ' remember-btn--done' : ''}`}
               onClick={rememberThis}
@@ -585,7 +589,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
               <StarIcon filled={remembered} />
             </button>
           )}
-          {session.status === 'recording' && canRecordClips && <ClipButton className="clip-btn" onTap={tapClip} />}
+          {session.status === 'recording' && showClip && <ClipButton className="clip-btn" onTap={tapClip} />}
           {session.items.some((i) => i.type === 'transcript' || i.type === 'note' || i.type === 'photo') && (
             <button className="ask-btn" onClick={() => setAskOpen(true)} aria-label="Ask about this session">
               <svg className="inline-icon" viewBox="2.2 2.7 19.6 18.6" fill="none" aria-hidden="true">
@@ -626,9 +630,9 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
         <CameraViewfinder
           onCapture={commitPhoto}
           onClose={() => setCameraOpen(false)}
-          onRemember={session.status === 'recording' ? rememberThis : undefined}
+          onRemember={session.status === 'recording' && sessionOptions.rememberThis ? rememberThis : undefined}
           remembered={remembered}
-          onClip={session.status === 'recording' && canRecordClips ? tapClip : undefined}
+          onClip={session.status === 'recording' && showClip ? tapClip : undefined}
         />
       )}
     </div>

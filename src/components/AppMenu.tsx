@@ -8,6 +8,7 @@ interface AppMenuProps {
   /** Skip the opening animation (coming back from a screen the menu opened). */
   instant?: boolean
   onClose: () => void
+  onSessionOptions: () => void
   onPresentationOptions: () => void
   onDeleteAccount: () => void
   onTutorial: () => void
@@ -22,7 +23,7 @@ const PRIVACY_URL = 'https://tangdru.github.io/conference-capture/privacy.html'
 
 // The app's one menu. Items not built yet show "Coming soon" so the list is
 // already in its final order.
-export function AppMenu({ email, instant = false, onClose, onPresentationOptions, onDeleteAccount, onTutorial, onAddEmail, onSignOut }: AppMenuProps) {
+export function AppMenu({ email, instant = false, onClose, onSessionOptions, onPresentationOptions, onDeleteAccount, onTutorial, onAddEmail, onSignOut }: AppMenuProps) {
   const [closing, setClosing] = useState(false)
 
   // Play the opening in reverse, then close.
@@ -65,24 +66,30 @@ export function AppMenu({ email, instant = false, onClose, onPresentationOptions
       <div className="app-menu__body app-menu__slide">
         <ul className="app-menu__list">
           <li style={{ '--i': 0 } as CSSProperties}>
+            <button className="app-menu__row" onClick={onSessionOptions}>
+              <span className="app-menu__label">Session options</span>
+              <Chevron />
+            </button>
+          </li>
+          <li style={{ '--i': 1 } as CSSProperties}>
             <button className="app-menu__row" onClick={onPresentationOptions}>
               <span className="app-menu__label">Presentation options</span>
               <Chevron />
             </button>
           </li>
-          <li style={{ '--i': 1 } as CSSProperties}>
+          <li style={{ '--i': 2 } as CSSProperties}>
             <button className="app-menu__row" onClick={onTutorial}>
               <span className="app-menu__label">Tutorial</span>
               <Chevron />
             </button>
           </li>
-          <li style={{ '--i': 2 } as CSSProperties}>
+          <li style={{ '--i': 3 } as CSSProperties}>
             <div className="app-menu__row app-menu__row--soon">
               <span className="app-menu__label">Claude API key</span>
               <span className="app-menu__soon">Coming soon</span>
             </div>
           </li>
-          <li style={{ '--i': 3 } as CSSProperties}>
+          <li style={{ '--i': 4 } as CSSProperties}>
             {email ? (
               <div className="app-menu__row app-menu__row--static">
                 <span className="app-menu__label">Account</span>
@@ -95,19 +102,19 @@ export function AppMenu({ email, instant = false, onClose, onPresentationOptions
               </button>
             )}
           </li>
-          <li style={{ '--i': 4 } as CSSProperties}>
+          <li style={{ '--i': 5 } as CSSProperties}>
             <a className="app-menu__row" href={feedbackHref}>
               <span className="app-menu__label">Send feedback</span>
               <Chevron />
             </a>
           </li>
-          <li style={{ '--i': 5 } as CSSProperties}>
+          <li style={{ '--i': 6 } as CSSProperties}>
             <a className="app-menu__row" href={PRIVACY_URL} target="_blank" rel="noopener">
               <span className="app-menu__label">Privacy policy</span>
               <Chevron />
             </a>
           </li>
-          <li style={{ '--i': 6 } as CSSProperties}>
+          <li style={{ '--i': 7 } as CSSProperties}>
             <button className="app-menu__row" onClick={onDeleteAccount}>
               <span className="app-menu__label">Delete account</span>
               <Chevron />
@@ -118,7 +125,7 @@ export function AppMenu({ email, instant = false, onClose, onPresentationOptions
         {/* A no-email account can't be signed back in to, so it never gets Sign out. */}
         {email && (
           <ul className="app-menu__list app-menu__list--apart">
-            <li style={{ '--i': 7 } as CSSProperties}>
+            <li style={{ '--i': 8 } as CSSProperties}>
               <button className="app-menu__row app-menu__row--danger" onClick={onSignOut}>
                 <span className="app-menu__label">Sign out</span>
               </button>
@@ -126,7 +133,7 @@ export function AppMenu({ email, instant = false, onClose, onPresentationOptions
           </ul>
         )}
 
-        <p className="app-menu__build" style={{ '--i': 8 } as CSSProperties}>{build}</p>
+        <p className="app-menu__build" style={{ '--i': 9 } as CSSProperties}>{build}</p>
       </div>
     </div>
   )

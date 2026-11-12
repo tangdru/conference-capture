@@ -421,6 +421,12 @@
   margin-right: auto;
 }
 
+/* With Remember this turned off in Session options, the clip button takes
+   the star's place (centre 70px right of the camera button's). */
+.capture-actions__end .clip-btn:first-child {
+  margin-left: 10px;
+}
+
 .clip-btn {
   flex-shrink: 0;
   width: 44px;

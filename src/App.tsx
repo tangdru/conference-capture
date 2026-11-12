@@ -17,6 +17,7 @@ import { DeckViewer } from './components/DeckViewer'
 import { AskSheet, type AskTurn } from './components/AskSheet'
 import { AppMenu } from './components/AppMenu'
 import { PresentationOptionsSheet } from './components/PresentationOptionsSheet'
+import { SessionOptionsSheet } from './components/SessionOptionsSheet'
 import { DeleteAccountSheet } from './components/DeleteAccountSheet'
 import { shouldAutoStartHomeTour, startHomeTour } from './tour'
 import { onPhotoUploaded, pendingPhotos, syncPhotoUploadAuth } from './photoUploads'
@@ -40,7 +41,7 @@ export default function App() {
 function AuthedApp({ authSession }: { authSession: AuthSession }) {
   const userId = authSession.user.id
   const [addingEmail, setAddingEmail] = useState(false)
-  const [menu, setMenu] = useState<'menu' | 'presentation' | 'delete-account' | null>(null)
+  const [menu, setMenu] = useState<'menu' | 'session' | 'presentation' | 'delete-account' | null>(null)
   // Coming back to the menu from a screen it opened: no opening animation.
   const [menuReturning, setMenuReturning] = useState(false)
   const [sessions, setSessions] = useState<Session[] | null>(null)
@@ -639,6 +640,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         email={authSession.user.is_anonymous ? null : authSession.user.email ?? null}
         instant={menuReturning}
         onClose={() => setMenu(null)}
+        onSessionOptions={() => setMenu('session')}
         onPresentationOptions={() => setMenu('presentation')}
         onDeleteAccount={() => setMenu('delete-account')}
         onTutorial={() => {
@@ -667,6 +669,15 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
           await clearCachedSessions(userId)
           await clearCachedDecks()
           setMenu(null)
+        }}
+      />
+    )}
+    {menu === 'session' && (
+      <SessionOptionsSheet
+        userId={authSession.user.id}
+        onBack={() => {
+          setMenuReturning(true)
+          setMenu('menu')
         }}
       />
     )}

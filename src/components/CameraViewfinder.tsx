@@ -429,7 +429,7 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
               <StarIcon filled={remembered} />
             </button>
           )}
-          {onClip && <ClipButton className="viewfinder__clip" extraClass={tilt === 270 ? 'viewfinder__clip--star-spot' : ''} onTap={onClip} />}
+          {onClip && <ClipButton className="viewfinder__clip" extraClass={tilt === 270 || !onRemember ? 'viewfinder__clip--star-spot' : ''} onTap={onClip} />}
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { MESSAGES } from './networkError'
 
 // Share by link. A shared presentation is a copy of its page in the public
 // cc-shared bucket at <owner>/<token>.html; the link is the website with
@@ -54,29 +55,77 @@ function fileOf(ownerId: string, token: string): string {
   return `${ownerId}/${token}.html`
 }
 
-/** Puts the session's presentation (as shown, photos embedded) where its link
- * can open it, and returns the link. Sharing again updates the same link. */
-export async function sharePresentation(userId: string, sessionId: string, title: string, html: string): Promise<string> {
-  const { data: existing, error: findError } = await supabase
+/** Shared but its page not uploaded yet: the row's update time is set to
+ * this until the upload finishes. */
+const NOT_UPLOADED = '2000-01-01T00:00:00Z'
+const NOT_UPLOADED_MS = Date.parse(NOT_UPLOADED)
+
+export function isUploading(deck: SharedDeck): boolean {
+  return deck.updatedAt <= NOT_UPLOADED_MS
+}
+
+/** The session's link, and whether its page still has to be uploaded. Only a
+ * small lookup -- the link can go into the share sheet at once while the
+ * page (photos and all, often megabytes) uploads afterwards. A page shared
+ * since the presentation was last built isn't uploaded again. */
+export async function prepareShareLink(
+  sessionId: string,
+  deckGeneratedAt: number | null,
+): Promise<{ token: string; url: string; isNew: boolean; upToDate: boolean }> {
+  const { data, error } = await supabase
     .from('cc_shared_decks')
-    .select('token')
+    .select('token, updated_at')
     .eq('session_id', sessionId)
     .maybeSingle()
-  if (findError) throw findError
-  const token = existing?.token ?? newToken()
+  if (error) throw error
+  const token = data?.token ?? newToken()
+  const sharedAt = data ? new Date(data.updated_at).getTime() : 0
+  const upToDate = !!data && sharedAt > NOT_UPLOADED_MS && deckGeneratedAt !== null && sharedAt >= deckGeneratedAt
+  return { token, url: shareUrl(token), isNew: !data, upToDate }
+}
 
-  const { error: uploadError } = await supabase.storage
-    .from(SHARED_BUCKET)
-    // A minute of caching at most, so stopping sharing (or sharing again)
-    // takes effect almost at once even for someone with the file's address.
-    .upload(fileOf(userId, token), new Blob([html], { type: 'text/html' }), { contentType: 'text/html', upsert: true, cacheControl: '60' })
-  if (uploadError) throw uploadError
-
-  const { error: saveError } = await supabase
-    .from('cc_shared_decks')
-    .upsert({ token, owner_id: userId, session_id: sessionId, title, updated_at: new Date().toISOString() }, { onConflict: 'token' })
-  if (saveError) throw saveError
-  return shareUrl(token)
+/** Puts the page where its link opens it. A new link is claimed first (so it
+ * reads "still uploading" rather than "no longer shared" in the meantime),
+ * and the upload is retried a few times on a bad connection. */
+export async function publishShare(
+  userId: string,
+  sessionId: string,
+  title: string,
+  link: { token: string; isNew: boolean; upToDate: boolean },
+  loadHtml: () => Promise<string>,
+): Promise<void> {
+  const row = { token: link.token, owner_id: userId, session_id: sessionId, title }
+  if (link.upToDate) {
+    // Nothing new to upload; just keep the title current.
+    const { error } = await supabase.from('cc_shared_decks').update({ title }).eq('token', link.token)
+    if (error) throw error
+    return
+  }
+  if (link.isNew) {
+    const { error } = await supabase.from('cc_shared_decks').upsert({ ...row, updated_at: NOT_UPLOADED }, { onConflict: 'token' })
+    if (error) throw error
+  }
+  const html = await loadHtml()
+  let lastError: unknown
+  for (const wait of [0, 5_000, 15_000, 45_000]) {
+    if (wait) await new Promise((r) => setTimeout(r, wait))
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from(SHARED_BUCKET)
+        // A minute of caching at most, so stopping sharing (or sharing again)
+        // takes effect almost at once even for someone with the file's address.
+        .upload(fileOf(userId, link.token), new Blob([html], { type: 'text/html' }), { contentType: 'text/html', upsert: true, cacheControl: '60' })
+      if (uploadError) throw uploadError
+      const { error: saveError } = await supabase
+        .from('cc_shared_decks')
+        .upsert({ ...row, updated_at: new Date().toISOString() }, { onConflict: 'token' })
+      if (saveError) throw saveError
+      return
+    } catch (err) {
+      lastError = err
+    }
+  }
+  throw lastError
 }
 
 /** Stops sharing a session: its link no longer opens. Best effort. */
@@ -101,6 +150,7 @@ export async function lookupShared(tokens: string[]): Promise<Map<string, Shared
 
 /** The shared page itself -- readable by anyone with the link. */
 export async function fetchSharedHtml(deck: SharedDeck): Promise<string> {
+  if (isUploading(deck)) throw new Error(MESSAGES.uploading)
   // The update time keeps a cached old copy from being shown after a re-share.
   const url = `${supabaseUrl}/storage/v1/object/public/${SHARED_BUCKET}/${fileOf(deck.ownerId, deck.token)}?v=${deck.updatedAt}`
   const response = await fetch(url, { cache: 'no-store' })
@@ -149,7 +199,7 @@ async function keepCopy(userId: string, deck: SharedDeck, html: string): Promise
  * their own to keep. */
 export async function saveShare(userId: string, token: string): Promise<void> {
   const deck = (await lookupShared([token])).get(token)
-  if (!deck) throw new Error('No longer shared')
+  if (!deck) throw new Error(MESSAGES.notShared)
   await keepCopy(userId, deck, await fetchSharedHtml(deck))
 }
 
@@ -168,7 +218,7 @@ export async function openSavedShare(userId: string, share: SavedShare): Promise
     return { title: deck?.title || share.title || 'Shared presentation', html: await data.text() }
   }
   if (deck) return { title: deck.title, html: await fetchSharedHtml(deck) }
-  throw new Error('No longer shared')
+  throw new Error(MESSAGES.notShared)
 }
 
 /** Takes it out of this person's sessions, and deletes their copy. */

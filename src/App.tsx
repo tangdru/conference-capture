@@ -22,7 +22,7 @@ import { shouldAutoStartHomeTour, startHomeTour } from './tour'
 import { onPhotoUploaded, pendingPhotos, syncPhotoUploadAuth } from './photoUploads'
 import { onOutboxProblem, startOutbox } from './itemOutbox'
 import { startDeckUploads, uploadDeckLater } from './deckUploads'
-import { listSavedShares, lookupShared, openSavedShare, removeSavedShare, saveShare, sharePresentation, stopSharing, tokenFromLink, type SavedShare } from './sharing'
+import { listSavedShares, lookupShared, openSavedShare, removeSavedShare, saveShare, prepareShareLink, publishShare, stopSharing, tokenFromLink, type SavedShare } from './sharing'
 import { App as CapApp } from '@capacitor/app'
 import { MESSAGES, OFFLINE_MESSAGE, errorMessage } from './networkError'
 
@@ -487,9 +487,15 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     try {
       const kind = await chooseShareKind()
       if (!kind) return
-      const fullHtml = await loadDeckHtml(session, session.deckPath)
       if (kind === 'link') {
-        const url = await sharePresentation(userId, session.id, session.title, fullHtml)
+        // The link opens the share sheet straight away; the page uploads
+        // behind it (and only if the presentation changed since last shared).
+        const link = await prepareShareLink(session.id, session.deckGeneratedAt)
+        const deckPath = session.deckPath
+        void publishShare(userId, session.id, session.title, link, () => loadDeckHtml(session, deckPath)).catch((err) =>
+          setHomeError(errorMessage(err)),
+        )
+        const url = link.url
         if (Capacitor.isNativePlatform()) {
           await Share.share({ title: session.title, url })
         } else if (navigator.share) {
@@ -500,6 +506,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         }
         return
       }
+      const fullHtml = await loadDeckHtml(session, session.deckPath)
       const length = await chooseDeckLength(fullHtml)
       if (!length) return
       const html = length === 'short' ? shortDeckHtml(fullHtml) : fullHtml

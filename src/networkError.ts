@@ -23,6 +23,7 @@ export const MESSAGES = {
   phoneFull: 'Phone storage full',
   refusedChange: 'The server refused a change',
   notShared: 'No longer shared',
+  uploading: 'Still uploading, try again in a minute',
   unknown: 'Something went wrong, try again',
 } as const
 

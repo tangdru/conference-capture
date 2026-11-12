@@ -15,6 +15,15 @@ Friends had build 64, which App Store Connect shows was also sent).
 
 ---
 
+## Build 72 — internal
+
+What to Test:
+
+```
+- The camera opens straight onto the live picture, with no black screen first. Try it right after opening a session, and again after closing and reopening the camera.
+- The first time after installing, the camera-access question may still appear before the camera opens.
+```
+
 ## Build 71 — internal
 
 What to Test:

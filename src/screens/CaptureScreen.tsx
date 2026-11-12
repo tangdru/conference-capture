@@ -586,18 +586,18 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
             </button>
           )}
           {session.status === 'recording' && canRecordClips && <ClipButton className="clip-btn" onTap={tapClip} />}
-          {session.items.some((i) => i.type === 'transcript' || i.type === 'note' || i.type === 'photo') && (
-            <button className="ask-btn" onClick={() => setAskOpen(true)} aria-label="Ask about this session">
-              <svg className="inline-icon" viewBox="2.2 2.7 19.6 18.6" fill="none" aria-hidden="true">
-                <path
-                  d="M4 5.5A2 2 0 016 3.5h12a2 2 0 012 2v9a2 2 0 01-2 2h-7l-4.5 4v-4H6a2 2 0 01-2-2v-9z"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-          )}
+          {/* Ask is always available — live, paused or ended — even before the
+              first transcript line has been saved as an item. */}
+          <button className="ask-btn" onClick={() => setAskOpen(true)} aria-label="Ask about this session">
+            <svg className="inline-icon" viewBox="2.2 2.7 19.6 18.6" fill="none" aria-hidden="true">
+              <path
+                d="M4 5.5A2 2 0 016 3.5h12a2 2 0 012 2v9a2 2 0 01-2 2h-7l-4.5 4v-4H6a2 2 0 01-2-2v-9z"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
         </div>
       </div>
 

@@ -35,14 +35,18 @@ public class PhotoUploadsPlugin: CAPPlugin, CAPBridgedPlugin {
         call.resolve()
     }
 
-    /// {id, sessionId, data, originalPath, flattenedPath, row}: saves the
-    /// photo to disk at once, straightens and reads it, then queues the
-    /// uploads and the timeline row. Resolves with {text, data?} once it's
-    /// safely queued -- `data` is the flattened slide, if one was found.
+    /// {id, sessionId, data | filePath, originalPath, flattenedPath, row}:
+    /// saves the photo to disk at once, straightens and reads it, then queues
+    /// the uploads and the timeline row. The photo comes as base64 `data`, or
+    /// as `filePath` (a file:// URL) from the native camera, which skips
+    /// sending it through the page as text. Resolves with {text, data?} once
+    /// it's safely queued -- `data` is the flattened slide, if one was found.
     @objc func enqueue(_ call: CAPPluginCall) {
+        let fromFile = call.getString("filePath").flatMap(URL.init(string:)).flatMap { try? Data(contentsOf: $0) }
+        let fromData = call.getString("data").flatMap { Data(base64Encoded: $0) }
         guard
             let id = call.getString("id"), let sessionId = call.getString("sessionId"),
-            let base64 = call.getString("data"), let bytes = Data(base64Encoded: base64),
+            let bytes = fromFile ?? fromData,
             let originalPath = call.getString("originalPath"), let flattenedPath = call.getString("flattenedPath"),
             let row = call.getObject("row")
         else {

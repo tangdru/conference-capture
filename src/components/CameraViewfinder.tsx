@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import { DeviceTilt } from '../native/deviceTilt'
-import { NativeCamera, type FlashMode } from '../native/nativeCamera'
+import type { FlashMode } from '../native/nativeCamera'
 import { StarIcon } from './InlineIcons'
 import { ClipButton } from './ClipButton'
 import './CameraViewfinder.css'
@@ -20,9 +20,9 @@ interface CameraViewfinderProps {
 
 const MAX_THUMBS = 3
 
-// In the app, the iPhone's own camera (NativeCameraPlugin.swift) draws the
-// preview behind this page, seen through a transparent stage; in a browser,
-// a getUserMedia <video> fills the stage instead.
+// The browser camera (getUserMedia), for the website. The app has its own
+// native camera screen (CameraViewController.swift) and only falls back to
+// this if that can't open.
 const NATIVE = Capacitor.isNativePlatform()
 
 export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = false, onClip }: CameraViewfinderProps) {
@@ -65,10 +65,8 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
   const iconTurn = tilt === 90 ? -90 : tilt === 270 ? 90 : tilt
   const touchStart = useRef<{ x: number; y: number } | null>(null)
 
-  // Zoom in the Camera app's units (1 = main lens). `lenses` are the buttons
-  // under the preview: the phone's lenses natively; in a browser just one,
-  // which shows the zoom and resets it. Flash natively is the real flash
-  // (off/auto/on); in a browser it's the torch, where the track offers one.
+  // Zoom, where the browser offers it: one lens button, which shows the zoom
+  // and resets it. Flash is the torch, where the track offers one.
   const trackRef = useRef<MediaStreamTrack | null>(null)
   const [zoomRange, setZoomRange] = useState<{ min: number; max: number } | null>(null)
   const [lenses, setLenses] = useState<number[]>([])
@@ -76,73 +74,30 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
   const [flashModes, setFlashModes] = useState<FlashMode[]>([])
   // Off by default: a flash on a projected slide only adds glare.
   const [flash, setFlash] = useState<FlashMode>('off')
-  const [focusRing, setFocusRing] = useState<{ x: number; y: number; key: number } | null>(null)
-  const [blink, setBlink] = useState(false)
-  // Starts native in the app; drops to the browser camera if the native one
-  // can't open (other than a denied permission), e.g. in the Simulator.
-  const [useNative, setUseNative] = useState(NATIVE)
   // A pinch in progress: finger spread and zoom when it started. `pinched`
   // stops the gesture's end from also counting as a swipe down to close.
   const pinch = useRef<{ distance: number; zoom: number } | null>(null)
   const pinched = useRef(false)
 
-  function setZoomTo(value: number, animated: boolean) {
+  function setZoomTo(value: number) {
     if (!zoomRange) return
     const next = Math.min(zoomRange.max, Math.max(zoomRange.min, value))
     setZoom(next)
-    if (useNative) {
-      void NativeCamera.setZoom({ zoom: next, animated }).catch(() => {})
-    } else {
-      void trackRef.current
-        ?.applyConstraints({ advanced: [{ zoom: next } as MediaTrackConstraintSet] })
-        .catch(() => {})
-    }
+    void trackRef.current
+      ?.applyConstraints({ advanced: [{ zoom: next } as MediaTrackConstraintSet] })
+      .catch(() => {})
   }
 
   function cycleFlash() {
     const next = flashModes[(flashModes.indexOf(flash) + 1) % flashModes.length]
     setFlash(next)
-    if (!useNative) {
-      void trackRef.current
-        ?.applyConstraints({ advanced: [{ torch: next === 'on' } as MediaTrackConstraintSet] })
-        .catch(() => setFlash(flash))
-    }
+    void trackRef.current
+      ?.applyConstraints({ advanced: [{ torch: next === 'on' } as MediaTrackConstraintSet] })
+      .catch(() => setFlash(flash))
   }
-
-  // Native camera: open it with its preview lined up under the stage, and
-  // make the page see-through there while it runs.
-  useEffect(() => {
-    if (!useNative) return
-    let cancelled = false
-    document.documentElement.classList.add('native-camera')
-    const frame = requestAnimationFrame(() => {
-      const rect = stageRef.current?.getBoundingClientRect()
-      if (!rect) return
-      NativeCamera.start({ x: rect.left, y: rect.top, width: rect.width, height: rect.height })
-        .then((info) => {
-          if (cancelled) return void NativeCamera.stop().catch(() => {})
-          setZoomRange({ min: info.minZoom, max: info.maxZoom })
-          setLenses(info.lenses)
-          setZoom(info.zoom)
-          if (info.flash) setFlashModes(['off', 'auto', 'on'])
-        })
-        .catch((err: { code?: string; message?: string }) => {
-          if (cancelled) return
-          if (err.code === 'DENIED') setError(err.message ?? 'Camera access is off')
-          else setUseNative(false)
-        })
-    })
-    return () => {
-      cancelled = true
-      cancelAnimationFrame(frame)
-      document.documentElement.classList.remove('native-camera')
-      void NativeCamera.stop().catch(() => {})
-    }
-  }, [useNative])
 
   // Browser camera.
   useEffect(() => {
-    if (useNative) return
     let stream: MediaStream | null = null
     let cancelled = false
 
@@ -183,7 +138,7 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
       cancelled = true
       stream?.getTracks().forEach((t) => t.stop())
     }
-  }, [useNative])
+  }, [])
 
   // The native app's UI is locked to portrait, so the viewfinder never
   // rotates -- watch the accelerometer instead, to save a landscape photo
@@ -228,21 +183,6 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
 
   async function capture() {
     const degrees = NATIVE ? await DeviceTilt.getRotation().then((r) => r.degrees).catch(() => 0) : 0
-    if (useNative) {
-      setBlink(true)
-      window.setTimeout(() => setBlink(false), 120)
-      try {
-        const { data } = await NativeCamera.capture({ flash, degrees })
-        // The tap of the haptic comes after the shot: before it, the nudge
-        // could set the lens refocusing just as the photo was taken.
-        void Haptics.impact({ style: ImpactStyle.Light })
-        addShot(await fetch(`data:image/jpeg;base64,${data}`).then((r) => r.blob()))
-      } catch {
-        // A failed shot just doesn't appear in the strip; the camera stays open.
-      }
-      return
-    }
-
     const video = videoRef.current
     const canvas = canvasRef.current
     if (!video || !canvas || video.videoWidth === 0) return
@@ -263,16 +203,6 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
     canvas.toBlob((blob) => blob && addShot(blob), 'image/jpeg', 0.82)
   }
 
-  /** Tap on the preview itself (not a control on it): focus there. */
-  function handleStageClick(e: React.MouseEvent<HTMLDivElement>) {
-    if (!useNative || e.target !== e.currentTarget) return
-    const rect = e.currentTarget.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-    void NativeCamera.focus({ x: x / rect.width, y: y / rect.height }).catch(() => {})
-    setFocusRing({ x, y, key: Date.now() })
-  }
-
   function fingerSpread(touches: React.TouchList) {
     return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY)
   }
@@ -289,7 +219,7 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
 
   function handleTouchMove(e: React.TouchEvent) {
     if (!pinch.current || e.touches.length !== 2) return
-    setZoomTo(pinch.current.zoom * (fingerSpread(e.touches) / pinch.current.distance), false)
+    setZoomTo(pinch.current.zoom * (fingerSpread(e.touches) / pinch.current.distance))
   }
 
   function handleTouchEnd(e: React.TouchEvent) {
@@ -312,7 +242,7 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
 
   return (
     <div
-      className={`viewfinder${useNative ? ' viewfinder--native' : ''}`}
+      className="viewfinder"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -332,13 +262,12 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
 
       <div
         ref={stageRef}
-        className={`viewfinder__stage${useNative ? ' viewfinder__stage--native' : ''}`}
-        onClick={handleStageClick}
+        className="viewfinder__stage"
       >
         {error ? (
           <p className="viewfinder__error">{error}</p>
         ) : (
-          !useNative && (
+          (
             <video
               ref={videoRef}
               className={`viewfinder__video${ready ? ' viewfinder__video--ready' : ''}`}
@@ -357,16 +286,6 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
           <span className="corner corner--br" />
         </div>
 
-        {focusRing && (
-          <span
-            key={focusRing.key}
-            className="viewfinder__focus"
-            style={{ left: focusRing.x, top: focusRing.y }}
-            aria-hidden="true"
-          />
-        )}
-        {blink && <span className="viewfinder__blink" aria-hidden="true" />}
-
         {peek && (
           <div className={`viewfinder__peek${tilt === 90 || tilt === 270 ? ' viewfinder__peek--sideways' : ''}`} aria-hidden="true">
             <img src={peek} alt="" />
@@ -381,7 +300,7 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
                 <button
                   key={lens}
                   className={`viewfinder__lens${active ? ' viewfinder__lens--active' : ''}`}
-                  onClick={() => setZoomTo(lens, true)}
+                  onClick={() => setZoomTo(lens)}
                   aria-label={active ? `Zoom ${formatZoom(zoom)}×` : `Zoom to ${formatZoom(lens)}×`}
                 >
                   {active ? `${formatZoom(zoom)}×` : formatZoom(lens)}

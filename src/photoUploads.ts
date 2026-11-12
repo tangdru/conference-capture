@@ -38,32 +38,36 @@ function base64ToObjectUrl(data: string): Promise<string> {
   return fetch(`data:image/jpeg;base64,${data}`).then((r) => r.blob()).then((b) => URL.createObjectURL(b))
 }
 
-/** Hands a photo to the queue. `item` is there to show at once; `processed`
- * settles once it's been straightened, read and safely queued. */
+/** Hands a photo to the queue: a Blob, or a file:// URL from the native
+ * camera (which then never crosses the bridge as text). `item` is there to
+ * show at once; `processed` settles once it's been straightened, read and
+ * safely queued. */
 export function queuePhoto(
   sessionId: string,
   userId: string,
-  blob: Blob,
+  photo: Blob | { filePath: string },
 ): { item: PhotoItem; processed: Promise<Pick<PhotoItem, 'photoPath' | 'slideText' | 'dataUrl'>> } {
   const id = crypto.randomUUID()
   const originalPath = `${userId}/${sessionId}/${crypto.randomUUID()}.jpg`
   const flattenedPath = `${userId}/${sessionId}/${crypto.randomUUID()}.jpg`
   const timestamp = Date.now()
   const caption = 'Untitled photo'
+  const fromFile = !(photo instanceof Blob)
   const item: PhotoItem = {
     id,
     type: 'photo',
     photoPath: originalPath,
     caption,
     timestamp,
-    dataUrl: URL.createObjectURL(blob),
+    dataUrl: fromFile ? Capacitor.convertFileSrc(photo.filePath) : URL.createObjectURL(photo),
     uploading: true,
   }
-  const processed = blobToBase64(blob).then(async (data) => {
+  const source = fromFile ? Promise.resolve({ filePath: photo.filePath }) : blobToBase64(photo).then((data) => ({ data }))
+  const processed = source.then(async (given) => {
     const result = await PhotoUploads.enqueue({
       id,
       sessionId,
-      data,
+      ...given,
       originalPath,
       flattenedPath,
       row: {

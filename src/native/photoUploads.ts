@@ -8,7 +8,9 @@ interface PhotoUploadsPlugin {
   enqueue(options: {
     id: string
     sessionId: string
-    data: string
+    /** The photo as base64, or as a file:// URL (from the native camera). */
+    data?: string
+    filePath?: string
     originalPath: string
     flattenedPath: string
     row: Record<string, unknown>

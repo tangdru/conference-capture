@@ -20,6 +20,7 @@ import * as db from '../db'
 import { forgetCachedDeck } from '../deckCache'
 import { SlideScanner, blobToBase64 } from '../native/slideScanner'
 import { backgroundUploads, queuePhoto } from '../photoUploads'
+import { NativeCamera } from '../native/nativeCamera'
 import { canRecordClips, commitClipTrims, recordClip, setClipTrim, stopClip, useActiveClip } from '../audioClips'
 import { ClipButton } from '../components/ClipButton'
 import { useSessionOptions } from '../sessionOptions'
@@ -331,9 +332,10 @@ export function CaptureScreen({
   }
 
   /** Native: the photo shows at once and goes to the background upload
-   * queue, which straightens and reads it first. */
-  async function queueNativePhoto(blob: Blob) {
-    const { item, processed } = queuePhoto(session.id, userId, blob)
+   * queue, which straightens and reads it first. From the native camera it
+   * comes as a file. */
+  async function queueNativePhoto(photo: Blob | { filePath: string }) {
+    const { item, processed } = queuePhoto(session.id, userId, photo)
     onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
     setProcessingPhotoIds((ids) => new Set(ids).add(item.id))
     try {
@@ -345,7 +347,11 @@ export function CaptureScreen({
     } catch {
       // Couldn't even save it to the phone -- upload it directly instead.
       onUpdateLocal((s) => ({ ...s, items: s.items.filter((i) => i.id !== item.id) }))
-      uploadPhoto(blob)
+      const blob = photo instanceof Blob
+        ? photo
+        : await fetch(Capacitor.convertFileSrc(photo.filePath)).then((r) => r.blob()).catch(() => null)
+      if (blob) uploadPhoto(blob)
+      else setSaveError("Couldn't save this photo")
     } finally {
       setProcessingPhotoIds((ids) => {
         const next = new Set(ids)
@@ -425,6 +431,65 @@ export function CaptureScreen({
       document.removeEventListener('click', check)
     }
   }, [])
+
+  // The camera. In the app it's the native camera screen
+  // (CameraViewController.swift) over everything; it hands back photos as
+  // files and taps on the star and clip button, which are handled here as on
+  // the session bar, and is kept told what they show. In a browser -- or if
+  // the native one can't open -- it's CameraViewfinder.
+  const showRememberInCamera = session.status === 'recording' && sessionOptions.rememberThis
+  const showClipInCamera = session.status === 'recording' && showClip
+  const nativeCameraUp = useRef(false)
+  const [nativeCameraFailed, setNativeCameraFailed] = useState(false)
+  const cameraHandlers = useRef({ photo: (_path: string) => {}, remember: () => {}, clip: () => {} })
+  cameraHandlers.current = {
+    photo: (path) => void queueNativePhoto({ filePath: path }),
+    remember: () => void rememberThis(),
+    clip: () => void tapClip(),
+  }
+  const cameraState = {
+    showRemember: showRememberInCamera,
+    showClip: showClipInCamera,
+    remembered,
+    clipEndsAt: activeClip?.endsAt ?? null,
+  }
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+    const handles = Promise.all([
+      NativeCamera.addListener('photo', ({ path }) => cameraHandlers.current.photo(path)),
+      NativeCamera.addListener('photoFailed', () => setSaveError("Couldn't save this photo")),
+      NativeCamera.addListener('remember', () => cameraHandlers.current.remember()),
+      NativeCamera.addListener('clip', () => cameraHandlers.current.clip()),
+      NativeCamera.addListener('closed', () => {
+        nativeCameraUp.current = false
+      }),
+    ])
+    return () => {
+      if (nativeCameraUp.current) void NativeCamera.close().catch(() => {})
+      nativeCameraUp.current = false
+      void handles.then((list) => list.forEach((h) => void h.remove()))
+    }
+  }, [])
+  useEffect(() => {
+    if (nativeCameraUp.current) void NativeCamera.update(cameraState).catch(() => {})
+  }, [cameraState.showRemember, cameraState.showClip, cameraState.remembered, cameraState.clipEndsAt])
+
+  async function openCamera() {
+    if (!Capacitor.isNativePlatform() || nativeCameraFailed) {
+      setCameraOpen(true)
+      return
+    }
+    nativeCameraUp.current = true
+    try {
+      await NativeCamera.open(cameraState)
+    } catch (err) {
+      nativeCameraUp.current = false
+      if ((err as { code?: string }).code === 'UNAVAILABLE') {
+        setNativeCameraFailed(true)
+        setCameraOpen(true)
+      } else setSaveError(errorMessage(err))
+    }
+  }
 
   function stop() {
     onPause().catch((err: unknown) => setSaveError(errorMessage(err)))
@@ -542,7 +607,7 @@ export function CaptureScreen({
 
         <button
           className="camera-trigger"
-          onClick={() => setCameraOpen(true)}
+          onClick={() => void openCamera()}
           aria-label="Capture photo"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">

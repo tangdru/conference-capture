@@ -36,7 +36,7 @@ export const DEFAULT_SESSION_OPTIONS: SessionOptions = {
   clipBeforeS: 5,
   clipAfterS: 44,
   snapToSentences: false,
-  voiceBoost: false,
+  voiceBoost: true,
   wifiOnlyUploads: false,
   keepTrimmedOnly: true,
   clipsInShared: false,

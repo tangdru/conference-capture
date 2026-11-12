@@ -10,7 +10,57 @@ changes.
   review. When sending a build to Friends, combine the notes of every build
   since the last one Friends got (marked below).
 
-**Last build sent to Friends: 63** (sent 2026-11-11)
+**Last build sent to Friends: 64** (per Andrew, 2026-11-12; this file had 63).
+Build 68 is next, with the combined notes below — update this line once it's sent.
+
+---
+
+## Build 68 — internal, Friends (combined notes ready)
+
+What to Test (internal):
+
+```
+- Chui's audio has its own settings now: turn it on in Menu > Session options and they fold open underneath.
+- Clip length: "Before the tap" (0-60 sec, default 5) and "After the tap" (0-2 min, default 44). Try a few lengths; the button's countdown should match "After".
+- Snap to sentences (off): clips start and end at a pause instead of mid-word.
+- Voice boost (on): turns down room noise in the saved clip only -- the live transcript is untouched. Compare a clip with it on and off in a noisy room.
+- Upload on Wi-Fi only (off): on mobile data, clips wait on the phone and upload once you're on Wi-Fi.
+- Keep only the trimmed part (on): trim a clip, leave the session, come back -- the handles can now only move inward.
+- Clips in shared presentations (off): share a presentation that has clips -- the link and download leave them out; in the app they still play. Turn it on and share again to include them.
+```
+
+For Friends (combined notes, builds 64–68 — paste as 68's What to Test
+for the Friends group):
+
+```
+New since build 63:
+
+SESSION OPTIONS (new, top of the menu)
+- Remember this (on): the star that marks a key moment.
+- Chui's audio (off): a button that keeps a clip of the speaker's voice. Turn it on and its settings fold open underneath.
+
+CHUI'S AUDIO -- CLIPS OF THE SPEAKER
+- While a talk is listening, tap the waveform button (beside the star, also in the camera): it keeps the seconds just heard and records on, with a countdown. Tap again to stop early.
+- Set how long: "Before the tap" (default 5 sec, up to 1 min) and "After the tap" (default 44 sec, up to 2 min).
+- Drag the handles on a clip's waveform to trim it. Play plays the kept part.
+- Presentations include your clips: a play button with a one-line caption, in the chapter where it was said.
+- Voice boost (on) cleans up room noise in the clip; Snap to sentences (off) starts and ends clips at a pause; Upload on Wi-Fi only (off); Keep only the trimmed part (on).
+- Clips in shared presentations is off: links and downloads you share leave clips out unless you turn it on.
+
+PRESENTATIONS
+- When a talk doesn't say who's speaking, the speaker is the first author on the title slide.
+- Share link opens the share sheet right away; the presentation uploads behind it.
+
+SHARED WITH YOU
+- Shared presentations are yours to keep: once added, one stays even if the sender deletes it ("Your saved copy").
+- "Pinned" and "Shared with you" fold away like the days.
+
+HOME AND SESSIONS
+- New sessions are named "Session 1 : 11/12" (month/day) until Sparkle names them.
+- A paused session leaves the live spot after 3 minutes.
+- The home list keeps its place when you come back from a presentation or session.
+- Remember this just marks the moment now (no audio).
+```
 
 ---
 

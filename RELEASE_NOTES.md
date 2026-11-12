@@ -14,6 +14,18 @@ changes.
 
 ---
 
+## Build 66 — internal
+
+What to Test:
+
+```
+- The clip button is now a waveform icon. In the camera, the star and clip button sit in the same places as on the session screen; held sideways (star on the left), the clip button takes the star's spot.
+- New sessions are named "Session 1 : 12/11", "Session 2 : 12/11"... (numbered within the day) until Sparkle names them.
+- A paused session leaves the live spot after 3 minutes (was 20).
+```
+
+---
+
 ## Build 65 — internal
 
 What to Test:

@@ -3,7 +3,7 @@ import { useActiveClip } from '../audioClips'
 
 /** The clip button: a waveform, or while a clip records, its seconds left (a tap
  * then stops it early). */
-export function ClipButton({ className, onTap }: { className: string; onTap: () => void }) {
+export function ClipButton({ className, extraClass = '', onTap }: { className: string; extraClass?: string; onTap: () => void }) {
   const active = useActiveClip()
   const [now, setNow] = useState(Date.now())
   const left = active ? Math.ceil((active.endsAt - now) / 1000) : 0
@@ -17,7 +17,7 @@ export function ClipButton({ className, onTap }: { className: string; onTap: () 
 
   return (
     <button
-      className={`${className}${counting ? ` ${className}--recording` : ''}`}
+      className={`${className}${extraClass ? ` ${extraClass}` : ''}${counting ? ` ${className}--recording` : ''}`}
       onClick={onTap}
       aria-label={counting ? `Recording clip, ${left} seconds left. Tap to stop` : 'Record a clip: 15 seconds before and 45 after'}
     >

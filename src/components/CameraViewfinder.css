@@ -439,6 +439,12 @@ html.native-camera .capture-screen > :not(.viewfinder) {
   cursor: pointer;
 }
 
+/* Held sideways the other way, the star moves to the shutter's left: the
+   clip button takes the star's place (70px right of the shutter's centre). */
+.viewfinder__clip--star-spot {
+  margin-left: -16px;
+}
+
 .viewfinder__clip .inline-icon {
   width: 26px;
   height: 26px;

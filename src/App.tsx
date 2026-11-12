@@ -23,6 +23,7 @@ import { onPhotoUploaded, pendingPhotos, syncPhotoUploadAuth } from './photoUplo
 import { onOutboxProblem, startOutbox } from './itemOutbox'
 import { startDeckUploads, uploadDeckLater } from './deckUploads'
 import { startClipUploads } from './audioClips'
+import { nextSessionTitle } from './sessionTitle'
 import { listSavedShares, lookupShared, openSavedShare, removeSavedShare, saveShare, prepareShareLink, publishShare, stopSharing, tokenFromLink, type SavedShare } from './sharing'
 import { App as CapApp } from '@capacitor/app'
 import { MESSAGES, OFFLINE_MESSAGE, errorMessage } from './networkError'
@@ -373,7 +374,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   }
 
   async function startNewSession() {
-    const session = await db.createSession(userId)
+    const session = await db.createSession(userId, nextSessionTitle(sessions ?? []))
     setSessions((prev) => (prev ? [session, ...prev] : [session]))
     setRoute({ screen: 'capture', sessionId: session.id })
   }

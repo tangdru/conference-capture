@@ -470,12 +470,12 @@ function queuedItem(row: QueuedRow): TimelineItemData {
 
 /** Starts a session on the phone at once -- no signal needed. It reaches
  * Supabase through the outbox, ahead of anything captured in it. */
-export async function createSession(userId: string): Promise<Session> {
+export async function createSession(userId: string, title = 'Session'): Promise<Session> {
   const now = new Date().toISOString()
   const row = {
     id: crypto.randomUUID(),
     owner_id: userId,
-    title: 'Session',
+    title,
     status: 'recording' as SessionStatus,
     started_at: now,
     accumulated_ms: 0,

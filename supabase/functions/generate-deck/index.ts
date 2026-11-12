@@ -14,8 +14,10 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
 const ANTHROPIC_MODEL = 'claude-opus-5-5'
 // Naming is a one-line answer; a faster model keeps it from delaying the deck.
 const NAMING_MODEL = 'claude-sonnet-5-5'
-// What createSession titles every new session until the user renames it.
-const DEFAULT_TITLE = 'Session'
+// What the app titles a new session until it's renamed: "Session", or since
+// build 66 "Session 2 : 11/11" (numbered within the day). Keep in step with
+// src/sessionTitle.ts.
+const DEFAULT_TITLE = /^Session(?: \d+ : \d{2}\/\d{2})?$/
 const DECKS_BUCKET = 'cc-decks'
 const PHOTOS_BUCKET = 'cc-photos'
 // How long one round may write before handing off to the next (the free
@@ -397,7 +399,7 @@ async function generateDeckPart(
   let skipped: string[] = givenSkipped ?? []
   if (part === 0) {
     const live = allItemRows.filter((r) => !r.excluded)
-    const needsName = !title.trim() || title.trim() === DEFAULT_TITLE
+    const needsName = !title.trim() || DEFAULT_TITLE.test(title.trim())
     // A slide that builds up step by step, photographed at each step, goes in
     // once: Claude keeps the photos that show something the others don't.
     const candidates = choosePhotos(live.filter((r) => r.type === 'photo' && r.photo_path), options)

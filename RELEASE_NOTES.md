@@ -10,12 +10,15 @@ changes.
   review. When sending a build to Friends, combine the notes of every build
   since the last one Friends got (marked below).
 
-**Last build sent to Friends: 64** (per Andrew, 2026-11-12; this file had 63).
-Build 68 is next, with the combined notes below — update this line once it's sent.
+**Last build sent to Friends: 68** (submitted for beta review 2026-11-12;
+Friends had build 64, which App Store Connect shows was also sent).
 
 ---
 
-## Build 68 — internal, Friends (combined notes ready)
+## Build 68 — internal, Friends
+
+The Friends notes below (builds 64–68) are build 68's What to Test in App
+Store Connect for every group (it has one box), as with build 63.
 
 What to Test (internal):
 
@@ -29,8 +32,8 @@ What to Test (internal):
 - Clips in shared presentations (off): share a presentation that has clips -- the link and download leave them out; in the app they still play. Turn it on and share again to include them.
 ```
 
-For Friends (combined notes, builds 64–68 — paste as 68's What to Test
-for the Friends group):
+For Friends (combined notes, builds 64–68 — this is what went into App
+Store Connect):
 
 ```
 New since build 63:

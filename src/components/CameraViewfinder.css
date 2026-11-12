@@ -364,7 +364,7 @@ html.native-camera .capture-screen > :not(.viewfinder) {
   transform: scale(0.94);
 }
 
-/* Remember this, beside the shutter: its centre 76px right of the shutter's
+/* Remember this, beside the shutter: its centre 70px right of the shutter's
    centre, the same as the star beside the camera button on the session
    screen, so it stays put as the camera opens. Held sideways it sits below
    the shutter as the viewer sees it: the right side when the phone's top is
@@ -374,8 +374,8 @@ html.native-camera .capture-screen > :not(.viewfinder) {
   grid-row: 1;
   justify-self: start;
   /* The column starts 62px from the shutter's centre (half its 68px plus the
-     28px gap); -10px puts this 48px button's centre at 76px. */
-  margin-left: -10px;
+     28px gap); -16px puts this 48px button's centre at 70px. */
+  margin-left: -16px;
   width: 48px;
   height: 48px;
   display: flex;
@@ -393,7 +393,7 @@ html.native-camera .capture-screen > :not(.viewfinder) {
   grid-column: 1;
   justify-self: end;
   margin-left: 0;
-  margin-right: -10px;
+  margin-right: -16px;
 }
 
 .viewfinder__remember .inline-icon {
@@ -417,12 +417,15 @@ html.native-camera .capture-screen > :not(.viewfinder) {
   transition: transform var(--duration-slow) var(--easing-base);
 }
 
-/* The clip button, at the right end of the shutter row. */
+/* The clip button: its centre 110px right of the shutter's centre, the same
+   as on the session screen, so it stays put as the camera opens. The column
+   starts 62px from the shutter's centre; 24px puts this 48px button's centre
+   at 110px. */
 .viewfinder__clip {
   grid-column: 3;
   grid-row: 1;
-  justify-self: end;
-  margin-right: 12px;
+  justify-self: start;
+  margin-left: 24px;
   width: 48px;
   height: 48px;
   display: flex;

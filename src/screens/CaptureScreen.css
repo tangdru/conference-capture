@@ -259,11 +259,14 @@
   justify-content: flex-end;
 }
 
-/* Remember this sits just right of the camera button, its centre 76px from
-   the button's centre -- where the camera view puts its star beside the
-   shutter -- and Ask stays at the far right. */
+/* Remember this sits just right of the camera button, its centre 70px from
+   the button's centre (28 + 12 gap + 10 + half its 40), with the clip button
+   touching it (centre 110px), and Ask at the far right. The camera view puts
+   its star and clip button at the same places beside the shutter. 40px wide
+   so all three fit even on a 375pt-wide phone without squeezing. */
 .capture-actions__end .remember-btn {
-  margin-left: 14px;
+  width: 40px;
+  margin-left: 10px;
   margin-right: auto;
 }
 
@@ -412,6 +415,9 @@
 }
 
 .capture-actions__end .clip-btn {
+  width: 40px;
+  /* Cancels the row's 10px gap, so it sits right against the star. */
+  margin-left: -10px;
   margin-right: auto;
 }
 

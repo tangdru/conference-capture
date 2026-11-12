@@ -19,7 +19,7 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "close", returnType: CAPPluginReturnPromise),
     ]
 
-    private weak var camera: CameraViewController?
+    private var camera: CameraViewController?
 
     /// Photos taken in the camera, until they're safely in the upload queue
     /// (which keeps its own copy) and no longer shown from here.
@@ -33,9 +33,9 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin {
     /// camera to use (the page then falls back to the browser camera).
     @objc func open(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
-            guard self.camera == nil, let host = self.bridge?.viewController else {
-                return call.resolve()
-            }
+            // One already up (a double tap on the camera button): nothing to do.
+            if let open = self.camera, open.presentingViewController != nil { return call.resolve() }
+            guard let host = self.bridge?.viewController else { return call.resolve() }
             Self.clearOldShots()
             let camera = CameraViewController()
             self.apply(call, to: camera)
@@ -43,10 +43,16 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin {
             camera.onPhoto = { [weak self] jpeg in self?.savePhoto(jpeg) }
             camera.onRemember = { [weak self] in self?.notifyListeners("remember", data: [:]) }
             camera.onClip = { [weak self] in self?.notifyListeners("clip", data: [:]) }
-            camera.onClose = { [weak self] in self?.notifyListeners("closed", data: [:]) }
+            camera.onClose = { [weak self] in
+                self?.camera = nil
+                self?.notifyListeners("closed", data: [:])
+            }
             var settled = false
-            camera.onUnavailable = { message in
-                camera.dismiss(animated: false)
+            // Weak: the screen keeps this closure, so a strong reference to
+            // it here would keep it alive (and look open) after it closed.
+            camera.onUnavailable = { [weak self, weak camera] message in
+                camera?.dismiss(animated: false)
+                self?.camera = nil
                 if !settled {
                     settled = true
                     call.reject("Camera unavailable: \(message)", "UNAVAILABLE")

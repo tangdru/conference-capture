@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useActiveClip } from '../audioClips'
 
-/** The clip button: a mic, or while a clip records, its seconds left (a tap
+/** The clip button: a waveform, or while a clip records, its seconds left (a tap
  * then stops it early). */
 export function ClipButton({ className, onTap }: { className: string; onTap: () => void }) {
   const active = useActiveClip()
@@ -25,8 +25,7 @@ export function ClipButton({ className, onTap }: { className: string; onTap: () 
         <span className="clip-btn__count mono-timestamp">{left}</span>
       ) : (
         <svg className="inline-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.8" />
-          <path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          <path d="M4.8 6.9v10.2M8.5 9.2v5.6M12.1 3.6v16.8M15.8 6.9v10.2M19.4 8.7v6.6" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
         </svg>
       )}
     </button>

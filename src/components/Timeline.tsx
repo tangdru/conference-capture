@@ -601,7 +601,7 @@ function AudioRow({ item, items, onTrim }: { item: AudioItem; items: TimelineIte
     return (
       <div className="highlight-block" role="group" aria-label={label}>
         <div className="highlight-row">
-          <p className="highlight-row__label clip-row__label"><MicIcon /> Recording clip…</p>
+          <p className="highlight-row__label clip-row__label"><ClipIcon /> Recording clip…</p>
           <span className="mono-timestamp highlight-row__meta">{formatClock(item.timestamp)}</span>
         </div>
       </div>
@@ -611,7 +611,7 @@ function AudioRow({ item, items, onTrim }: { item: AudioItem; items: TimelineIte
     return (
       <div className="highlight-block" role="group" aria-label={label}>
         <div className="highlight-row">
-          <p className="highlight-row__label clip-row__label"><MicIcon /> Clip not saved</p>
+          <p className="highlight-row__label clip-row__label"><ClipIcon /> Clip not saved</p>
           <span className="mono-timestamp highlight-row__meta">{formatClock(item.timestamp)}</span>
         </div>
       </div>
@@ -682,7 +682,7 @@ function AudioRow({ item, items, onTrim }: { item: AudioItem; items: TimelineIte
     <div className={`highlight-block${item.excluded ? ' is-excluded' : ''}`} role="group" aria-label={label}>
       <div className="highlight-row">
         <p className="highlight-row__label clip-row__label">
-          <MicIcon /> Clip · {formatClipDuration(endMs - startMs)}
+          <ClipIcon /> Clip · {formatClipDuration(endMs - startMs)}
         </p>
         {item.excluded && <ExcludedBadge />}
         <span className="mono-timestamp highlight-row__meta">{formatClock(item.timestamp)}</span>
@@ -787,11 +787,10 @@ function useRemotePlayback(item: AudioItem) {
   return { playing, active, positionMs, toggle }
 }
 
-function MicIcon() {
+function ClipIcon() {
   return (
     <svg className="inline-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M4.8 6.9v10.2M8.5 9.2v5.6M12.1 3.6v16.8M15.8 6.9v10.2M19.4 8.7v6.6" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
     </svg>
   )
 }

@@ -16,10 +16,11 @@ export interface QueuedRow {
   id: string
   session_id: string
   owner_id: string
-  type: 'transcript' | 'highlight' | 'note'
+  type: 'transcript' | 'highlight' | 'note' | 'audio'
   item_timestamp: string
   text?: string
   duration_ms?: number
+  payload?: Record<string, unknown>
   excluded?: boolean
   starred?: boolean
   position?: number | null
@@ -38,7 +39,7 @@ export interface QueuedSession {
   pinned_at?: string | null
 }
 
-export type ItemPatch = Partial<Pick<QueuedRow, 'text' | 'excluded' | 'starred' | 'position' | 'item_timestamp' | 'placement_locked'>>
+export type ItemPatch = Partial<Pick<QueuedRow, 'text' | 'excluded' | 'starred' | 'position' | 'item_timestamp' | 'placement_locked' | 'duration_ms' | 'payload'>>
 export type SessionPatch = Partial<Pick<QueuedSession, 'title' | 'status' | 'accumulated_ms' | 'live_span_started_at' | 'updated_at' | 'pinned_at'>>
 
 /** Files to remove from storage along with a deletion. */

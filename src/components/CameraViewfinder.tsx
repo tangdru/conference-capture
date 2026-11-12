@@ -4,6 +4,7 @@ import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import { DeviceTilt } from '../native/deviceTilt'
 import { NativeCamera, type FlashMode } from '../native/nativeCamera'
 import { StarIcon } from './InlineIcons'
+import { ClipButton } from './ClipButton'
 import './CameraViewfinder.css'
 
 interface CameraViewfinderProps {
@@ -13,6 +14,8 @@ interface CameraViewfinderProps {
   onRemember?: () => void
   /** Briefly true after a Remember this, as its confirmation. */
   remembered?: boolean
+  /** The clip button, for while the talk is being recorded. */
+  onClip?: () => void
 }
 
 const MAX_THUMBS = 3
@@ -22,7 +25,7 @@ const MAX_THUMBS = 3
 // a getUserMedia <video> fills the stage instead.
 const NATIVE = Capacitor.isNativePlatform()
 
-export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = false }: CameraViewfinderProps) {
+export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = false, onClip }: CameraViewfinderProps) {
   const stageRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -426,6 +429,7 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
               <StarIcon filled={remembered} />
             </button>
           )}
+          {onClip && <ClipButton className="viewfinder__clip" onTap={onClip} />}
         </div>
       </div>
 

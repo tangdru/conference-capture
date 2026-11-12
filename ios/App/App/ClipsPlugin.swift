@@ -1,11 +1,13 @@
 import AVFoundation
 import Capacitor
 
-/// "Remember this" audio. While a session listens, the last two minutes of the
-/// mic feed sit in memory and are overwritten as they age; nothing reaches disk
-/// unless the user taps. A tap keeps that stretch, carries on until the speaker
-/// finishes the thought, and saves it as a small .m4a on the phone. The buffer
-/// is wiped whenever listening stops.
+/// Audio clips. While a session listens, the last few minutes of the mic feed
+/// sit in memory and are overwritten as they age; nothing reaches disk unless
+/// the user taps. The clip button keeps the seconds before the tap and records
+/// on for a set time (with a spare margin either side, for trimming), then
+/// saves it as a small .m4a on the phone. Builds before 65 also saved one on
+/// "Remember this" (`capture`), kept so those clips still play. The buffer is
+/// wiped whenever listening stops.
 final class ClipRecorder {
     static let shared = ClipRecorder()
 
@@ -15,9 +17,15 @@ final class ClipRecorder {
         let startedAt: Int
         let durationMs: Int
         let peaks: [Float]
+        /// The part to keep, within the saved audio (which has spare either side).
+        var trimStartMs: Int = 0
+        var trimEndMs: Int? = nil
 
         var json: [String: Any] {
-            ["id": id, "sessionId": sessionId, "startedAt": startedAt, "durationMs": durationMs, "peaks": peaks]
+            var json: [String: Any] = ["id": id, "sessionId": sessionId, "startedAt": startedAt, "durationMs": durationMs, "peaks": peaks]
+            json["trimStartMs"] = trimStartMs
+            json["trimEndMs"] = trimEndMs ?? durationMs
+            return json
         }
     }
 
@@ -70,6 +78,19 @@ final class ClipRecorder {
     private var lastText = ""
     private var timer: Timer?
 
+    // A clip-button recording, main thread only.
+    private struct Recording {
+        let id: String
+        let sessionId: String
+        let startSample: Int
+        let keepFromSample: Int
+        let keepToSample: Int
+        let endSample: Int
+        let completion: (Clip?) -> Void
+    }
+    private var recording: Recording?
+    private var recordTimer: Timer?
+
     var isCapturing: Bool {
         lock.lock()
         defer { lock.unlock() }
@@ -88,6 +109,7 @@ final class ClipRecorder {
     /// Saves a clip still waiting for the end of the thought, then wipes the buffer.
     func end() {
         finish()
+        finishRecording()
         lock.lock()
         capturing = false
         written = 0
@@ -141,6 +163,74 @@ final class ClipRecorder {
             self?.checkForEndOfThought()
         }
     }
+
+    /// The clip button: keeps `before` seconds already heard and records
+    /// `after` more, plus `margin` spare on each side for trimming. Starting
+    /// one while another is recording finishes that one first. `completion`
+    /// gets nil when not listening (or nothing was heard).
+    func record(id: String, sessionId: String, before: Double, after: Double, margin: Double,
+                completion: @escaping (Clip?) -> Void) {
+        finishRecording()
+        lock.lock()
+        let listening = capturing
+        let tap = written
+        let oldest = max(written - ring.count + Int(Self.sampleRate * (after + margin)), 0)
+        lock.unlock()
+        guard listening else {
+            completion(nil)
+            return
+        }
+        let start = max(tap - Int(Self.sampleRate * (before + margin)), oldest)
+        recording = Recording(
+            id: id, sessionId: sessionId, startSample: start,
+            keepFromSample: max(tap - Int(Self.sampleRate * before), start),
+            keepToSample: tap + Int(Self.sampleRate * after),
+            endSample: tap + Int(Self.sampleRate * (after + margin)),
+            completion: completion)
+        recordTimer = Timer.scheduledTimer(withTimeInterval: Self.checkSeconds, repeats: true) { [weak self] _ in
+            guard let self, let recording = self.recording else { return }
+            self.lock.lock()
+            let now = self.written
+            self.lock.unlock()
+            if now >= recording.endSample { self.finishRecording() }
+        }
+    }
+
+    /// Ends the clip-button recording now (the stop tap, or listening ended).
+    func finishRecording() {
+        recordTimer?.invalidate()
+        recordTimer = nil
+        guard let recording else { return }
+        self.recording = nil
+
+        lock.lock()
+        let end = min(written, recording.endSample)
+        let start = max(recording.startSample, written - ring.count)
+        var samples = [Float](repeating: 0, count: max(end - start, 0))
+        for i in 0..<samples.count {
+            samples[i] = ring[(start + i) % ring.count]
+        }
+        let behind = written - end
+        lock.unlock()
+
+        guard Double(samples.count) >= Self.sampleRate * Self.minClipSeconds else {
+            recording.completion(nil)
+            return
+        }
+        let ms = { (sample: Int) in Int((Double(sample) / Self.sampleRate * 1000).rounded()) }
+        let trimStart = ms(max(recording.keepFromSample - start, 0))
+        // Stopped early: keep up to the stop.
+        let trimEnd = ms(min(recording.keepToSample, end) - start)
+        let seconds = Double(samples.count + behind) / Self.sampleRate
+        let startedAt = Int(((Date().timeIntervalSince1970 - seconds) * 1000).rounded())
+        DispatchQueue.global(qos: .userInitiated).async {
+            let clip = Self.save(samples, id: recording.id, sessionId: recording.sessionId, startedAt: startedAt,
+                                 trimStartMs: trimStart, trimEndMs: trimEnd)
+            DispatchQueue.main.async { recording.completion(clip) }
+        }
+    }
+
+    var recordingId: String? { recording?.id }
 
     private func checkForEndOfThought() {
         guard let waiting else { return }
@@ -212,7 +302,8 @@ final class ClipRecorder {
 
     // MARK: - Saved clips
 
-    private static func save(_ raw: [Float], id: String, sessionId: String, startedAt: Int) -> Clip? {
+    private static func save(_ raw: [Float], id: String, sessionId: String, startedAt: Int,
+                             trimStartMs: Int = 0, trimEndMs: Int? = nil) -> Clip? {
         // The mic runs unprocessed for transcription, so a far-off speaker is
         // quiet: bring the clip up to a listenable level.
         let peak = raw.reduce(0) { max($0, abs($1)) }
@@ -243,13 +334,54 @@ final class ClipRecorder {
         let peaks = stride(from: 0, to: samples.count, by: perBar).prefix(peakCount).map { start in
             samples[start..<min(start + perBar, samples.count)].reduce(0) { max($0, abs($1)) }
         }
+        let durationMs = Int((Double(samples.count) / sampleRate * 1000).rounded())
         let clip = Clip(
-            id: id, sessionId: sessionId, startedAt: startedAt,
-            durationMs: Int((Double(samples.count) / sampleRate * 1000).rounded()), peaks: peaks)
+            id: id, sessionId: sessionId, startedAt: startedAt, durationMs: durationMs, peaks: peaks,
+            trimStartMs: min(trimStartMs, durationMs), trimEndMs: trimEndMs.map { min($0, durationMs) })
         // Written last: its presence means the audio is complete.
         guard let data = try? JSONSerialization.data(withJSONObject: clip.json),
               (try? data.write(to: infoURL(id), options: .atomic)) != nil else { return nil }
         return clip
+    }
+
+    /// Writes the kept part to its own file, for uploading; returns its URL.
+    static func exportTrimmed(_ id: String, startMs: Int, endMs: Int, completion: @escaping (URL?) -> Void) {
+        let output = directory.appendingPathComponent("\(id).trimmed.m4a")
+        let asset = AVURLAsset(url: audioURL(id))
+        let range = CMTimeRange(
+            start: CMTime(value: CMTimeValue(startMs), timescale: 1000),
+            end: CMTime(value: CMTimeValue(endMs), timescale: 1000))
+        // Cut without re-encoding (small, quick); re-encode only if that fails.
+        func run(_ preset: String, then fallback: (() -> Void)?) {
+            try? FileManager.default.removeItem(at: output)
+            guard let export = AVAssetExportSession(asset: asset, presetName: preset) else {
+                if let fallback { fallback() } else { completion(nil) }
+                return
+            }
+            export.outputURL = output
+            export.outputFileType = .m4a
+            export.timeRange = range
+            export.exportAsynchronously {
+                if export.status == .completed {
+                    completion(output)
+                } else if let fallback {
+                    fallback()
+                } else {
+                    completion(nil)
+                }
+            }
+        }
+        run(AVAssetExportPresetPassthrough) { run(AVAssetExportPresetAppleM4A, then: nil) }
+    }
+
+    /// Remembers a new trim in the clip's info file.
+    static func setTrim(_ id: String, startMs: Int, endMs: Int) {
+        guard var json = info(id), let data = try? JSONSerialization.data(withJSONObject: {
+            json["trimStartMs"] = startMs
+            json["trimEndMs"] = endMs
+            return json
+        }()) else { return }
+        try? data.write(to: infoURL(id), options: .atomic)
     }
 
     static func audioURL(_ id: String) -> URL { directory.appendingPathComponent("\(id).m4a") }
@@ -261,6 +393,7 @@ final class ClipRecorder {
     }
 
     static func remove(_ id: String) {
+        try? FileManager.default.removeItem(at: directory.appendingPathComponent("\(id).trimmed.m4a"))
         try? FileManager.default.removeItem(at: audioURL(id))
         try? FileManager.default.removeItem(at: infoURL(id))
     }
@@ -285,8 +418,10 @@ final class ClipPlayer: NSObject, AVAudioPlayerDelegate {
     private var player: AVAudioPlayer?
     private var playingId: String?
     private var timer: Timer?
+    /// Seconds: the part being played (a trimmed clip plays only its kept part).
+    private var range: ClosedRange<Double>?
 
-    func play(_ id: String) throws {
+    func play(_ id: String, startMs: Int? = nil, endMs: Int? = nil) throws {
         if playingId != id || player == nil {
             stop()
             let session = AVAudioSession.sharedInstance()
@@ -296,6 +431,12 @@ final class ClipPlayer: NSObject, AVAudioPlayerDelegate {
             player.delegate = self
             self.player = player
             playingId = id
+        }
+        if let player {
+            let lower = Double(startMs ?? 0) / 1000
+            let upper = endMs.map { Double($0) / 1000 } ?? player.duration
+            range = lower...max(lower, min(upper, player.duration))
+            if player.currentTime < lower || player.currentTime >= upper - 0.05 { player.currentTime = lower }
         }
         player?.play()
         timer?.invalidate()
@@ -327,6 +468,10 @@ final class ClipPlayer: NSObject, AVAudioPlayerDelegate {
 
     private func report() {
         guard let player, let id = playingId, player.duration > 0 else { return }
+        if let range, player.isPlaying, player.currentTime >= range.upperBound {
+            stop()
+            return
+        }
         onProgress?(id, player.currentTime / player.duration)
     }
 
@@ -341,6 +486,10 @@ public class ClipsPlugin: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "Clips"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "capture", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "record", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stopRecording", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setTrim", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "exportTrimmed", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "info", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "remove", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "removeSession", returnType: CAPPluginReturnPromise),
@@ -366,6 +515,51 @@ public class ClipsPlugin: CAPPlugin, CAPBridgedPlugin {
         DispatchQueue.main.async {
             ClipRecorder.shared.capture(id: id, sessionId: sessionId) { clip in
                 call.resolve(clip.map { ["clip": $0.json] } ?? [:])
+            }
+        }
+    }
+
+    @objc func record(_ call: CAPPluginCall) {
+        guard let id = call.getString("id"), let sessionId = call.getString("sessionId") else {
+            call.reject("Missing id or sessionId")
+            return
+        }
+        let before = call.getDouble("before") ?? 15
+        let after = call.getDouble("after") ?? 45
+        let margin = call.getDouble("margin") ?? 15
+        DispatchQueue.main.async {
+            ClipRecorder.shared.record(id: id, sessionId: sessionId, before: before, after: after, margin: margin) { clip in
+                call.resolve(clip.map { ["clip": $0.json] } ?? [:])
+            }
+        }
+    }
+
+    @objc func stopRecording(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            ClipRecorder.shared.finishRecording()
+            call.resolve()
+        }
+    }
+
+    @objc func setTrim(_ call: CAPPluginCall) {
+        guard let id = call.getString("id"), let start = call.getInt("startMs"), let end = call.getInt("endMs") else {
+            call.reject("Missing id or trim")
+            return
+        }
+        ClipRecorder.setTrim(id, startMs: start, endMs: end)
+        call.resolve()
+    }
+
+    @objc func exportTrimmed(_ call: CAPPluginCall) {
+        guard let id = call.getString("id"), let start = call.getInt("startMs"), let end = call.getInt("endMs") else {
+            call.reject("Missing id or trim")
+            return
+        }
+        ClipRecorder.exportTrimmed(id, startMs: start, endMs: end) { url in
+            if let url {
+                call.resolve(["path": url.absoluteString])
+            } else {
+                call.reject("Couldn’t prepare the clip")
             }
         }
     }
@@ -410,7 +604,7 @@ public class ClipsPlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
             do {
-                try ClipPlayer.shared.play(id)
+                try ClipPlayer.shared.play(id, startMs: call.getInt("startMs"), endMs: call.getInt("endMs"))
                 call.resolve()
             } catch {
                 call.reject("Couldn’t play this clip")

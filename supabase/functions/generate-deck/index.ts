@@ -375,7 +375,7 @@ async function generateDeckPart(
     for (let from = 0; ; from += 1000) {
       const { data, error } = await supabase
         .from('cc_timeline_items')
-        .select('id, type, subtype, payload, text, caption, photo_path, item_timestamp, excluded, starred, position, placement_locked')
+        .select('id, type, subtype, payload, text, caption, photo_path, duration_ms, item_timestamp, excluded, starred, position, placement_locked')
         .eq('session_id', sessionId)
         .order('item_timestamp', { ascending: true })
         .order('id', { ascending: true })
@@ -445,6 +445,8 @@ async function generateDeckPart(
   const photoRows = itemRows.filter((r) => r.type === 'photo' && r.photo_path)
   const enrichmentRows = itemRows.filter((r) => r.type === 'enrichment' && r.payload)
   const highlightRows = itemRows.filter((r) => r.type === 'highlight')
+  // The clip button's recordings, once their kept part has uploaded.
+  const audioRows = itemRows.filter((r) => r.type === 'audio' && typeof r.payload?.path === 'string')
 
   // Links, not the photos themselves: a function has too little memory to
   // hold a session's worth of photos. Claude fetches them from the link, and
@@ -474,13 +476,17 @@ async function generateDeckPart(
     written = await partialBlob.text()
   }
 
+  const clips = await linkClips(supabase, session.started_at, audioRows, transcriptSegments, photoLinks)
+  const clipsText = clips.length > 0
+    ? clips.map((c) => `- ${c.placeholder} [${c.elapsed}] (${c.length})${c.starred ? ' ★' : ''}${c.said ? ` -- said in it: "${c.said}"` : ''}`).join('\n')
+    : '(None recorded.)'
   const highlightsText = formatHighlights(session.started_at, highlightRows, transcriptSegments, notes)
   // From every photo, shown in the page or not (a repeat slide, or photos
   // left out): a QR code's link belongs in the references either way.
   const qrLinksText = formatQrLinks(session.started_at, photoRows)
   const { text, finished } = await callClaude(
     title, session.started_at, notes, transcriptSegments, enrichmentRows, photos, highlightsText, qrLinksText,
-    written, invokedAt + ROUND_BUDGET_MS, options,
+    clipsText, written, invokedAt + ROUND_BUDGET_MS, options,
   )
   written += text
 
@@ -508,7 +514,7 @@ async function generateDeckPart(
   // The slide Claude named as the talk's most telling image, for the card.
   const coverPlaceholder = /<meta\s+name=["']cc-cover["']\s+content=["'](PHOTO_\d+)["']/i.exec(page)?.[1]
   const coverPhotoId = photos.find((p) => p.placeholder === coverPlaceholder)?.id ?? null
-  const finalHtml = substitutePhotos(page, photos)
+  const finalHtml = substitutePhotos(page, [...photos, ...clips])
 
   const deckPath = `${session.owner_id}/${sessionId}/deck.html`
   const { error: uploadError } = await supabase.storage
@@ -760,6 +766,7 @@ async function callClaude(
   photos: DeckPhoto[],
   highlightsText: string,
   qrLinksText: string,
+  clipsText: string,
   writtenSoFar: string,
   deadline: number,
   o: PresentationOptions,
@@ -798,6 +805,9 @@ ${photosText}
 
 Moments the attendee marked "Remember this" (tapped live, as it happened):
 ${highlightsText}
+
+Audio clips the attendee recorded of the speaker (their own voice, about a minute each; what was said in each is from the transcript):
+${clipsText}
 
 Links from QR codes on the attendee's photos (decoded on the phone, so exact):
 ${qrLinksText}
@@ -888,6 +898,7 @@ function presentationRequirements(o: PresentationOptions): string {
     `The "Remember this" moments are the attendee's own signal of what mattered most. Each one ${keyMomentsWhere}, built from what was being said and shown at that point (a tap usually lands just after the thing it marks, so the transcript just before it is usually what it's about). Don't label them with the phrase "Remember this"; just let them read as the key moments. If there are none, ignore this.`,
     `Notes, transcript lines and photos marked ★ were starred by the attendee afterwards as entries that mattered most. Give them the same weight as the "Remember this" moments: ${o.tldr ? 'in the TL;DR and ' : ''}called out in their chapter. Don't show the ★ itself or call them "starred".`,
     'Place each photo in the chapter that matches its elapsed time (not an appendix dumped at the end), full width of the text column, never cropped so a slide\'s content is cut off. Reference EACH photo using an <img> tag whose src is EXACTLY its placeholder token, e.g. <img src="PHOTO_1">. Do not invent placeholder names and do not attempt to embed real image data yourself.',
+    'Audio clips (if any are listed): place each one in the chapter that matches its elapsed time, at the point in the text where what\'s said in it fits, as <figure class="cc-audio"><audio controls preload="metadata" src="AUDIO_1"></audio><figcaption>...</figcaption></figure> -- the src EXACTLY its placeholder token. The caption is one line saying what the speaker says in the clip: a short quote of their strongest words in it, or a brief paraphrase if the transcript is garbled. No time in the caption. The clips are recordings the attendee chose to keep, so mark them clearly as the speaker\'s voice (e.g. a small "Listen" label or speaker icon) and style the player to fit the theme, the full width of the text column. Use every clip once; don\'t invent placeholders.',
     'Work acronym expansions into the text where each term first appears, not as a list.',
     'In the <head>, add <meta name="cc-cover" content="PHOTO_n"> naming the ONE photo that best shows what this talk was about -- a key chart, diagram, result or core idea -- never the title slide, an agenda, a photo of the speaker or audience, or a thank-you/questions slide. The app shows it as the talk\'s thumbnail. Leave the tag out if there are no photos.',
     `${o.theme === 'auto' ? 'Pick a visual theme (color palette, type) that fits the subject matter of the talk.' : `Use a ${o.theme} theme (${o.theme === 'dark' ? 'dark background, light text' : 'light background, dark text'}), with type that fits the subject of the talk.`}${/^#[0-9a-fA-F]{6}$/.test(o.accent) ? ` Use ${o.accent} as the accent color (links, rules, highlights, chart emphasis), adjusted only if needed for readable contrast.` : ''} Keep it tasteful and readable: a comfortable text column (about 65 characters wide), generous spacing, legibility over spectacle. On a narrow phone screen keep at least 20px between all text and the left and right edges of the screen (padding on the page or its main column), so nothing touches the edge.`,
@@ -1232,6 +1243,66 @@ async function nameSession(
     return null
   }
   return text
+}
+
+const VIDEOS_BUCKET = 'cc-videos'
+
+interface DeckClip {
+  placeholder: string
+  url: string
+  /** Elapsed time where the kept part starts. */
+  elapsed: string
+  /** Its length, as m:ss. */
+  length: string
+  said: string
+  starred: boolean
+}
+
+/** Links to the clips' kept parts (reused across rounds, like photos), with
+ * what was said in each. */
+async function linkClips(
+  supabase: ReturnType<typeof createClient>,
+  startedAt: string,
+  // deno-lint-ignore no-explicit-any -- rows as the untyped client returns them
+  rows: any[],
+  transcriptSegments: { text: string | null; item_timestamp: string }[],
+  links: Record<string, string>,
+): Promise<DeckClip[]> {
+  const key = (path: string) => `audio:${path}`
+  const missing = [...new Set(rows.map((r) => r.payload.path as string).filter((path) => !links[key(path)]))]
+  if (missing.length > 0) {
+    const { data: signed, error } = await supabase.storage.from(VIDEOS_BUCKET).createSignedUrls(missing, PHOTO_LINK_SECONDS)
+    if (error) throw error
+    for (const link of signed ?? []) {
+      if (link.error || !link.path || !link.signedUrl) continue
+      links[key(link.path)] = link.signedUrl
+    }
+  }
+  return rows
+    .filter((r) => links[key(r.payload.path)])
+    .map((r, i) => {
+      const clipStart = typeof r.payload.startedAt === 'number' ? r.payload.startedAt : new Date(r.item_timestamp).getTime()
+      const trimStart = Number(r.payload.trimStartMs ?? 0)
+      const trimEnd = Number(r.payload.trimEndMs ?? r.duration_ms ?? 0)
+      const from = clipStart + trimStart
+      const to = clipStart + trimEnd
+      const said = transcriptSegments
+        .filter((t) => {
+          const at = new Date(t.item_timestamp).getTime()
+          return at >= from - 5_000 && at <= to
+        })
+        .map((t) => t.text)
+        .join(' ')
+      const seconds = Math.max(0, Math.round((trimEnd - trimStart) / 1000))
+      return {
+        placeholder: `AUDIO_${i + 1}`,
+        url: links[key(r.payload.path)],
+        elapsed: formatElapsed(startedAt, new Date(from).toISOString()),
+        length: `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`,
+        said,
+        starred: !!r.starred,
+      }
+    })
 }
 
 /** Each "Remember this" tap with what was said and noted around it --

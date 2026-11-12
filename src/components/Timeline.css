@@ -510,6 +510,55 @@
   color: var(--text-secondary);
 }
 
+/* The clip button's minute. */
+.clip-row__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+}
+
+.clip-row__label .inline-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.clip-player__wave span.is-cut {
+  opacity: 0.25;
+}
+
+/* Room for the handles to be grabbed past the waveform's ends. */
+.clip-player__wave--trim {
+  position: relative;
+  height: 44px;
+  margin: 0 10px;
+}
+
+.clip-trim {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 28px;
+  margin-left: -14px;
+  /* The bars sit in flex; these don't. */
+  flex: none !important;
+  min-width: 0 !important;
+  background: none !important;
+  touch-action: none;
+  cursor: ew-resize;
+}
+
+.clip-trim::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
 /* Landed on from a search hit. */
 .timeline-row--flash {
   border-radius: var(--radius-md);

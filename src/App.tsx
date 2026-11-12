@@ -22,6 +22,7 @@ import { shouldAutoStartHomeTour, startHomeTour } from './tour'
 import { onPhotoUploaded, pendingPhotos, syncPhotoUploadAuth } from './photoUploads'
 import { onOutboxProblem, startOutbox } from './itemOutbox'
 import { startDeckUploads, uploadDeckLater } from './deckUploads'
+import { startClipUploads } from './audioClips'
 import { listSavedShares, lookupShared, openSavedShare, removeSavedShare, saveShare, prepareShareLink, publishShare, stopSharing, tokenFromLink, type SavedShare } from './sharing'
 import { App as CapApp } from '@capacitor/app'
 import { MESSAGES, OFFLINE_MESSAGE, errorMessage } from './networkError'
@@ -54,6 +55,21 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   useEffect(() => startOutbox(), [])
   useEffect(() => onOutboxProblem(setHomeError), [])
   useEffect(() => startDeckUploads(), [])
+  // Clip uploads left from before (no signal, app closed) carry on; each
+  // one's entry learns where its cut went.
+  useEffect(
+    () =>
+      startClipUploads((sessionId, itemId, path) =>
+        setSessions((prev) =>
+          prev?.map((s) =>
+            s.id === sessionId
+              ? { ...s, items: s.items.map((i) => (i.id === itemId && i.type === 'audio' ? { ...i, audioPath: path } : i)) }
+              : s,
+          ) ?? prev,
+        ),
+      ),
+    [],
+  )
 
   // Presentations others shared that were added to this account's sessions.
   const [savedShares, setSavedShares] = useState<SavedShare[]>([])

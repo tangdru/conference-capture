@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { errorMessage } from '../networkError'
 import type {
+  AudioItem,
   EnrichmentItemData,
   HighlightItem,
   NoteItem,
@@ -16,6 +17,7 @@ import { SwipeActions, DeleteIcon, ExcludeIcon, IncludeIcon, SaveIcon, StarActio
 import { CheckIcon, PauseIcon, PlayIcon, StarIcon } from './InlineIcons'
 import { seekClip, togglePlay, useClip, usePlayback } from '../clips'
 import type { ClipInfo } from '../native/clips'
+import { clipUrl } from '../audioClips'
 import { TOUR_REVEAL_EVENT, type TourRevealTarget } from '../tour'
 import './Timeline.css'
 
@@ -45,6 +47,8 @@ interface TimelineProps {
   processingPhotoIds?: ReadonlySet<string>
   /** Scrolled to and flashed once on mount, instead of starting at the end. */
   focusId?: string
+  /** A clip's trim handles were moved. Absent where clips can't be trimmed. */
+  onTrimClip?: (item: AudioItem) => void
 }
 
 /** Only notes and photos have a drag handle -- a human typing a note may
@@ -78,6 +82,7 @@ export function Timeline({
   liveTranscript,
   processingPhotoIds,
   focusId,
+  onTrimClip,
 }: TimelineProps) {
   const endRef = useRef<HTMLDivElement>(null)
   const userScrolledUp = useRef(false)
@@ -224,7 +229,7 @@ export function Timeline({
                       onSavePhoto(item)
                     } }]
                   : []),
-                ...(item.type === 'highlight' || item.type === 'enrichment'
+                ...(item.type === 'highlight' || item.type === 'enrichment' || item.type === 'audio'
                   ? []
                   : [{
                       icon: <StarActionIcon filled={!!item.starred} />,
@@ -257,6 +262,8 @@ export function Timeline({
                 <TranscriptRow item={item} />
               ) : item.type === 'highlight' ? (
                 <HighlightRow item={item} items={items} />
+              ) : item.type === 'audio' ? (
+                <AudioRow item={item} items={items} onTrim={onTrimClip} />
               ) : (
                 <EnrichmentRow item={item} />
               )}
@@ -558,6 +565,234 @@ function ClipPlayer({ clip, items }: { clip: ClipInfo; items: TimelineItemData[]
       {error && <p className="clip-status">{error}</p>}
       {words && <p className="clip-player__words">{words}</p>}
     </div>
+  )
+}
+
+/** What was transcribed between two times (epoch ms). */
+function wordsBetween(items: TimelineItemData[], from: number, to: number): string {
+  return items
+    .filter((i): i is TranscriptItem => i.type === 'transcript')
+    .filter((i) => i.timestamp < to && i.timestamp + i.durationMs > from)
+    .map((i) => i.text)
+    .join(' ')
+}
+
+const MIN_CLIP_MS = 1000
+
+/** The clip button's minute: play button, waveform with trim handles (on the
+ * phone that recorded it), and what was said in the kept part. */
+function AudioRow({ item, items, onTrim }: { item: AudioItem; items: TimelineItemData[]; onTrim?: (item: AudioItem) => void }) {
+  const local = useClip(item.id)
+  const hasLocal = !!local && local !== 'saving'
+  const playback = usePlayback()
+  const [error, setError] = useState<string | null>(null)
+  // While a handle is being dragged: the trim shown, not yet saved.
+  const [draft, setDraft] = useState<{ startMs: number; endMs: number } | null>(null)
+  const waveRef = useRef<HTMLDivElement>(null)
+  const dragging = useRef<'start' | 'end' | null>(null)
+  const remote = useRemotePlayback(item)
+
+  const startMs = draft?.startMs ?? item.trimStartMs
+  const endMs = draft?.endMs ?? item.trimEndMs
+  const total = Math.max(item.durationMs, 1)
+  const label = `Clip at ${formatClock(item.timestamp)}`
+
+  if (item.recording || (item.durationMs === 0 && local === 'saving')) {
+    return (
+      <div className="highlight-block" role="group" aria-label={label}>
+        <div className="highlight-row">
+          <p className="highlight-row__label clip-row__label"><MicIcon /> Recording clip…</p>
+          <span className="mono-timestamp highlight-row__meta">{formatClock(item.timestamp)}</span>
+        </div>
+      </div>
+    )
+  }
+  if (item.durationMs === 0) {
+    return (
+      <div className="highlight-block" role="group" aria-label={label}>
+        <div className="highlight-row">
+          <p className="highlight-row__label clip-row__label"><MicIcon /> Clip not saved</p>
+          <span className="mono-timestamp highlight-row__meta">{formatClock(item.timestamp)}</span>
+        </div>
+      </div>
+    )
+  }
+
+  const current = hasLocal ? playback.id === item.id : remote.active
+  const playing = hasLocal ? current && playback.playing : remote.playing
+  const fraction = hasLocal ? (current ? playback.fraction : startMs / total) : (startMs + remote.positionMs) / total
+  const canTrim = hasLocal && !!onTrim
+  const from = (item.startedAt ?? item.timestamp) + startMs
+  const words = wordsBetween(items, from, (item.startedAt ?? item.timestamp) + endMs)
+
+  function toggle() {
+    setError(null)
+    if (hasLocal) {
+      togglePlay(item.id, { startMs, endMs }).catch((err: unknown) => setError(errorMessage(err)))
+    } else if (item.audioPath) {
+      remote.toggle().catch((err: unknown) => setError(errorMessage(err)))
+    } else {
+      setError('Still uploading')
+    }
+  }
+
+  function msAt(clientX: number): number {
+    const box = waveRef.current?.getBoundingClientRect()
+    if (!box) return 0
+    return Math.min(Math.max(((clientX - box.left) / box.width) * total, 0), total)
+  }
+
+  function handleDown(which: 'start' | 'end') {
+    return (e: ReactPointerEvent<HTMLSpanElement>) => {
+      e.stopPropagation()
+      e.preventDefault()
+      e.currentTarget.setPointerCapture(e.pointerId)
+      dragging.current = which
+      setDraft({ startMs: item.trimStartMs, endMs: item.trimEndMs })
+    }
+  }
+
+  function handleMove(e: ReactPointerEvent<HTMLSpanElement>) {
+    e.stopPropagation()
+    if (!dragging.current) return
+    const at = Math.round(msAt(e.clientX))
+    setDraft((d) => {
+      const now = d ?? { startMs: item.trimStartMs, endMs: item.trimEndMs }
+      return dragging.current === 'start'
+        ? { ...now, startMs: Math.min(at, now.endMs - MIN_CLIP_MS) }
+        : { ...now, endMs: Math.max(at, now.startMs + MIN_CLIP_MS) }
+    })
+  }
+
+  function handleUp(e: ReactPointerEvent<HTMLSpanElement>) {
+    e.stopPropagation()
+    if (!dragging.current) return
+    dragging.current = null
+    const trim = draft
+    setDraft(null)
+    if (trim && (trim.startMs !== item.trimStartMs || trim.endMs !== item.trimEndMs)) {
+      onTrim?.({ ...item, trimStartMs: Math.max(0, trim.startMs), trimEndMs: Math.min(total, trim.endMs), audioPath: item.audioPath })
+    }
+  }
+
+  const keptFrom = startMs / total
+  const keptTo = endMs / total
+
+  return (
+    <div className={`highlight-block${item.excluded ? ' is-excluded' : ''}`} role="group" aria-label={label}>
+      <div className="highlight-row">
+        <p className="highlight-row__label clip-row__label">
+          <MicIcon /> Clip · {formatClipDuration(endMs - startMs)}
+        </p>
+        {item.excluded && <ExcludedBadge />}
+        <span className="mono-timestamp highlight-row__meta">{formatClock(item.timestamp)}</span>
+      </div>
+      <div className="clip-player">
+        <div className="clip-player__controls">
+          <button className="clip-player__play" onClick={toggle} aria-label={playing ? 'Pause clip' : 'Play clip'}>
+            {playing ? <PauseIcon /> : <PlayIcon />}
+          </button>
+          <div className={`clip-player__wave${canTrim ? ' clip-player__wave--trim' : ''}`} ref={waveRef} aria-hidden="true">
+            {item.peaks.map((peak, i) => {
+              const at = (i + 0.5) / item.peaks.length
+              const kept = at >= keptFrom && at <= keptTo
+              return (
+                <span
+                  key={i}
+                  className={!kept ? 'is-cut' : at <= fraction && (current || draft) ? 'is-played' : undefined}
+                  style={{ height: `${Math.max(Math.sqrt(peak) * 100, 8)}%` }}
+                />
+              )
+            })}
+            {canTrim && (
+              <>
+                <span
+                  className="clip-trim clip-trim--start"
+                  style={{ left: `${keptFrom * 100}%` }}
+                  role="slider"
+                  aria-label="Clip start"
+                  aria-valuemin={0}
+                  aria-valuemax={total}
+                  aria-valuenow={startMs}
+                  onPointerDown={handleDown('start')}
+                  onPointerMove={handleMove}
+                  onPointerUp={handleUp}
+                  onPointerCancel={handleUp}
+                />
+                <span
+                  className="clip-trim clip-trim--end"
+                  style={{ left: `${keptTo * 100}%` }}
+                  role="slider"
+                  aria-label="Clip end"
+                  aria-valuemin={0}
+                  aria-valuemax={total}
+                  aria-valuenow={endMs}
+                  onPointerDown={handleDown('end')}
+                  onPointerMove={handleMove}
+                  onPointerUp={handleUp}
+                  onPointerCancel={handleUp}
+                />
+              </>
+            )}
+          </div>
+        </div>
+        {error && <p className="clip-status">{error}</p>}
+        {!item.audioPath && hasLocal && <p className="clip-status">Waiting to upload</p>}
+        {words && <p className="clip-player__words">{words}</p>}
+      </div>
+    </div>
+  )
+}
+
+/** Plays a clip's uploaded cut, for a device that doesn't have the recording. */
+function useRemotePlayback(item: AudioItem) {
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [playing, setPlaying] = useState(false)
+  const [active, setActive] = useState(false)
+  const [positionMs, setPositionMs] = useState(0)
+
+  useEffect(() => () => audioRef.current?.pause(), [])
+  // A new cut: start over with it.
+  useEffect(() => {
+    audioRef.current?.pause()
+    audioRef.current = null
+    setPlaying(false)
+    setActive(false)
+    setPositionMs(0)
+  }, [item.audioPath])
+
+  async function toggle() {
+    let audio = audioRef.current
+    if (!audio) {
+      if (!item.audioPath) return
+      audio = new Audio(await clipUrl(item.audioPath))
+      audio.ontimeupdate = () => setPositionMs((audio?.currentTime ?? 0) * 1000)
+      audio.onended = () => {
+        setPlaying(false)
+        setActive(false)
+        setPositionMs(0)
+      }
+      audioRef.current = audio
+    }
+    if (audio.paused) {
+      await audio.play()
+      setPlaying(true)
+      setActive(true)
+    } else {
+      audio.pause()
+      setPlaying(false)
+    }
+  }
+
+  return { playing, active, positionMs, toggle }
+}
+
+function MicIcon() {
+  return (
+    <svg className="inline-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
   )
 }
 

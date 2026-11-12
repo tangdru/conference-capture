@@ -7,7 +7,7 @@ import { Keyboard } from '@capacitor/keyboard'
 import { useKeyboardHeight } from '../hooks/useKeyboardHeight'
 import { maybeStartSessionTour } from '../tour'
 import { PHOTOS_DENIED_MESSAGE, saveToPhotoLibrary } from '../native/photoLibrary'
-import type { PhotoItem, Session, TimelineItemData, VideoItem } from '../types'
+import type { AudioItem, PhotoItem, Session, TimelineItemData, VideoItem } from '../types'
 import { formatShortElapsed, formatSessionSubtitle, formatDurationCompact } from '../format'
 import { Timeline } from '../components/Timeline'
 import { CheckIcon, StarIcon, WarningIcon } from '../components/InlineIcons'
@@ -22,7 +22,8 @@ import * as db from '../db'
 import { forgetCachedDeck } from '../deckCache'
 import { SlideScanner, blobToBase64 } from '../native/slideScanner'
 import { backgroundUploads, queuePhoto } from '../photoUploads'
-import { saveClip } from '../clips'
+import { canRecordClips, recordClip, setClipTrim, stopClip, useActiveClip } from '../audioClips'
+import { ClipButton } from '../components/ClipButton'
 import './CaptureScreen.css'
 
 interface CaptureScreenProps {
@@ -114,7 +115,35 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
     window.setTimeout(() => setRemembered(false), 1600)
     const item = await db.addHighlight(session.id, userId)
     onUpdateLocal((s) => ({ ...s, items: [...s.items, item] }))
-    void saveClip(item.id, session.id)
+  }
+
+  const activeClip = useActiveClip()
+  /** The clip button: starts a clip, or stops the one counting down. */
+  async function tapClip() {
+    if (Capacitor.isNativePlatform()) void Haptics.impact({ style: ImpactStyle.Medium })
+    if (activeClip && activeClip.endsAt > Date.now()) {
+      stopClip()
+      return
+    }
+    try {
+      await recordClip(session.id, userId, (item, id) =>
+        onUpdateLocal((s) => ({
+          ...s,
+          items: item
+            ? s.items.some((i) => i.id === id)
+              ? s.items.map((i) => (i.id === id ? item : i))
+              : [...s.items, item]
+            : s.items.filter((i) => i.id !== id),
+        })),
+      )
+    } catch (err) {
+      setSaveError(errorMessage(err))
+    }
+  }
+
+  function trimClip(item: AudioItem) {
+    onUpdateLocal((s) => ({ ...s, items: s.items.map((i) => (i.id === item.id ? item : i)) }))
+    setClipTrim(session.id, userId, item).catch((err: unknown) => setSaveError(errorMessage(err)))
   }
 
   async function commitNoteEdit(id: string, text: string) {
@@ -496,6 +525,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
         liveTranscript={session.status === 'recording' ? liveText : null}
         processingPhotoIds={processingPhotoIds}
         focusId={focusItemId}
+        onTrimClip={canRecordClips ? trimClip : undefined}
       />
 
       <div className="save-notice" role="status">
@@ -555,6 +585,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
               <StarIcon filled={remembered} />
             </button>
           )}
+          {session.status === 'recording' && canRecordClips && <ClipButton className="clip-btn" onTap={tapClip} />}
           {session.items.some((i) => i.type === 'transcript' || i.type === 'note' || i.type === 'photo') && (
             <button className="ask-btn" onClick={() => setAskOpen(true)} aria-label="Ask about this session">
               <svg className="inline-icon" viewBox="2.2 2.7 19.6 18.6" fill="none" aria-hidden="true">
@@ -597,6 +628,7 @@ export function CaptureScreen({ session, userId, focusItemId, onUpdateLocal, onB
           onClose={() => setCameraOpen(false)}
           onRemember={session.status === 'recording' ? rememberThis : undefined}
           remembered={remembered}
+          onClip={session.status === 'recording' && canRecordClips ? tapClip : undefined}
         />
       )}
     </div>

@@ -416,3 +416,38 @@ html.native-camera .capture-screen > :not(.viewfinder) {
   transform: rotate(var(--vf-icon-turn, 0deg));
   transition: transform var(--duration-slow) var(--easing-base);
 }
+
+/* The clip button, at the right end of the shutter row. */
+.viewfinder__clip {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  margin-right: 12px;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.viewfinder__clip .inline-icon {
+  width: 26px;
+  height: 26px;
+  transform: rotate(var(--vf-icon-turn, 0deg));
+  transition: transform var(--duration-slow) var(--easing-base);
+}
+
+.viewfinder__clip:active {
+  transform: scale(0.94);
+}
+
+.viewfinder__clip--recording {
+  border: 2px solid var(--semantic-error, #ff4d5e);
+  color: var(--text-primary);
+}

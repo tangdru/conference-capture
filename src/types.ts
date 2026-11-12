@@ -68,6 +68,29 @@ export interface HighlightItem {
   starred?: boolean
 }
 
+/** The clip button: a minute of the speaker's own voice, around the tap. */
+export interface AudioItem {
+  id: string
+  type: 'audio'
+  /** When the button was tapped. */
+  timestamp: number
+  /** Epoch ms where the saved audio starts; null until it's saved. */
+  startedAt: number | null
+  /** All the saved audio, spare either side included. */
+  durationMs: number
+  /** The part kept (and uploaded, and played in the presentation). */
+  trimStartMs: number
+  trimEndMs: number
+  /** Loudness across the saved audio, 0-1, for the waveform. */
+  peaks: number[]
+  /** The kept part in storage (cc-videos), once uploaded. */
+  audioPath: string | null
+  /** Still recording on this phone. */
+  recording?: boolean
+  excluded?: boolean
+  starred?: boolean
+}
+
 interface BaseEnrichmentItem {
   id: string
   type: 'enrichment'
@@ -115,7 +138,7 @@ export type EnrichmentItemData =
   | EnrichmentSpeakerBioItem
   | EnrichmentAcronymsItem
 
-export type TimelineItemData = NoteItem | PhotoItem | VideoItem | TranscriptItem | HighlightItem | EnrichmentItemData
+export type TimelineItemData = NoteItem | PhotoItem | VideoItem | TranscriptItem | HighlightItem | AudioItem | EnrichmentItemData
 
 export interface Session {
   id: string

@@ -1,12 +1,12 @@
 import { supabase, PHOTOS_BUCKET, VIDEOS_BUCKET, DECKS_BUCKET } from './supabaseClient'
 import { cancelPhotoUploads } from './photoUploads'
-import { removeClip, removeSessionClips } from './clips'
+import { forgetClipUpload, removeClip, removeSessionClips } from './clips'
 import {
   dropQueuedSession, flushOutbox, queuedEntries, queueItemDelete, queueItemPatch, queueRow, queueSession,
   queueSessionDelete, queueSessionPatch, type ItemPatch, type QueuedRow, type SessionPatch, type StoredFile,
 } from './itemOutbox'
 import { MESSAGES } from './networkError'
-import type { DeckStatus, EnrichmentItemData, HighlightItem, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData, TranscriptItem, VideoItem } from './types'
+import type { AudioItem, DeckStatus, EnrichmentItemData, HighlightItem, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData, TranscriptItem, VideoItem } from './types'
 
 const ITEM_COLUMNS = 'id, session_id, type, subtype, payload, text, caption, photo_path, video_path, duration_ms, item_timestamp, added_later, excluded, starred, position'
 const SESSION_COLUMNS = 'id, title, status, started_at, accumulated_ms, live_span_started_at, deck_status, deck_path, deck_error, deck_generated_at, deck_heartbeat_at, updated_at, pinned_at, deck_cover_photo_id, deck_read_minutes'
@@ -32,7 +32,7 @@ interface SessionRow {
 interface ItemRow {
   id: string
   session_id: string
-  type: 'note' | 'photo' | 'video' | 'transcript' | 'highlight' | 'enrichment'
+  type: 'note' | 'photo' | 'video' | 'transcript' | 'highlight' | 'audio' | 'enrichment'
   subtype: string | null
   payload: Record<string, unknown> | null
   text: string | null
@@ -162,6 +162,23 @@ function itemFromRow(row: ItemRow): TimelineItemData | null {
   }
   if (row.type === 'highlight') {
     return { id: row.id, type: 'highlight', timestamp, excluded }
+  }
+  if (row.type === 'audio') {
+    const p = (row.payload ?? {}) as Partial<AudioPayload>
+    const durationMs = row.duration_ms ?? 0
+    return {
+      id: row.id,
+      type: 'audio',
+      timestamp,
+      startedAt: typeof p.startedAt === 'number' ? p.startedAt : null,
+      durationMs,
+      trimStartMs: typeof p.trimStartMs === 'number' ? p.trimStartMs : 0,
+      trimEndMs: typeof p.trimEndMs === 'number' ? p.trimEndMs : durationMs,
+      peaks: Array.isArray(p.peaks) ? p.peaks : [],
+      audioPath: typeof p.path === 'string' ? p.path : null,
+      excluded,
+      starred,
+    }
   }
   if (row.type === 'enrichment') {
     return enrichmentItemFromRow(row)
@@ -419,6 +436,15 @@ function applyItemPatch(item: TimelineItemData, p: ItemPatch): TimelineItemData 
   if (p.excluded !== undefined) next.excluded = p.excluded || undefined
   if (p.item_timestamp !== undefined) next.timestamp = new Date(p.item_timestamp).getTime()
   if (p.position !== undefined && 'position' in next) next.position = p.position ?? undefined
+  if (next.type === 'audio' && (p.payload !== undefined || p.duration_ms !== undefined)) {
+    const audio = itemFromRow({
+      id: next.id, session_id: '', type: 'audio', subtype: null, text: null, caption: null, photo_path: null, video_path: null,
+      payload: p.payload ?? audioPayload(next) as unknown as Record<string, unknown>,
+      duration_ms: p.duration_ms ?? next.durationMs,
+      item_timestamp: new Date(next.timestamp).toISOString(), added_later: false, excluded: !!next.excluded, starred: !!next.starred, position: null,
+    })
+    if (audio?.type === 'audio') return { ...audio, recording: next.recording }
+  }
   return next
 }
 
@@ -430,6 +456,14 @@ function queuedItem(row: QueuedRow): TimelineItemData {
   }
   if (row.type === 'note') {
     return { ...shared, type: 'note', text: row.text ?? '', starred: row.starred || undefined, position: row.position ?? undefined }
+  }
+  if (row.type === 'audio') {
+    const audio = itemFromRow({
+      id: row.id, session_id: row.session_id, type: 'audio', subtype: null, text: null, caption: null, photo_path: null, video_path: null,
+      payload: row.payload ?? null, duration_ms: row.duration_ms ?? 0, item_timestamp: row.item_timestamp,
+      added_later: false, excluded: !!row.excluded, starred: !!row.starred, position: null,
+    })
+    if (audio) return audio
   }
   return { ...shared, type: 'highlight' }
 }
@@ -536,6 +570,7 @@ export async function deleteSession(session: Session): Promise<void> {
 function filesOf(item: TimelineItemData): StoredFile[] {
   if (item.type === 'photo' && item.photoPath) return [{ bucket: PHOTOS_BUCKET, path: item.photoPath }]
   if (item.type === 'video' && item.videoPath) return [{ bucket: VIDEOS_BUCKET, path: item.videoPath }]
+  if (item.type === 'audio' && item.audioPath) return [{ bucket: VIDEOS_BUCKET, path: item.audioPath }]
   return []
 }
 
@@ -551,6 +586,34 @@ export async function addHighlight(sessionId: string, userId: string): Promise<H
   const timestamp = Date.now()
   await queueRow({ id, session_id: sessionId, owner_id: userId, type: 'highlight', item_timestamp: new Date(timestamp).toISOString() })
   return { id, type: 'highlight', timestamp }
+}
+
+/** An audio clip's details, kept in the row's payload. */
+export interface AudioPayload {
+  startedAt: number | null
+  trimStartMs: number
+  trimEndMs: number
+  peaks: number[]
+  /** The kept part, uploaded to cc-videos. */
+  path: string | null
+}
+
+export function audioPayload(item: AudioItem): AudioPayload {
+  return { startedAt: item.startedAt, trimStartMs: item.trimStartMs, trimEndMs: item.trimEndMs, peaks: item.peaks, path: item.audioPath }
+}
+
+/** The clip button was tapped: the clip's entry, before its audio is saved. */
+export async function addAudioClip(sessionId: string, userId: string): Promise<AudioItem> {
+  const id = crypto.randomUUID()
+  const timestamp = Date.now()
+  const item: AudioItem = { id, type: 'audio', timestamp, startedAt: null, durationMs: 0, trimStartMs: 0, trimEndMs: 0, peaks: [], audioPath: null, recording: true }
+  await queueRow({ id, session_id: sessionId, owner_id: userId, type: 'audio', duration_ms: 0, payload: audioPayload(item) as unknown as Record<string, unknown>, item_timestamp: new Date(timestamp).toISOString() })
+  return item
+}
+
+/** Saves a clip's audio details (length, trim, waveform, uploaded file). */
+export async function updateAudioClip(sessionId: string, item: AudioItem): Promise<void> {
+  await queueItemPatch(item.id, sessionId, { duration_ms: item.durationMs, payload: audioPayload(item) as unknown as Record<string, unknown> })
 }
 
 export async function updateNoteText(sessionId: string, itemId: string, text: string): Promise<void> {
@@ -595,7 +658,8 @@ export async function convertToTimeOrder(sessionId: string, times: Map<string, n
 }
 
 export async function deleteTimelineItem(sessionId: string, item: TimelineItemData): Promise<void> {
-  if (item.type === 'highlight') await removeClip(item.id)
+  if (item.type === 'highlight' || item.type === 'audio') await removeClip(item.id)
+  if (item.type === 'audio') forgetClipUpload(item.id)
   if (item.type === 'photo' && item.uploading) await cancelPhotoUploads({ id: item.id })
   await queueItemDelete(item.id, sessionId, filesOf(item))
 }

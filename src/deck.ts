@@ -38,10 +38,13 @@ export function cleanDeckHtml(html: string): string {
 const PHOTO_MAX_SIDE = 1600
 const PHOTO_QUALITY = 0.78
 const PHOTO_LINK = /https:\/\/[^"'\s)]+\/storage\/v1\/object\/sign\/cc-photos\/[^"'\s)]+/g
+// Audio clips are linked the same way and embedded as they are (a minute is
+// well under a megabyte).
+const CLIP_LINK = /https:\/\/[^"'\s)]+\/storage\/v1\/object\/sign\/cc-videos\/[^"'\s)]+\.m4a[^"'\s)]*/g
 
-/** Whether the page still links to photos rather than embedding them. */
+/** Whether the page still links to photos (or clips) rather than embedding them. */
 export function hasPhotoLinks(html: string): boolean {
-  return html.search(PHOTO_LINK) !== -1
+  return html.search(PHOTO_LINK) !== -1 || html.search(CLIP_LINK) !== -1
 }
 
 /** The page with its photos embedded and scaled down to at most
@@ -50,8 +53,9 @@ export function hasPhotoLinks(html: string): boolean {
  * is taken out, with its caption, rather than left as a broken image. */
 export async function compactDeckPhotos(html: string): Promise<string> {
   const links = [...new Set(html.match(PHOTO_LINK) ?? [])]
+  const clipLinks = [...new Set(html.match(CLIP_LINK) ?? [])]
   // Done before: every photo is in the page and already scaled down.
-  if (!links.length && html.includes(COMPACT_MARK)) return html
+  if (!links.length && !clipLinks.length && html.includes(COMPACT_MARK)) return html
   const sources = [...new Set(html.match(/data:image\/jpe?g;base64,[A-Za-z0-9+/=]+/g) ?? [])]
   let result = html
   const smaller = await inParallel(sources, (src) => shrinkJpeg(src).catch(() => null))
@@ -75,6 +79,16 @@ export async function compactDeckPhotos(html: string): Promise<string> {
     if (data) result = result.split(link).join(data)
   })
   if (gone.length) result = withoutPhotos(result, gone)
+  const clips = await inParallel(clipLinks, (link) =>
+    embedClip(link).catch(() => {
+      failed = true
+      return null
+    }),
+  )
+  clipLinks.forEach((link, i) => {
+    const data = clips[i]
+    if (data) result = result.split(link).join(data)
+  })
   return failed ? result : markCompact(result)
 }
 
@@ -101,6 +115,18 @@ async function inParallel<T, R>(items: T[], work: (item: T) => Promise<R>, limit
 }
 
 class PhotoGone extends Error {}
+
+async function embedClip(link: string): Promise<string> {
+  const response = await fetch(link)
+  if (!response.ok) throw new Error(`Clip ${response.status}`)
+  const blob = await response.blob()
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result).replace(/^data:[^;]*;/, 'data:audio/mp4;'))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(blob)
+  })
+}
 
 async function embedPhoto(link: string): Promise<string> {
   const response = await fetch(link)

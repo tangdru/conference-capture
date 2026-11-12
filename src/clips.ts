@@ -2,8 +2,9 @@ import { useEffect, useSyncExternalStore } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Clips, type ClipInfo } from './native/clips'
 
-// "Remember this" audio clips. For now they live on the phone only, keyed by
-// their highlight's id, while we find out how room audio really sounds.
+// Audio clips, saved on the phone keyed by their entry's id: the clip button's
+// (whose kept part also uploads -- see audioClips.ts) and, from builds before
+// 65, the ones "Remember this" saved, which stay on the phone.
 
 const native = Capacitor.isNativePlatform()
 
@@ -68,19 +69,62 @@ export function usePlayback(): Playback {
   return useSyncExternalStore(subscribe, () => playback)
 }
 
-/** Rejects while the session is listening. */
-export async function togglePlay(id: string): Promise<void> {
+/** Rejects while the session is listening. `range` (ms): play only that part. */
+export async function togglePlay(id: string, range?: { startMs: number; endMs: number }): Promise<void> {
   if (playback.id === id && playback.playing) {
     await Clips.pause()
     setPlayback({ ...playback, playing: false })
     return
   }
-  await Clips.play({ id })
+  await Clips.play({ id, ...range })
   setPlayback({ id, playing: true, fraction: playback.id === id ? playback.fraction : 0 })
 }
 
 export function seekClip(id: string, fraction: number): void {
   if (playback.id === id) void Clips.seek({ id, fraction })
+}
+
+/** A clip just saved on this phone (the clip button's). */
+export function noteClipSaved(clip: ClipInfo): void {
+  setClip(clip.id, clip)
+}
+
+/** Notes a new trim on the phone, so the waveform shows it next time too. */
+export function trimClip(id: string, startMs: number, endMs: number): void {
+  const clip = clips.get(id)
+  if (clip && clip !== 'saving') setClip(id, { ...clip, trimStartMs: startMs, trimEndMs: endMs })
+  if (native) void Clips.setTrim({ id, startMs, endMs }).catch(() => {})
+}
+
+// Clips whose kept part still has to upload (audioClips.ts does it), kept
+// across restarts. Here so deleting an entry can drop it without a loop of
+// imports.
+const UPLOADS_KEY = 'cc-clip-uploads'
+
+export interface ClipUpload {
+  itemId: string
+  sessionId: string
+  userId: string
+}
+
+export function pendingClipUploads(): ClipUpload[] {
+  try {
+    return JSON.parse(localStorage.getItem(UPLOADS_KEY) ?? '[]') as ClipUpload[]
+  } catch {
+    return []
+  }
+}
+
+export function setPendingClipUploads(list: ClipUpload[]): void {
+  try {
+    localStorage.setItem(UPLOADS_KEY, JSON.stringify(list))
+  } catch {
+    // Storage full: it uploads on the next trim or restart instead.
+  }
+}
+
+export function forgetClipUpload(itemId: string): void {
+  setPendingClipUploads(pendingClipUploads().filter((u) => u.itemId !== itemId))
 }
 
 export async function removeClip(id: string): Promise<void> {

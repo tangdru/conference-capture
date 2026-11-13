@@ -15,6 +15,17 @@ once -- "Testing"; Friends had build 68).
 
 ---
 
+## Build 78 — internal
+
+What to Test:
+
+```
+- In any session (recording, paused or finished), swipe right from the left edge of the timeline: the session follows your finger with the session list underneath, and goes back to the list when let go past about a third of the way (or flicked). A short drag settles back.
+- Same feel as swiping away a presentation: a light tick once far enough, a solid tap as it leaves. While a session is recording, iOS keeps haptics silent.
+- Still works: the back button, swiping left on an entry for its menu, the record/pause pill.
+- Back on the list, it's still scrolled where you left it.
+```
+
 ## Build 77 — internal
 
 What to Test:

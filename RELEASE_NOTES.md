@@ -15,6 +15,15 @@ once -- "Testing"; Friends had build 68).
 
 ---
 
+## Build 79 — internal (measuring build -- not for Friends)
+
+What to Test:
+
+```
+- TEMPORARY: the camera shows a line of timings under the shutter -- ms for each step of opening, from your finger touching the camera button (touch, tap, access, sensors on / was on, ready, screen up, frame or timer).
+- Please screenshot it for: (1) the first camera opening after opening a session, (2) an opening more than 20 seconds after closing the camera, (3) an opening within 20 seconds of closing it.
+```
+
 ## Build 78 — internal
 
 What to Test:

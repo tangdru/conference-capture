@@ -115,7 +115,9 @@ export function AskPanel({
 
   const home = (
     <div className="ask-panel__home">
-      {!query && <p className="ask-panel__hint">Ask anything about your sessions. Answers point to where they came from.</p>}
+      {!query && threads?.length === 0 && (
+        <p className="ask-panel__hint">Type to find it in your sessions, or send it to ask Claude.</p>
+      )}
 
       {threadsError && <p className="ask-sheet__error">{threadsError}</p>}
 
@@ -177,7 +179,7 @@ export function AskPanel({
       className={`ask-panel ask-sheet${keyboardHeight ? ' ask-sheet--keyboard' : ''}${closing ? ' ask-panel--closing' : ''}`}
       style={{ height: `calc(100dvh - ${keyboardHeight}px)` }}
       role="dialog"
-      aria-label="Ask Claude"
+      aria-label="Search"
     >
       <header className="ask-sheet__header ask-panel__header">
         {inThread ? (
@@ -195,8 +197,7 @@ export function AskPanel({
           </span>
         )}
         <div className="ask-sheet__heading">
-          <p className="ask-sheet__kicker">{inThread ? 'Conversation' : 'Across all sessions'}</p>
-          <h2 className="ask-sheet__title">{inThread ? thread!.title : 'Ask Claude'}</h2>
+          {inThread && <h2 className="ask-sheet__title">{thread!.title}</h2>}
         </div>
         <button className="ask-panel__icon-btn" onClick={close} aria-label="Close">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -214,7 +215,7 @@ export function AskPanel({
         onOpenCitation={onOpenCitation}
         onDraftChange={setDraft}
         inputRef={inputRef}
-        placeholder="Ask or search your sessions"
+        placeholder="Search or ask"
         empty={home}
       />
     </div>

@@ -398,22 +398,25 @@ final class CameraViewController: UIViewController {
 
     /// The live picture fades in once its first frame is drawn, rather than
     /// the stage sitting black and then snapping to the picture.
+    /// The first-frame signal isn't dependable on every phone (it can come
+    /// before we listen, or not at all), so a short timer reveals the picture
+    /// regardless -- it must never stay hidden.
     private func revealOnFirstFrame() {
         if #available(iOS 17.0, *) {
-            if preview.previewLayer.isPreviewing { return revealPreview() }
-            previewingObservation = preview.previewLayer.observe(\.isPreviewing, options: [.new]) { [weak self] layer, _ in
+            previewingObservation = preview.previewLayer.observe(\.isPreviewing, options: [.initial, .new]) { [weak self] layer, _ in
                 guard layer.isPreviewing else { return }
-                DispatchQueue.main.async {
-                    self?.previewingObservation = nil
-                    self?.revealPreview()
-                }
+                DispatchQueue.main.async { self?.revealPreview() }
             }
-        } else {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { self.revealPreview() }
         }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in self?.revealPreview() }
     }
 
+    private var revealed = false
+
     private func revealPreview() {
+        guard !revealed else { return }
+        revealed = true
+        previewingObservation = nil
         UIView.animate(withDuration: 0.18) {
             self.preview.alpha = 1
             self.standInView.alpha = 1

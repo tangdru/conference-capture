@@ -15,6 +15,19 @@ once -- "Testing"; Friends had build 75).
 
 ---
 
+## Build 82 — internal
+
+What to Test:
+
+```
+SEARCH IS NOW ASK CLAUDE
+- Tap the search button on the session list: it grows into a full screen with the keyboard up.
+- Typing shows sessions and earlier chats that mention the words as you type. Press send to ask Claude across all your sessions.
+- Each question you send becomes a chat that's kept. Close and reopen search: your 5 most recent chats are under Recent, with "Show N more" / "Show less" for older ones. Tap one to pick it back up; the back arrow returns to the list.
+- Swipe a chat left to delete it.
+- Check the grow/shrink animation from the search button looks right, and the list scrolls straight away after opening.
+```
+
 ## Build 81 — internal, Friends
 
 What to Test (internal):

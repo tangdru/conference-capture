@@ -10,8 +10,8 @@ changes.
   review. When sending a build to Friends, combine the notes of every build
   since the last one Friends got (marked below).
 
-**Last build sent to Friends: 68** (submitted for beta review 2026-11-12;
-Friends had build 64, which App Store Connect shows was also sent).
+**Last build sent to Friends: 75** (added 2026-11-12 and approved at
+once -- "Testing"; Friends had build 68).
 
 ---
 
@@ -40,14 +40,34 @@ What to Test:
 - Back on the list, it's still scrolled where you left it.
 ```
 
-## Build 75 — internal
+## Build 75 — internal, Friends
 
-What to Test:
+What to Test (internal):
 
 ```
 - Tap the camera button: the live picture should show much sooner -- the camera starts switching on the moment your finger touches the button.
 - Close the camera and reopen it within 20 seconds: the picture is there at once.
 - After closing, the green camera dot stays on for about 20 seconds, then goes off. Leaving the session or switching apps turns it off straight away.
+```
+
+For Friends (combined notes, builds 69–75 -- this is what went into App
+Store Connect):
+
+```
+New since build 68:
+
+CAMERA -- NOW A NATIVE IPHONE CAMERA
+- Feels like the Camera app: no shutter lag, a steadier picture, faster repeat shots. Everything is where it was.
+- New: press volume up or down (or the Camera Control button) to take a photo.
+- Tap to focus: it stays on the spot you tapped, and a photo waits for focus to settle -- fewer blurry slides.
+- Opens with a quick fade. It starts switching on as your finger touches the camera button; reopen it within 20 seconds and the picture is there at once (the green camera dot stays on for those 20 seconds).
+- Sideways: photos come out landscape, the icons turn upright, and the star slides behind the shutter.
+- Please check it all still works: flash, lens buttons and pinch zoom, the last 3 photos top-left (hold one to see it larger), Remember this and the clip button, swipe down to close.
+
+RECORDING
+- Live transcription keeps going when you leave a recording session -- browse the list, another session or a presentation, and come back to no gap.
+- The Lock Screen / Dynamic Island recording stays up while you browse, and its Pause works from any screen.
+- Opening the app doesn't start listening by itself.
 ```
 
 ## Build 74 — internal

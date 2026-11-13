@@ -209,6 +209,10 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
         ClipPlayer.shared.stop()
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.record, mode: .measurement, options: [])
+        // iOS mutes every haptic while the mic records unless told otherwise
+        // -- swipe ticks, Remember this, the shutter all went silent in a
+        // recording session. Haptics don't reach the mic's transcript.
+        try? session.setAllowHapticsAndSystemSoundsDuringRecording(true)
         try session.setActive(true, options: .notifyOthersOnDeactivation)
         ClipRecorder.shared.begin()
     }

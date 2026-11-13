@@ -22,6 +22,8 @@ const FEEDBACK_ADDRESS = 'tangdru@gmail.com'
 // Hosted with the web version (public/privacy.html); the App Store listing
 // links here too.
 const PRIVACY_URL = 'https://tangdru.github.io/conference-capture/privacy.html'
+// The Claude API key screen is built but held for a later build.
+const SHOW_CLAUDE_KEY = false
 
 // The app's one menu. Items not built yet show "Coming soon" so the list is
 // already in its final order.
@@ -30,6 +32,7 @@ export function AppMenu({ email, instant = false, onClose, onSessionOptions, onP
   // Whether the account has its own Claude API key (null while checking).
   const [hasKey, setHasKey] = useState<boolean | null>(null)
   useEffect(() => {
+    if (!SHOW_CLAUDE_KEY) return
     fetchClaudeKey().then((k) => setHasKey(!!k)).catch(() => {})
   }, [])
 
@@ -90,14 +93,14 @@ export function AppMenu({ email, instant = false, onClose, onSessionOptions, onP
               <Chevron />
             </button>
           </li>
-          <li style={{ '--i': 3 } as CSSProperties}>
+          {SHOW_CLAUDE_KEY && <li style={{ '--i': 3 } as CSSProperties}>
             <button className="app-menu__row" onClick={onClaudeKey}>
               <span className="app-menu__label">Claude API key</span>
               {hasKey === true && <span className="app-menu__value">Added</span>}
               {hasKey === false && <span className="app-menu__value app-menu__value--accent">Add key</span>}
               <Chevron />
             </button>
-          </li>
+          </li>}
           <li style={{ '--i': 4 } as CSSProperties}>
             {email ? (
               <div className="app-menu__row app-menu__row--static">

@@ -17,6 +17,7 @@ import { DeckViewer } from './components/DeckViewer'
 import { feel } from './haptics'
 import { AskSheet, type AskTurn } from './components/AskSheet'
 import { AppMenu } from './components/AppMenu'
+import { ClaudeKeySheet } from './components/ClaudeKeySheet'
 import { PresentationOptionsSheet } from './components/PresentationOptionsSheet'
 import { SessionOptionsSheet } from './components/SessionOptionsSheet'
 import { DeleteAccountSheet } from './components/DeleteAccountSheet'
@@ -46,7 +47,7 @@ export default function App() {
 function AuthedApp({ authSession }: { authSession: AuthSession }) {
   const userId = authSession.user.id
   const [addingEmail, setAddingEmail] = useState(false)
-  const [menu, setMenu] = useState<'menu' | 'session' | 'presentation' | 'delete-account' | null>(null)
+  const [menu, setMenu] = useState<'menu' | 'session' | 'presentation' | 'claude-key' | 'delete-account' | null>(null)
   // Coming back to the menu from a screen it opened: no opening animation.
   const [menuReturning, setMenuReturning] = useState(false)
   const [sessions, setSessions] = useState<Session[] | null>(null)
@@ -746,6 +747,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         onClose={() => setMenu(null)}
         onSessionOptions={() => setMenu('session')}
         onPresentationOptions={() => setMenu('presentation')}
+        onClaudeKey={() => setMenu('claude-key')}
         onDeleteAccount={() => setMenu('delete-account')}
         onTutorial={() => {
           setMenu(null)
@@ -779,6 +781,14 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     {menu === 'session' && (
       <SessionOptionsSheet
         userId={authSession.user.id}
+        onBack={() => {
+          setMenuReturning(true)
+          setMenu('menu')
+        }}
+      />
+    )}
+    {menu === 'claude-key' && (
+      <ClaudeKeySheet
         onBack={() => {
           setMenuReturning(true)
           setMenu('menu')

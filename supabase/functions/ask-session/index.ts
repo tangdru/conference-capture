@@ -29,7 +29,7 @@ function explain(err: unknown): string {
   const text = err instanceof Error ? err.message : String(err)
   if (/credit balance/i.test(text)) return MESSAGES.credits
   if (/took too long|Couldn't continue/i.test(text)) return MESSAGES.stopped
-  if (/ANTHROPIC_API_KEY|\b40[13]\b|authentication_error|permission_error|x-api-key/i.test(text)) return MESSAGES.apiKey
+  if (/ANTHROPIC_API_KEY|No Claude API key|Claude API key:|\b40[13]\b|authentication_error|permission_error|x-api-key/i.test(text)) return MESSAGES.apiKey
   if (/\b429\b|rate_limit/i.test(text)) return MESSAGES.busy
   if (/\b413\b|request_too_large|prompt is too long|too many total/i.test(text)) return MESSAGES.tooBig
   if (/\b5\d\d\b|overloaded|api_error|stream failed/i.test(text)) return MESSAGES.overloaded
@@ -40,7 +40,29 @@ function explain(err: unknown): string {
   return MESSAGES.unknown
 }
 
-const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
+// Accounts without a key of their own still use the shared key while this is
+// true (testers on builds before the Claude API key screen can't add one).
+// false: Sparkle and Ask need the account's own key.
+const SHARED_KEY_FALLBACK = true
+
+/** The Claude API key for this request: the caller's own (menu > Claude API
+ * key), read from Vault with the service role -- the only thing it's used for. */
+async function claudeKeyFor(supabase: ReturnType<typeof createClient>): Promise<string> {
+  const { data: userData } = await supabase.auth.getUser()
+  const userId = userData?.user?.id
+  if (userId) {
+    const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
+      auth: { persistSession: false },
+    })
+    const { data, error } = await admin.rpc('cc_claude_key_for', { p_user: userId })
+    if (error) throw new Error(`Couldn't read the Claude API key: ${error.message}`)
+    if (typeof data === 'string' && data) return data
+  }
+  const shared = SHARED_KEY_FALLBACK ? Deno.env.get('ANTHROPIC_API_KEY') : undefined
+  if (shared) return shared
+  throw new Error('No Claude API key')
+}
+
 // Answers are read while the talk is fresh, often during it -- a faster
 // model keeps the wait short.
 const ANTHROPIC_MODEL = 'claude-sonnet-5-5'
@@ -163,7 +185,7 @@ ${GROUND_RULES}
 Captured material:
 ${material}`
 
-  return await callClaude(system, history, question)
+  return await callClaude(supabase, system, history, question)
 }
 
 /** Across every session: each is labelled S1, S2... in the prompt and
@@ -238,7 +260,7 @@ ${GROUND_RULES}
 Captured talks:
 ${blocks.join('\n\n')}`
 
-  return { answer: await callClaude(system, history, question), sessions: labels }
+  return { answer: await callClaude(supabase, system, history, question), sessions: labels }
 }
 
 /** Every row of a query, a page at a time; `page` asks for rows from..to. */
@@ -254,13 +276,13 @@ async function allPages(
   }
 }
 
-async function callClaude(system: string, history: Turn[], question: string): Promise<string> {
-  if (!ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured')
+async function callClaude(supabase: ReturnType<typeof createClient>, system: string, history: Turn[], question: string): Promise<string> {
+  const apiKey = await claudeKeyFor(supabase)
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
+      'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({

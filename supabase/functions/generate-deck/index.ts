@@ -1,8 +1,8 @@
 // Supabase Edge Function: generate-deck
 //
 // Given a session id, reads that session's notes and photos (scoped by the
-// caller's own JWT, so Postgres RLS enforces ownership end-to-end -- this
-// function never uses a service-role key), asks Claude for a themed,
+// caller's own JWT, so Postgres RLS enforces ownership end-to-end; the
+// service role is used only to read the caller's Claude API key), asks Claude for a themed,
 // self-contained HTML page (a TL;DR, then chapters behind a sticky chapter
 // bar; interactive only where the talk showed data), substitutes
 // photo links in place of the placeholders Claude is asked to emit (the
@@ -10,7 +10,6 @@
 // cc-decks bucket.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
 const ANTHROPIC_MODEL = 'claude-opus-5-5'
 // Naming is a one-line answer; a faster model keeps it from delaying the deck.
 const NAMING_MODEL = 'claude-sonnet-5-5'
@@ -44,6 +43,29 @@ const BUILD_SILENCE_MS = 6 * 60 * 1000
 // many times before giving up.
 const RATE_LIMIT_RETRIES = 4
 
+// Accounts without a key of their own still use the shared key while this is
+// true (testers on builds before the Claude API key screen can't add one).
+// false: Sparkle and Ask need the account's own key.
+const SHARED_KEY_FALLBACK = true
+
+/** The Claude API key for this request: the caller's own (menu > Claude API
+ * key), read from Vault with the service role -- the only thing it's used for. */
+async function claudeKeyFor(supabase: ReturnType<typeof createClient>): Promise<string> {
+  const { data: userData } = await supabase.auth.getUser()
+  const userId = userData?.user?.id
+  if (userId) {
+    const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
+      auth: { persistSession: false },
+    })
+    const { data, error } = await admin.rpc('cc_claude_key_for', { p_user: userId })
+    if (error) throw new Error(`Couldn't read the Claude API key: ${error.message}`)
+    if (typeof data === 'string' && data) return data
+  }
+  const shared = SHARED_KEY_FALLBACK ? Deno.env.get('ANTHROPIC_API_KEY') : undefined
+  if (shared) return shared
+  throw new Error('No Claude API key')
+}
+
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void }
 
 // What the app shows when something goes wrong: short and fixed, never the
@@ -67,7 +89,7 @@ function explain(err: unknown): string {
   const text = err instanceof Error ? err.message : String(err)
   if (/credit balance/i.test(text)) return MESSAGES.credits
   if (/took too long|Couldn't continue/i.test(text)) return MESSAGES.stopped
-  if (/ANTHROPIC_API_KEY|\b40[13]\b|authentication_error|permission_error|x-api-key/i.test(text)) return MESSAGES.apiKey
+  if (/ANTHROPIC_API_KEY|No Claude API key|Claude API key:|\b40[13]\b|authentication_error|permission_error|x-api-key/i.test(text)) return MESSAGES.apiKey
   if (/\b429\b|rate_limit/i.test(text)) return MESSAGES.busy
   if (/\b413\b|request_too_large|prompt is too long|too many total/i.test(text)) return MESSAGES.tooBig
   if (/\b5\d\d\b|overloaded|api_error|stream failed/i.test(text)) return MESSAGES.overloaded
@@ -199,6 +221,8 @@ Deno.serve(async (req) => {
   // built: they're built one at a time, which keeps within Claude's limits.
   if (part === 0) {
     try {
+      // No key: say so now, before anything is marked as building.
+      await claudeKeyFor(supabase)
       const start = await markGenerating(supabase, sessionId)
       if (start !== 'started') return jsonResponse({ [start]: true }, 202)
     } catch (err) {
@@ -229,7 +253,6 @@ async function markGenerating(
   supabase: ReturnType<typeof createClient>,
   sessionId: string,
 ): Promise<'started' | 'queued' | 'already'> {
-  if (!ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured')
   const { data: rows, error } = await supabase
     .from('cc_timeline_items')
     .select('type, text, photo_path, excluded')
@@ -323,13 +346,13 @@ async function startNextQueued(supabase: ReturnType<typeof createClient>, authHe
 
 /** A Claude request, sent again after a wait when Claude says it's getting
  * too many (429) or is overloaded (529). */
-async function claudeFetch(body: Record<string, unknown>): Promise<Response> {
+async function claudeFetch(apiKey: string, body: Record<string, unknown>): Promise<Response> {
   for (let attempt = 0; ; attempt++) {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY!,
+        'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify(body),
@@ -357,6 +380,7 @@ async function generateDeckPart(
   givenSkipped: string[] | null,
   invokedAt: number,
 ): Promise<void> {
+  const apiKey = await claudeKeyFor(supabase)
   // The app takes silence as a crash, so each round says it's still going.
   if (part > 0) {
     await supabase.from('cc_sessions').update({ deck_heartbeat_at: new Date().toISOString() }).eq('id', sessionId)
@@ -408,6 +432,7 @@ async function generateDeckPart(
     const [named, changed, picked] = await Promise.all([
       needsName
         ? nameSession(
+          apiKey,
           live.filter((r) => r.type === 'note' && r.text),
           live.filter((r) => r.type === 'transcript' && r.text),
           live.filter((r) => r.type === 'photo' && r.photo_path),
@@ -417,14 +442,14 @@ async function generateDeckPart(
           return null
         })
         : Promise.resolve(null),
-      organizeSession(supabase, session, allItemRows, options).catch((err) => {
+      organizeSession(apiKey, supabase, session, allItemRows, options).catch((err) => {
         // The presentation still gets built without it.
         console.error('organizeSession failed:', err)
         return false
       }),
       picking
         ? withTimeout(
-          pickSlidePhotos(candidates.map((r) => ({ ...r, url: photoLinks[r.photo_path] })), session.started_at),
+          pickSlidePhotos(apiKey, candidates.map((r) => ({ ...r, url: photoLinks[r.photo_path] })), session.started_at),
           PICK_PHOTOS_MS,
         ).catch((err) => {
           // Every photo goes in, as before.
@@ -487,7 +512,7 @@ async function generateDeckPart(
   // left out): a QR code's link belongs in the references either way.
   const qrLinksText = formatQrLinks(session.started_at, photoRows)
   const { text, finished } = await callClaude(
-    title, session.started_at, notes, transcriptSegments, enrichmentRows, photos, highlightsText, qrLinksText,
+    apiKey, title, session.started_at, notes, transcriptSegments, enrichmentRows, photos, highlightsText, qrLinksText,
     clipsText, written, invokedAt + ROUND_BUDGET_MS, options,
   )
   written += text
@@ -637,6 +662,7 @@ function groupSlideRuns(photos: { text: string | null; item_timestamp: string }[
  * builds up, or a repeat). Claude looks at each run of likely repeats;
  * starred photos are always kept, and anything unclear is kept. */
 async function pickSlidePhotos(
+  apiKey: string,
   photos: { id: string; url: string; text: string | null; caption: string | null; item_timestamp: string; starred: boolean | null }[],
   startedAt: string,
 ): Promise<string[]> {
@@ -690,7 +716,7 @@ For each group, decide which photos the attendee's write-up doesn't need: a phot
       text: 'Return ONLY a JSON object {"redundant": [labels]}, e.g. {"redundant": ["G1P1", "G1P2"]}, or {"redundant": []}. No markdown fences, no commentary.',
     })
 
-    const response = await claudeFetch({
+    const response = await claudeFetch(apiKey, {
       model: NAMING_MODEL,
       thinking: { type: 'between_tools' },
       max_tokens: 2000,
@@ -760,6 +786,7 @@ function formatSlideText(text: string): string {
 }
 
 async function callClaude(
+  apiKey: string,
   title: string,
   startedAt: string,
   notes: { text: string | null; item_timestamp: string; starred?: boolean }[],
@@ -840,7 +867,7 @@ ${presentationRequirements(o)}`
   // Streamed, not one blocking request: writing a whole page takes minutes,
   // and a connection that sits silent that long gets dropped upstream (seen
   // as a Cloudflare 520 from api.anthropic.com). Streaming keeps bytes moving.
-  const response = await claudeFetch({
+  const response = await claudeFetch(apiKey, {
     model: ANTHROPIC_MODEL,
     max_tokens: 48000,
     stream: true,
@@ -1023,6 +1050,7 @@ interface SessionRow {
  *    and the transcript never move.
  * Returns whether the session changed. */
 async function organizeSession(
+  apiKey: string,
   supabase: ReturnType<typeof createClient>,
   session: { id: string; owner_id: string; started_at: string },
   allRows: SessionRow[],
@@ -1081,7 +1109,7 @@ async function organizeSession(
     keys.push('placements')
   }
 
-  const response = await claudeFetch({
+  const response = await claudeFetch(apiKey, {
     model: NAMING_MODEL,
     thinking: { type: 'between_tools' },
     max_tokens: 6000,
@@ -1208,6 +1236,7 @@ Return ONLY one JSON object with exactly these keys: ${keys.join(', ')}. No mark
 /** A short title for the talk from what was captured, or null if there's too
  * little to tell what it was about. */
 async function nameSession(
+  apiKey: string,
   notes: { text: string | null }[],
   transcriptSegments: { text: string | null }[],
   photoRows: { text: string | null; caption: string | null }[],
@@ -1223,7 +1252,7 @@ async function nameSession(
     transcriptSegments.length ? `Transcript:\n${transcriptSegments.map((t) => t.text).join(' ')}` : '',
   ].filter(Boolean).join('\n\n').slice(0, 12000)
 
-  const response = await claudeFetch({
+  const response = await claudeFetch(apiKey, {
     model: NAMING_MODEL,
     // Sonnet 5.5 thinks before answering unless told not to, and the
     // thinking alone used up a small token cap, leaving no title.

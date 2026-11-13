@@ -921,3 +921,28 @@ export async function replaceDeckHtml(path: string, html: string): Promise<void>
   if (error) throw error
 }
 
+
+/** The account's own Claude API key, as the app may see it: only its last 4
+ * characters (the key itself never comes back from the server). */
+export interface ClaudeKeyInfo {
+  last4: string
+  updatedAt: number
+}
+
+export async function fetchClaudeKey(): Promise<ClaudeKeyInfo | null> {
+  const { data, error } = await supabase.from('cc_claude_keys').select('last4, updated_at').maybeSingle()
+  if (error) throw error
+  return data ? { last4: data.last4, updatedAt: new Date(data.updated_at).getTime() } : null
+}
+
+/** Checks the key with Claude, then saves it (encrypted) to the account. */
+export async function saveClaudeKey(key: string): Promise<ClaudeKeyInfo> {
+  const { data, error } = await supabase.functions.invoke('claude-key', { body: { key } })
+  if (error) throw await functionError(error)
+  return { last4: data.last4, updatedAt: Date.now() }
+}
+
+export async function removeClaudeKey(): Promise<void> {
+  const { error } = await supabase.rpc('cc_remove_claude_key')
+  if (error) throw error
+}

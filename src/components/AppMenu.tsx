@@ -1,4 +1,5 @@
-import { useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
+import { fetchClaudeKey } from '../db'
 import { Logo } from './Logo'
 import './AppMenu.css'
 
@@ -10,6 +11,7 @@ interface AppMenuProps {
   onClose: () => void
   onSessionOptions: () => void
   onPresentationOptions: () => void
+  onClaudeKey: () => void
   onDeleteAccount: () => void
   onTutorial: () => void
   onAddEmail: () => void
@@ -23,8 +25,13 @@ const PRIVACY_URL = 'https://tangdru.github.io/conference-capture/privacy.html'
 
 // The app's one menu. Items not built yet show "Coming soon" so the list is
 // already in its final order.
-export function AppMenu({ email, instant = false, onClose, onSessionOptions, onPresentationOptions, onDeleteAccount, onTutorial, onAddEmail, onSignOut }: AppMenuProps) {
+export function AppMenu({ email, instant = false, onClose, onSessionOptions, onPresentationOptions, onClaudeKey, onDeleteAccount, onTutorial, onAddEmail, onSignOut }: AppMenuProps) {
   const [closing, setClosing] = useState(false)
+  // Whether the account has its own Claude API key (null while checking).
+  const [hasKey, setHasKey] = useState<boolean | null>(null)
+  useEffect(() => {
+    fetchClaudeKey().then((k) => setHasKey(!!k)).catch(() => {})
+  }, [])
 
   // Play the opening in reverse, then close.
   function close() {
@@ -84,10 +91,12 @@ export function AppMenu({ email, instant = false, onClose, onSessionOptions, onP
             </button>
           </li>
           <li style={{ '--i': 3 } as CSSProperties}>
-            <div className="app-menu__row app-menu__row--soon">
+            <button className="app-menu__row" onClick={onClaudeKey}>
               <span className="app-menu__label">Claude API key</span>
-              <span className="app-menu__soon">Coming soon</span>
-            </div>
+              {hasKey === true && <span className="app-menu__value">Added</span>}
+              {hasKey === false && <span className="app-menu__value app-menu__value--accent">Add key</span>}
+              <Chevron />
+            </button>
           </li>
           <li style={{ '--i': 4 } as CSSProperties}>
             {email ? (

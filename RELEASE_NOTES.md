@@ -10,19 +10,41 @@ changes.
   review. When sending a build to Friends, combine the notes of every build
   since the last one Friends got (marked below).
 
-**Last build sent to Friends: 75** (added 2026-11-12 and approved at
-once -- "Testing"; Friends had build 68).
+**Last build sent to Friends: 81** (added 2026-11-13 and approved at
+once -- "Testing"; Friends had build 75).
 
 ---
 
-## Build 81 — internal
+## Build 81 — internal, Friends
 
-What to Test:
+What to Test (internal):
 
 ```
 - The camera opens fast: the live picture shows about 0.4 s after touching the camera button (it was ~1.5 s), and about 0.1 s when reopened within 20 seconds. Measured in builds 79-80.
 - The timing line under the shutter is gone.
 - Check the camera still works as before: focus, zoom/lenses, flash, photos, Remember this, closing and reopening.
+```
+
+For Friends (combined notes, builds 76–81 -- this is what went into App
+Store Connect; the clip-end haptic is left out because clips only finish
+while recording, when iOS keeps haptics silent):
+
+```
+New since build 75:
+
+FASTER CAMERA
+- The camera opens much faster: the live picture shows in about a third of a second (it was about 1.5 s), and almost at once if you reopen it within 20 seconds.
+- Please check it all still works: focus, lens buttons and zoom, flash, photos, Remember this, closing and reopening.
+
+SWIPE BACK
+- Swipe right from the left edge of a presentation or a session to go back to the session list, like iOS's own back swipe. The list slides into view underneath; let go past about a third of the way (or flick) to go back, or less to stay.
+- The list keeps its place when you come back.
+
+HAPTICS
+- A light tick when a swipe has gone far enough: going back, opening a swipe menu, pulling the list to refresh.
+- A solid tap as a presentation or session leaves the screen.
+- New Session and Resume: a crisp click. Pause: a soft bump.
+- While a session is recording, iOS keeps haptics silent so they never touch the recording.
 ```
 
 ## Build 80 — internal (measuring build -- not for Friends)

@@ -1,7 +1,28 @@
-/* Grows out of the search button (clip-path animated from AskPanel). */
+/* Grows out of the search button: the bloom circle scales up behind the
+   content (AskPanel), then the panel takes over the background. */
 .ask-panel {
   animation: none;
   z-index: 25;
+  background: transparent;
+}
+
+.ask-panel--settled {
+  background: var(--bg-base);
+}
+
+.ask-panel__bloom {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--bg-base);
+  pointer-events: none;
+}
+
+.ask-panel--settled .ask-panel__bloom {
+  visibility: hidden;
+}
+
+.ask-panel > :not(.ask-panel__bloom) {
+  position: relative;
 }
 
 .ask-panel--closing {
@@ -9,11 +30,11 @@
 }
 
 /* The header and content settle in just after the circle opens. */
-.ask-panel > * {
-  animation: ask-panel-content 320ms ease 120ms both;
+.ask-panel > :not(.ask-panel__bloom) {
+  animation: ask-panel-content 320ms ease 120ms backwards;
 }
 
-.ask-panel--closing > * {
+.ask-panel--closing > :not(.ask-panel__bloom) {
   transition: opacity 160ms ease;
   opacity: 0;
 }
@@ -24,7 +45,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ask-panel > * { animation: none; }
+  .ask-panel > :not(.ask-panel__bloom) { animation: none; }
 }
 
 .ask-panel__header {
@@ -112,4 +133,17 @@
 .ask-thread__meta {
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+.ask-panel__more {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
 }

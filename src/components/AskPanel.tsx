@@ -34,6 +34,9 @@ interface AskPanelProps {
   onClose: () => void
 }
 
+/** Recent chats shown before "Show more". */
+const RECENT_SHOWN = 5
+
 const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)'
 
 /** Search is asking Claude: the search button grows into this full screen,
@@ -53,26 +56,36 @@ export function AskPanel({
   onOpenCitation,
   onClose,
 }: AskPanelProps) {
-  const panelRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const [closing, setClosing] = useState(false)
   const [draft, setDraft] = useState('')
   const [revealedId, setRevealedId] = useState<string | null>(null)
+  const [showAll, setShowAll] = useState(false)
   const keyboardHeight = useKeyboardHeight()
 
   const thread = threads?.find((t) => t.id === threadId)
   const turns = thread?.turns ?? []
   const inThread = turns.length > 0
 
+  const bloomRef = useRef<HTMLDivElement>(null)
+  const [settled, setSettled] = useState(false)
   const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  const circle = (r: number) => `circle(${r}px at ${origin.x}px ${origin.y}px)`
-  const fullRadius = () => Math.hypot(Math.max(origin.x, window.innerWidth - origin.x), Math.max(origin.y, window.innerHeight))
+  // How far the circle grows to cover the screen from the button.
+  const fullScale = () =>
+    Math.hypot(Math.max(origin.x, window.innerWidth - origin.x), Math.max(origin.y, window.innerHeight - origin.y)) / origin.r
 
-  // Grow out of the search button.
+  // Grow out of the search button: a circle behind the content scales up
+  // (not a clip-path on the panel -- on iOS that leaves the list inside
+  // unable to scroll), then the panel takes over its background.
   useLayoutEffect(() => {
-    const el = panelRef.current
-    if (!el || reduceMotion()) return
-    el.animate([{ clipPath: circle(origin.r) }, { clipPath: circle(fullRadius()) }], { duration: 460, easing: EASE })
+    const bloom = bloomRef.current
+    if (!bloom || reduceMotion()) return setSettled(true)
+    const anim = bloom.animate([{ transform: 'scale(1)' }, { transform: `scale(${fullScale()})` }], {
+      duration: 460,
+      easing: EASE,
+      fill: 'forwards',
+    })
+    anim.onfinish = () => setSettled(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -84,10 +97,11 @@ export function AskPanel({
   function close() {
     if (closing) return
     inputRef.current?.blur()
-    const el = panelRef.current
-    if (!el || reduceMotion()) return onClose()
+    const bloom = bloomRef.current
+    if (!bloom || reduceMotion()) return onClose()
     setClosing(true)
-    const anim = el.animate([{ clipPath: circle(fullRadius()) }, { clipPath: circle(origin.r) }], {
+    setSettled(false)
+    const anim = bloom.animate([{ transform: `scale(${fullScale()})` }, { transform: 'scale(1)', opacity: 0.6 }], {
       duration: 360,
       easing: EASE,
       fill: 'forwards',
@@ -112,6 +126,9 @@ export function AskPanel({
       return words.every((w) => text.includes(w))
     })
   }, [threads, query])
+  // Typing searches every chat; the resting list is just the latest few.
+  const shownThreads = query || showAll ? matchingThreads : matchingThreads.slice(0, RECENT_SHOWN)
+  const hiddenCount = matchingThreads.length - shownThreads.length
 
   const home = (
     <div className="ask-panel__home">
@@ -124,7 +141,7 @@ export function AskPanel({
       {matchingThreads.length > 0 && (
         <section className="ask-panel__section">
           <h3 className="ask-panel__heading">{query ? 'Your conversations' : 'Recent'}</h3>
-          {matchingThreads.map((t) => {
+          {shownThreads.map((t) => {
             const questions = t.turns.filter((turn) => turn.role === 'user').length
             return (
               <SwipeActions
@@ -159,6 +176,16 @@ export function AskPanel({
               </SwipeActions>
             )
           })}
+          {hiddenCount > 0 && (
+            <button className="ask-panel__more" onClick={() => setShowAll(true)}>
+              Show {hiddenCount} more
+            </button>
+          )}
+          {showAll && !query && matchingThreads.length > RECENT_SHOWN && (
+            <button className="ask-panel__more" onClick={() => setShowAll(false)}>
+              Show less
+            </button>
+          )}
         </section>
       )}
 
@@ -175,12 +202,17 @@ export function AskPanel({
 
   return (
     <div
-      ref={panelRef}
-      className={`ask-panel ask-sheet${keyboardHeight ? ' ask-sheet--keyboard' : ''}${closing ? ' ask-panel--closing' : ''}`}
+      className={`ask-panel ask-sheet${keyboardHeight ? ' ask-sheet--keyboard' : ''}${closing ? ' ask-panel--closing' : ''}${settled ? ' ask-panel--settled' : ''}`}
       style={{ height: `calc(100dvh - ${keyboardHeight}px)` }}
       role="dialog"
       aria-label="Search"
     >
+      <div
+        ref={bloomRef}
+        className="ask-panel__bloom"
+        style={{ left: origin.x - origin.r, top: origin.y - origin.r, width: origin.r * 2, height: origin.r * 2 }}
+        aria-hidden="true"
+      />
       <header className="ask-sheet__header ask-panel__header">
         {inThread ? (
           <button className="ask-panel__icon-btn" onClick={newQuestion} aria-label="All conversations">

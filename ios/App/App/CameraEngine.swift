@@ -49,8 +49,43 @@ final class CameraEngine: NSObject, AVCapturePhotoCaptureDelegate {
     /// granted -- this never asks for it -- and the camera stays off.
     func prepare() {
         guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { return }
-        queue.async {
-            if !self.configured { try? self.configure() }
+        DispatchQueue.main.async {
+            _ = self.sharedPreview()
+            self.queue.async {
+                if !self.configured { try? self.configure() }
+            }
+        }
+    }
+
+    // MARK: - The picture
+
+    private var previewView: PreviewView?
+    private var previewLayer: AVCaptureVideoPreviewLayer?
+
+    /// One live picture for every camera screen, wired to the camera once,
+    /// before it first switches on. Wiring a new picture to a camera that's
+    /// already running makes iOS rebuild its whole pipeline -- as slow as
+    /// starting it -- and holds up the screen meanwhile: on a real phone,
+    /// most of a second and a half per opening. Each camera screen moves this
+    /// view into itself instead. Main queue only.
+    func sharedPreview() -> PreviewView {
+        if let view = previewView { return view }
+        let view = PreviewView()
+        view.previewLayer.videoGravity = .resizeAspectFill
+        view.previewLayer.session = session
+        previewView = view
+        previewLayer = view.previewLayer
+        return view
+    }
+
+    /// Steadies the picture against hand shake, as the Camera app does. Set
+    /// once, while the camera is still off: changing it on a running camera
+    /// rebuilds the pipeline too. Camera queue.
+    private func steadyPicture() {
+        guard let connection = previewLayer?.connection else { return }
+        if #available(iOS 17.0, *), connection.isVideoStabilizationSupported,
+           connection.preferredVideoStabilizationMode != .previewOptimized {
+            connection.preferredVideoStabilizationMode = .previewOptimized
         }
     }
 
@@ -60,7 +95,13 @@ final class CameraEngine: NSObject, AVCapturePhotoCaptureDelegate {
     func warm() {
         guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { return }
         CameraTiming.shared.begin("touch")
-        queue.async {
+        DispatchQueue.main.async {
+            _ = self.sharedPreview()
+            self.queue.async { self.warmOnQueue() }
+        }
+    }
+
+    private func warmOnQueue() {
             self.pendingStop?.cancel()
             self.pendingStop = nil
             if !self.configured {
@@ -70,14 +111,24 @@ final class CameraEngine: NSObject, AVCapturePhotoCaptureDelegate {
             if self.session.isRunning {
                 CameraTiming.shared.mark("was on")
             } else if self.configured {
+                self.steadyPicture()
                 self.session.startRunning()
                 CameraTiming.shared.mark("sensors on")
             }
-        }
     }
 
+    /// Main queue (it makes sure the shared picture exists first).
     func start(completion: @escaping (Result<Info, Failure>) -> Void) {
-        AVCaptureDevice.requestAccess(for: .video) { granted in
+        _ = sharedPreview()
+        // Already allowed (nearly always): straight on, without waiting on
+        // iOS to answer the question again.
+        if AVCaptureDevice.authorizationStatus(for: .video) == .authorized {
+            return startOnQueue(granted: true, completion)
+        }
+        AVCaptureDevice.requestAccess(for: .video) { granted in self.startOnQueue(granted: granted, completion) }
+    }
+
+    private func startOnQueue(granted: Bool, _ completion: @escaping (Result<Info, Failure>) -> Void) {
             CameraTiming.shared.mark("access")
             self.queue.async {
                 CameraTiming.shared.mark("queue")
@@ -102,13 +153,13 @@ final class CameraEngine: NSObject, AVCapturePhotoCaptureDelegate {
                 self.setFocus(at: CGPoint(x: 0.5, y: 0.5))
                 self.setZoomFactor(self.wideFactor, animated: false)
                 if !self.session.isRunning {
+                    self.steadyPicture()
                     self.session.startRunning()
                     CameraTiming.shared.mark("sensors on")
                 }
                 let info = self.info()
                 DispatchQueue.main.async { completion(.success(info)) }
             }
-        }
     }
 
     /// Switches the camera off, after `delay` seconds: closing the camera

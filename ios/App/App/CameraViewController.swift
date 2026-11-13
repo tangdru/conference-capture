@@ -46,7 +46,8 @@ final class CameraViewController: UIViewController {
     // MARK: - Views
 
     private let stage = UIView()
-    private let preview = PreviewView()
+    /// The engine's one live picture, moved into this screen (see sharedPreview).
+    private let preview = CameraEngine.shared.sharedPreview()
     private let standInView = UIImageView()
     private let reticle = UIView()
     private let errorLabel = UILabel()
@@ -118,9 +119,9 @@ final class CameraViewController: UIViewController {
     /// camera at all, `onUnavailable` instead.
     func start(ready: @escaping () -> Void) {
         loadViewIfNeeded()
-        // Wired to the camera before it's switched on, so the picture shows on
-        // its very first frame (often already running from `warm`).
-        if preview.previewLayer.session == nil { preview.previewLayer.session = engine.session }
+        // The picture shows the moment frames come (often already, from
+        // `warm`), not once the camera reports back.
+        revealOnFirstFrame()
         engine.start { [weak self] result in
             guard let self = self else { return }
             switch result {
@@ -134,10 +135,7 @@ final class CameraViewController: UIViewController {
                 if let standIn = self.engine.standIn {
                     self.standInView.image = standIn
                     self.standInView.isHidden = false
-                    self.revealPreview()
-                } else {
-                    self.steadyPreview()
-                    self.revealOnFirstFrame()
+                    UIView.animate(withDuration: 0.18) { self.standInView.alpha = 1 }
                 }
                 self.flashButton.isHidden = self.flashModes.isEmpty
                 self.buildLenses()
@@ -417,6 +415,13 @@ final class CameraViewController: UIViewController {
     /// before we listen, or not at all), so a short timer reveals the picture
     /// regardless -- it must never stay hidden.
     private func revealOnFirstFrame() {
+        // Already live (kept on, or warmed by the touch): no fade to wait for.
+        if #available(iOS 17.0, *), preview.previewLayer.isPreviewing {
+            CameraTiming.shared.mark("frame")
+            revealed = true
+            preview.alpha = 1
+            return
+        }
         if #available(iOS 17.0, *) {
             var first = true
             previewingObservation = preview.previewLayer.observe(\.isPreviewing, options: [.initial, .new]) { [weak self] layer, _ in
@@ -440,19 +445,9 @@ final class CameraViewController: UIViewController {
         guard !revealed else { return }
         revealed = true
         previewingObservation = nil
-        UIView.animate(withDuration: 0.18) {
-            self.preview.alpha = 1
-            self.standInView.alpha = 1
-        }
+        UIView.animate(withDuration: 0.18) { self.preview.alpha = 1 }
     }
 
-    /// Steadies the preview against hand shake, as the Camera app does.
-    private func steadyPreview() {
-        guard let connection = preview.previewLayer.connection else { return }
-        if #available(iOS 17.0, *), connection.isVideoStabilizationSupported {
-            connection.preferredVideoStabilizationMode = .previewOptimized
-        }
-    }
 
     // MARK: - Drawing
 

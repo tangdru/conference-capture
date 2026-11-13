@@ -6,6 +6,7 @@ import {
   queueSessionDelete, queueSessionPatch, type ItemPatch, type QueuedRow, type SessionPatch, type StoredFile,
 } from './itemOutbox'
 import { MESSAGES } from './networkError'
+import type { AskTurn } from './components/AskSheet'
 import type { AudioItem, DeckStatus, EnrichmentItemData, HighlightItem, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData, TranscriptItem, VideoItem } from './types'
 
 const ITEM_COLUMNS = 'id, session_id, type, subtype, payload, text, caption, photo_path, video_path, duration_ms, item_timestamp, added_later, excluded, starred, position'
@@ -944,5 +945,45 @@ export async function saveClaudeKey(key: string): Promise<ClaudeKeyInfo> {
 
 export async function removeClaudeKey(): Promise<void> {
   const { error } = await supabase.rpc('cc_remove_claude_key')
+  if (error) throw error
+}
+
+// --- Ask Claude threads (questions across all sessions) --------------------
+
+export interface AskThread {
+  id: string
+  /** The first question. */
+  title: string
+  turns: AskTurn[]
+  updatedAt: number
+}
+
+export async function fetchAskThreads(): Promise<AskThread[]> {
+  const { data, error } = await supabase
+    .from('cc_ask_threads')
+    .select('id, title, turns, updated_at')
+    .order('updated_at', { ascending: false })
+    .limit(200)
+  if (error) throw error
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    title: row.title as string,
+    turns: (row.turns ?? []) as AskTurn[],
+    updatedAt: Date.parse(row.updated_at as string),
+  }))
+}
+
+export async function saveAskThread(thread: AskThread): Promise<void> {
+  const { error } = await supabase.from('cc_ask_threads').upsert({
+    id: thread.id,
+    title: thread.title,
+    turns: thread.turns,
+    updated_at: new Date(thread.updatedAt).toISOString(),
+  })
+  if (error) throw error
+}
+
+export async function deleteAskThread(id: string): Promise<void> {
+  const { error } = await supabase.from('cc_ask_threads').delete().eq('id', id)
   if (error) throw error
 }

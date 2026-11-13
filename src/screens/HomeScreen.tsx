@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Session } from '../types'
 import type { SavedShare } from '../sharing'
 import { formatSessionSubtitle } from '../format'
@@ -8,8 +8,7 @@ import { usePullToRefresh } from '../hooks/usePullToRefresh'
 import { useKeyboardHeight } from '../hooks/useKeyboardHeight'
 import { SessionCard } from '../components/SessionCard'
 import { groupByDay } from '../dayGroups'
-import { SearchResults } from '../components/SearchResults'
-import { searchSessions } from '../search'
+import type { AskOrigin } from '../components/AskPanel'
 import { SortMenu, SORT_OPTIONS, type SessionSort } from '../components/SortMenu'
 import {
   SwipeActions,
@@ -86,8 +85,8 @@ interface HomeScreenProps {
   onRefresh: () => Promise<void>
   error: string | null
   onDismissError: () => void
-  /** Ask Claude the search text as a question, across all sessions. */
-  onAskAll: (question: string) => void
+  /** Search: opens Ask Claude, growing out of the search button. */
+  onOpenAsk: (origin: AskOrigin) => void
   /** A session is open over the list: it's out of reach (inert) and its
    * clock stops, until swiped or tapped back to. */
   covered?: boolean
@@ -109,19 +108,15 @@ export function HomeScreen({
   onRefresh,
   error,
   onDismissError,
-  onAskAll,
+  onOpenAsk,
   covered = false,
 }: HomeScreenProps) {
   const [now, setNow] = useState(Date.now())
   const [revealedId, setRevealedId] = useState<string | null>(null)
-  const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SessionSort>(savedSort)
-  const [searchOpen, setSearchOpen] = useState(false)
   // Days folded away, by date, remembered between opens.
   const [collapsed, setCollapsed] = useState<Set<string>>(savedCollapsed)
   const searchInputRef = useRef<HTMLInputElement>(null)
-  const results = useMemo(() => searchSessions(sessions, query), [sessions, query])
-  const searching = query.trim().length > 0
   const scrollRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const { progress, refreshing } = usePullToRefresh(scrollRef, listRef, onRefresh)
@@ -132,13 +127,11 @@ export function HomeScreen({
     if (!el) return
     el.scrollTop = savedScrollTop
     const remember = () => {
-      if (!searchingRef.current) savedScrollTop = Math.max(0, el.scrollTop)
+      savedScrollTop = Math.max(0, el.scrollTop)
     }
     el.addEventListener('scroll', remember, { passive: true })
     return () => el.removeEventListener('scroll', remember)
   }, [])
-  const searchingRef = useRef(searching)
-  searchingRef.current = searching
 
   useEffect(() => {
     if (covered) return
@@ -150,17 +143,12 @@ export function HomeScreen({
   // Lift the bottom bar (and shorten the list) by the keyboard's height.
   const keyboardHeight = useKeyboardHeight()
 
-  function openSearch() {
-    setSearchOpen(true)
-    // Raise the keyboard right away so the bar grows while the keyboard
-    // slides up -- the same feel as closing.
+  function openSearch(button: HTMLElement) {
+    // Focused now, inside the tap, so iOS raises the keyboard; Ask's own
+    // box takes the focus over as it opens.
     searchInputRef.current?.focus()
-  }
-
-  function closeSearch() {
-    setQuery('')
-    setSearchOpen(false)
-    searchInputRef.current?.blur()
+    const rect = button.getBoundingClientRect()
+    onOpenAsk({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, r: rect.width / 2 })
   }
 
   function toggleDay(key: string) {
@@ -368,10 +356,7 @@ export function HomeScreen({
               <path d="M20 4v4.5h-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
-          {searching ? (
-            <SearchResults results={results} query={query.trim()} onOpen={onOpenSession} onAsk={() => onAskAll(query.trim())} />
-          ) : (
-            <>
+          <>
               {live.map(renderCard)}
 
               {sessions.length === 0 && (
@@ -413,20 +398,12 @@ export function HomeScreen({
               </>)}
 
               {renderByDay(past, renderCard, datedSort)}
-            </>
-          )}
+          </>
         </div>
       </div>
 
-      <div className={`home-footer${searchOpen ? ' home-footer--searching' : ''}`}>
-        {/* Shrinks away while searching so the search field can take the whole row. */}
-        <button
-          className="new-session-btn"
-          onClick={onNewSession}
-          aria-label="Start new session"
-          aria-hidden={searchOpen}
-          tabIndex={searchOpen ? -1 : 0}
-        >
+      <div className="home-footer">
+        <button className="new-session-btn" onClick={onNewSession} aria-label="Start new session">
           <span className="new-session-btn__plus" aria-hidden="true">+</span>
           <span className="new-session-btn__label" aria-hidden="true">New Session</span>
         </button>
@@ -434,39 +411,17 @@ export function HomeScreen({
         {sessions.length > 0 && (
           <>
             <div className="home-searchbox">
-              {!searchOpen && <button className="home-searchbox__open" onClick={openSearch} aria-label="Search sessions" />}
+              <button className="home-searchbox__open" onClick={(e) => openSearch(e.currentTarget)} aria-label="Search and ask Claude" />
               <svg className="home-searchbox__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" strokeWidth="2" />
                 <path d="M15.5 15.5L20 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
-              <input
-                ref={searchInputRef}
-                className="home-searchbox__input"
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') e.currentTarget.blur()
-                  if (e.key === 'Escape') closeSearch()
-                }}
-                placeholder="Search sessions"
-                aria-label="Search sessions"
-                aria-hidden={!searchOpen}
-                tabIndex={searchOpen ? 0 : -1}
-                enterKeyHint="search"
-                autoCorrect="off"
-              />
-              {searchOpen && (
-                <button className="home-searchbox__close" onClick={closeSearch} aria-label="Close search">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
-                  </svg>
-                </button>
-              )}
+              {/* Never seen: holds the keyboard for the moment Ask takes to open. */}
+              <input ref={searchInputRef} className="home-searchbox__input" aria-hidden="true" tabIndex={-1} />
             </div>
 
             {/* Tucks away to the right while searching, then grows back as the field shrinks. */}
-            <div className="home-footer__sort" aria-hidden={searchOpen}>
+            <div className="home-footer__sort">
               {sessions.length > 1 && <SortMenu value={sort} onChange={changeSort} />}
             </div>
           </>

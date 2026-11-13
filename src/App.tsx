@@ -15,7 +15,8 @@ import { HomeScreen } from './screens/HomeScreen'
 import { CaptureScreen } from './screens/CaptureScreen'
 import { DeckViewer } from './components/DeckViewer'
 import { feel } from './haptics'
-import { AskSheet, type AskTurn } from './components/AskSheet'
+import type { AskTurn } from './components/AskSheet'
+import { AskPanel, type AskOrigin } from './components/AskPanel'
 import { AppMenu } from './components/AppMenu'
 import { ClaudeKeySheet } from './components/ClaudeKeySheet'
 import { PresentationOptionsSheet } from './components/PresentationOptionsSheet'
@@ -55,9 +56,13 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [homeError, setHomeError] = useState<string | null>(null)
   const [openDeck, setOpenDeck] = useState<{ title: string; html: string } | null>(null)
-  // Ask across all sessions. Held here, not in HomeScreen, so it's still
-  // open with its answers on coming back from a session it cited.
-  const [askAll, setAskAll] = useState<{ question: string; turns: AskTurn[] } | null>(null)
+  // Ask Claude across all sessions (the session list's search). Held here,
+  // not in HomeScreen, so it's still open on the same conversation on
+  // coming back from a session it cited.
+  const [askOrigin, setAskOrigin] = useState<AskOrigin | null>(null)
+  const [askThreads, setAskThreads] = useState<db.AskThread[] | null>(null)
+  const [askThreadsError, setAskThreadsError] = useState<string | null>(null)
+  const [askThreadId, setAskThreadId] = useState<string>(() => crypto.randomUUID())
 
   useEffect(() => syncPhotoUploadAuth(), [])
   useEffect(() => startOutbox(), [])
@@ -725,6 +730,37 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
 
   /** A citation in a cross-session answer: open that session at the item
    * nearest the cited time. */
+  function openAsk(origin: AskOrigin) {
+    setAskThreadId(crypto.randomUUID())
+    setAskOrigin(origin)
+    if (askThreads !== null && !askThreadsError) return
+    setAskThreadsError(null)
+    db.fetchAskThreads()
+      .then((loaded) =>
+        // Anything asked while these loaded stays on top.
+        setAskThreads((prev) => [...(prev ?? []), ...loaded.filter((t) => !prev?.some((p) => p.id === t.id))]),
+      )
+      .catch((err) => setAskThreadsError(`Couldn’t load your conversations. ${errorMessage(err)}`))
+  }
+
+  function updateAskThread(id: string, turns: AskTurn[]) {
+    if (turns.length === 0) {
+      setAskThreads((prev) => prev?.filter((t) => t.id !== id) ?? prev)
+      return
+    }
+    const thread: db.AskThread = { id, title: turns[0].content.slice(0, 300), turns, updatedAt: Date.now() }
+    setAskThreads((prev) => [thread, ...(prev ?? []).filter((t) => t.id !== id)])
+    // Kept once answered; a question still waiting isn't worth saving alone.
+    if (turns[turns.length - 1].role === 'assistant') {
+      db.saveAskThread(thread).catch((err) => console.warn('Saving the conversation failed', err))
+    }
+  }
+
+  function deleteAskThread(id: string) {
+    setAskThreads((prev) => prev?.filter((t) => t.id !== id) ?? prev)
+    db.deleteAskThread(id).catch((err) => setHomeError(`Couldn’t delete that conversation. ${errorMessage(err)}`))
+  }
+
   function openCitation(sessionId: string, elapsedSeconds: number | null) {
     const session = sessions?.find((s) => s.id === sessionId)
     if (!session) return
@@ -827,20 +863,22 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       }}
       error={homeError}
       onDismissError={() => setHomeError(null)}
-      onAskAll={(question) => setAskAll({ question, turns: [] })}
+      onOpenAsk={openAsk}
     />
-    {askAll && (
-      <AskSheet
-        kicker="Ask across"
-        title="All sessions"
-        hint="Answers come from every session’s transcript, notes and slides."
+    {askOrigin && (
+      <AskPanel
+        origin={askOrigin}
+        sessions={sessions}
+        threads={askThreads}
+        threadsError={askThreadsError}
+        threadId={askThreadId}
+        onThreadIdChange={setAskThreadId}
+        onThreadTurns={updateAskThread}
+        onDeleteThread={deleteAskThread}
         ask={db.askAllSessions}
-        turns={askAll.turns}
-        onTurnsChange={(turns) => setAskAll((prev) => (prev ? { ...prev, turns } : prev))}
-        initialQuestion={askAll.question}
-        sessionTitles={new Map(sessions.map((s) => [s.id, s.title]))}
+        onOpenSession={openSession}
         onOpenCitation={openCitation}
-        onClose={() => setAskAll(null)}
+        onClose={() => setAskOrigin(null)}
       />
     )}
     {/* Over the session list (kept underneath), so swiping it away shows

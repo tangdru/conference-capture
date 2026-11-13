@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type MutableRefObject, type ReactNode, type RefObject } from 'react'
+import { useKeyboardHeight } from '../hooks/useKeyboardHeight'
 import { errorMessage } from '../networkError'
 import './AskSheet.css'
 
@@ -34,8 +35,7 @@ interface AskSheetProps {
 
 const CITATION = /\[(S\d+)(?:\s+(\d{1,3}(?::\d{2}){1,2}))?\]/g
 
-/** Questions answered by Claude from what was captured -- in one session,
- * or across all of them. */
+/** Questions answered by Claude from what was captured in one session. */
 export function AskSheet({
   kicker,
   title,
@@ -49,11 +49,96 @@ export function AskSheet({
   onOpenCitation,
   onClose,
 }: AskSheetProps) {
-  const [draft, setDraft] = useState('')
+  const keyboardHeight = useKeyboardHeight()
+  const submitRef = useRef<((q: string) => void) | null>(null)
+
+  return (
+    <div
+      className={`ask-sheet${keyboardHeight ? ' ask-sheet--keyboard' : ''}`}
+      style={{ height: `calc(100dvh - ${keyboardHeight}px)` }}
+      role="dialog"
+      aria-label={`${kicker} ${title}`}
+    >
+      <header className="ask-sheet__header">
+        <div className="ask-sheet__heading">
+          <p className="ask-sheet__kicker">{kicker}</p>
+          <h2 className="ask-sheet__title">{title}</h2>
+        </div>
+        <button className="ask-sheet__done" onClick={onClose}>
+          Done
+        </button>
+      </header>
+
+      <AskConversation
+        ask={ask}
+        turns={turns}
+        onTurnsChange={onTurnsChange}
+        initialQuestion={initialQuestion}
+        sessionTitles={sessionTitles}
+        onOpenCitation={onOpenCitation}
+        submitRef={submitRef}
+        empty={
+          <div className="ask-sheet__empty">
+            <p className="ask-sheet__hint">{hint}</p>
+            <div className="ask-sheet__suggestions">
+              {suggestions.map((s) => (
+                <button
+                  key={s}
+                  className="ask-sheet__suggestion"
+                  onClick={() => submitRef.current?.(s)}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        }
+      />
+    </div>
+  )
+}
+
+interface AskConversationProps {
+  ask: AskFn
+  turns: AskTurn[]
+  onTurnsChange: (turns: AskTurn[]) => void
+  initialQuestion?: string
+  sessionTitles?: Map<string, string>
+  onOpenCitation?: (sessionId: string, elapsedSeconds: number | null) => void
+  /** Shown in place of the conversation before anything's been asked. */
+  empty?: ReactNode
+  /** Follows the composer's text (e.g. to show matching sessions). */
+  onDraftChange?: (draft: string) => void
+  inputRef?: RefObject<HTMLTextAreaElement | null>
+  /** Lets the parent send a question (e.g. a suggestion chip). */
+  submitRef?: MutableRefObject<((q: string) => void) | null>
+  placeholder?: string
+}
+
+/** A conversation with Claude: the answers so far, and the box to ask in. */
+export function AskConversation({
+  ask,
+  turns,
+  onTurnsChange,
+  initialQuestion,
+  sessionTitles,
+  onOpenCitation,
+  empty,
+  onDraftChange,
+  inputRef,
+  submitRef,
+  placeholder,
+}: AskConversationProps) {
+  const [draft, setDraftState] = useState('')
   const [asking, setAsking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const askedInitial = useRef(false)
+
+  function setDraft(value: string) {
+    setDraftState(value)
+    onDraftChange?.(value)
+  }
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' })
@@ -82,6 +167,7 @@ export function AskSheet({
       setAsking(false)
     }
   }
+  if (submitRef) submitRef.current = (q) => void submit(q)
 
   // A ref, not just `turns`, so StrictMode's double effect doesn't ask twice.
   useEffect(() => {
@@ -121,30 +207,9 @@ export function AskSheet({
   }
 
   return (
-    <div className="ask-sheet" role="dialog" aria-label={`${kicker} ${title}`}>
-      <header className="ask-sheet__header">
-        <div className="ask-sheet__heading">
-          <p className="ask-sheet__kicker">{kicker}</p>
-          <h2 className="ask-sheet__title">{title}</h2>
-        </div>
-        <button className="ask-sheet__done" onClick={onClose}>
-          Done
-        </button>
-      </header>
-
+    <>
       <div className="ask-sheet__scroll">
-        {turns.length === 0 && !asking && (
-          <div className="ask-sheet__empty">
-            <p className="ask-sheet__hint">{hint}</p>
-            <div className="ask-sheet__suggestions">
-              {suggestions.map((s) => (
-                <button key={s} className="ask-sheet__suggestion" onClick={() => void submit(s)}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        {turns.length === 0 && !asking && empty}
 
         {turns.map((turn, i) => (
           <div key={i} className={`ask-turn ask-turn--${turn.role}`}>
@@ -180,10 +245,11 @@ export function AskSheet({
         }}
       >
         <textarea
+          ref={inputRef}
           className="ask-sheet__input"
           value={draft}
           rows={1}
-          placeholder={turns.length > 0 ? 'Ask a follow-up' : 'Ask a question'}
+          placeholder={turns.length > 0 ? 'Ask a follow-up' : placeholder ?? 'Ask a question'}
           enterKeyHint="send"
           onChange={(e) => {
             setDraft(e.target.value)
@@ -203,7 +269,7 @@ export function AskSheet({
           </svg>
         </button>
       </form>
-    </div>
+    </>
   )
 }
 

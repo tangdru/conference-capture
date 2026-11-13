@@ -50,6 +50,7 @@ export function DeleteAccountSheet({ email, sessionCount, onBack, onDelete }: De
           <li>{sessions}, with their notes, transcripts and Remember this clips</li>
           <li>All your photos and videos</li>
           <li>All your presentations</li>
+          <li>Your Ask Claude conversations</li>
           <li>Your presentation options and your saved Claude API key</li>
         </ul>
         <p className="delete-account__warning">This can’t be undone.</p>

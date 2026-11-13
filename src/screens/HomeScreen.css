@@ -228,22 +228,7 @@
     opacity 160ms ease;
 }
 
-/* Not needed mid-search: it shrinks away (the negative margin cancels the
-   row gap) so the field takes the whole row, and grows back on close. */
-.home-footer--searching .new-session-btn {
-  min-width: 0;
-  max-width: 0;
-  padding: 0;
-  margin-right: -10px;
-  opacity: 0;
-  transform: scale(0.6);
-  pointer-events: none;
-  box-shadow: none;
-}
-
-/* Sort sits at the right edge. While searching it shrinks to nothing (the
-   negative margin cancels the row gap so the field reaches the edge); on
-   close it grows back into the space the shrinking field leaves. */
+/* Sort sits at the right edge. */
 .home-footer__sort {
   flex-shrink: 0;
   max-width: 44px;
@@ -252,17 +237,7 @@
     transform var(--bar-time) var(--bar-ease), opacity 200ms ease 80ms;
 }
 
-.home-footer--searching .home-footer__sort {
-  max-width: 0;
-  margin-left: -10px;
-  opacity: 0;
-  transform: scale(0.6);
-  pointer-events: none;
-  transition: max-width var(--bar-time) var(--bar-ease), margin var(--bar-time) var(--bar-ease),
-    transform var(--bar-time) var(--bar-ease), opacity 120ms ease;
-}
-
-/* Search: a round icon button that grows into a field filling the row. */
+/* Search: a round icon button; Ask Claude grows out of it (AskPanel). */
 .home-searchbox {
   position: relative;
   margin-left: auto;
@@ -275,12 +250,6 @@
   box-sizing: border-box;
   overflow: hidden;
   transition: max-width var(--bar-time) var(--bar-ease), border-color var(--bar-time) var(--bar-ease);
-}
-
-/* The teal outline grows in with the bar, not when the keyboard arrives. */
-.home-footer--searching .home-searchbox {
-  max-width: 100%;
-  border-color: var(--accent);
 }
 
 .home-searchbox__open {
@@ -310,12 +279,7 @@
   font: inherit;
   font-size: 16px;
   opacity: 0;
-  transition: opacity 160ms ease;
-}
-
-.home-footer--searching .home-searchbox__input {
-  opacity: 1;
-  transition-delay: 120ms;
+  pointer-events: none;
 }
 
 .home-searchbox__input:focus {
@@ -328,22 +292,6 @@
 
 .home-searchbox__input::-webkit-search-cancel-button {
   -webkit-appearance: none;
-}
-
-.home-searchbox__close {
-  position: absolute;
-  right: 4px;
-  top: 3px;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 50%;
-  background: none;
-  color: var(--text-secondary);
-  cursor: pointer;
 }
 
 /* Above the keyboard there's no home indicator to clear. */

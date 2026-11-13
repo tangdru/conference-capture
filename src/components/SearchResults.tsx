@@ -17,22 +17,22 @@ export function SearchResults({
   query: string
   onOpen: (sessionId: string, itemId?: string) => void
   /** Hands the search text to Claude as a question across all sessions. */
-  onAsk: () => void
+  onAsk?: () => void
 }) {
   return (
     <div className="search-results">
       {/* First, not after the matches, so it's in reach however many there
           are -- and it's what answers a question rather than a keyword. */}
-      <button className="search-ask" onClick={onAsk}>
+      {onAsk && <button className="search-ask" onClick={onAsk}>
         <SparkleIcon />
         <span className="search-ask__body">
           <span className="search-ask__label">Ask Claude</span>
           <span className="search-ask__query">“{query}”</span>
         </span>
         <span className="search-ask__hint">across all sessions</span>
-      </button>
+      </button>}
 
-      {results.length === 0 && <p className="search-empty">No sessions mention those words.</p>}
+      {onAsk && results.length === 0 && <p className="search-empty">No sessions mention those words.</p>}
 
       {results.map(({ session, hits }) => (
         <section key={session.id} className="search-result">

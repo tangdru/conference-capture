@@ -15,6 +15,16 @@ once -- "Testing"; Friends had build 68).
 
 ---
 
+## Build 81 — internal
+
+What to Test:
+
+```
+- The camera opens fast: the live picture shows about 0.4 s after touching the camera button (it was ~1.5 s), and about 0.1 s when reopened within 20 seconds. Measured in builds 79-80.
+- The timing line under the shutter is gone.
+- Check the camera still works as before: focus, zoom/lenses, flash, photos, Remember this, closing and reopening.
+```
+
 ## Build 80 — internal (measuring build -- not for Friends)
 
 What to Test:

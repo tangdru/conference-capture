@@ -15,6 +15,17 @@ Friends had build 64, which App Store Connect shows was also sent).
 
 ---
 
+## Build 76 — internal
+
+What to Test:
+
+```
+- Open a presentation, then swipe right from the left edge of the screen: it follows your finger with the session list underneath, and goes back to the list when let go past about a third of the way (or flicked).
+- A short drag settles back. Dragging along the title bar works too.
+- The X button now slides the presentation away.
+- Back on the list, it's still scrolled where you left it.
+```
+
 ## Build 75 — internal
 
 What to Test:

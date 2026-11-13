@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
+import { feel } from '../haptics'
 
 // How far (after resistance) the list must be pulled before letting go
 // refreshes, and where it rests while the refresh runs.
@@ -53,6 +54,8 @@ export function usePullToRefresh(
     let offset = 0
 
     function place(px: number, animate: boolean) {
+      // Pulled far enough that letting go refreshes: a tick as it's reached.
+      if (!animate && offset < TRIGGER_PX && px >= TRIGGER_PX) feel.tick()
       offset = px
       content!.style.transition = animate ? SPRING : 'none'
       content!.style.transform = px === 0 ? '' : `translateY(${px}px)`

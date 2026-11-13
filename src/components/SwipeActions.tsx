@@ -1,4 +1,5 @@
 import { useEffect, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { feel } from '../haptics'
 import './SwipeActions.css'
 
 const ACTION_WIDTH = 72
@@ -131,6 +132,7 @@ export function SwipeActions({ id, revealedId, onReveal, actions, dragHandle, di
     const shouldOpen = finalPos < -revealWidth / 2
 
     setTransform(shouldOpen ? -revealWidth : 0, true)
+    if (shouldOpen && !isRevealed) feel.tick()
     onReveal(shouldOpen ? id : null)
   }
 

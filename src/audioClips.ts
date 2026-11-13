@@ -4,6 +4,7 @@ import { supabase, VIDEOS_BUCKET } from './supabaseClient'
 import * as db from './db'
 import { Clips } from './native/clips'
 import { forgetClipUpload, noteClipSaved, pendingClipUploads, setPendingClipUploads, trimClip, type ClipUpload } from './clips'
+import { feel } from './haptics'
 import { getSessionOptions } from './sessionOptions'
 import type { AudioItem } from './types'
 
@@ -71,7 +72,11 @@ export async function recordClip(
   })
     .catch(() => ({ clip: undefined }))
     .then(async ({ clip }) => {
-      if (active?.id === item.id) setActive(null)
+      // Still counting down when it ended: it finished by itself (a tap on
+      // stop clears it first, and has its own haptic).
+      const ranOut = active?.id === item.id
+      if (ranOut) setActive(null)
+      if (ranOut && clip) feel.soft()
       if (!clip) {
         onChange(null, item.id)
         await db.deleteTimelineItem(sessionId, item).catch(() => {})

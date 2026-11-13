@@ -15,5 +15,6 @@ class MainViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(ClipsPlugin())
         bridge?.registerPluginInstance(PhotoLibraryPlugin())
         bridge?.registerPluginInstance(RecordingActivityPlugin())
+        bridge?.registerPluginInstance(FeelPlugin())
     }
 }

@@ -14,6 +14,7 @@ import { AddEmailSheet } from './auth/AddEmailSheet'
 import { HomeScreen } from './screens/HomeScreen'
 import { CaptureScreen } from './screens/CaptureScreen'
 import { DeckViewer } from './components/DeckViewer'
+import { feel } from './haptics'
 import { AskSheet, type AskTurn } from './components/AskSheet'
 import { AppMenu } from './components/AppMenu'
 import { PresentationOptionsSheet } from './components/PresentationOptionsSheet'
@@ -379,6 +380,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   }
 
   async function startNewSession() {
+    feel.rigid()
     const session = await db.createSession(userId, nextSessionTitle(sessions ?? []))
     setSessions((prev) => (prev ? [session, ...prev] : [session]))
     setRoute({ screen: 'capture', sessionId: session.id })
@@ -700,8 +702,14 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         onUpdateLocal={(updater) => updateSessionLocally(session.id, updater)}
         liveText={session.id === liveId ? liveText : ''}
         transcriptionError={session.id === liveId ? transcriptionError : null}
-        onPause={() => pauseSession(session.id)}
-        onResume={() => resumeSession(session.id)}
+        onPause={() => {
+          feel.soft()
+          return pauseSession(session.id)
+        }}
+        onResume={() => {
+          feel.rigid()
+          return resumeSession(session.id)
+        }}
         onBack={() => setRoute({ screen: 'home' })}
       />
     )

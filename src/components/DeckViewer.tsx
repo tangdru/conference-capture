@@ -1,6 +1,5 @@
 import { useRef, useState, type PointerEvent } from 'react'
-import { Capacitor } from '@capacitor/core'
-import { Haptics, ImpactStyle } from '@capacitor/haptics'
+import { feel } from '../haptics'
 import './DeckViewer.css'
 
 interface DeckViewerProps {
@@ -30,6 +29,8 @@ export function DeckViewer({ title, html, onClose }: DeckViewerProps) {
   const drag = useRef<{ id: number; x: number; y: number; t: number; lastX: number; lastT: number; decided: boolean } | null>(
     null,
   )
+  // Past the close point: letting go now closes. A tick each time it's crossed.
+  const armed = useRef(false)
 
   function close() {
     if (leaving) return
@@ -65,12 +66,16 @@ export function DeckViewer({ title, html, onClose }: DeckViewerProps) {
     d.lastX = e.clientX
     d.lastT = e.timeStamp
     setOffset(Math.max(0, dx))
+    const past = dx > window.innerWidth * CLOSE_SHARE
+    if (past && !armed.current) feel.tick()
+    armed.current = past
   }
 
   function up(e: PointerEvent<HTMLDivElement>) {
     const d = drag.current
     drag.current = null
     if (!d || d.id !== e.pointerId || !d.decided) return
+    armed.current = false
     setDragging(false)
     const dx = e.clientX - d.x
     const speed = (e.clientX - d.lastX) / Math.max(1, e.timeStamp - d.lastT)
@@ -106,5 +111,5 @@ export function DeckViewer({ title, html, onClose }: DeckViewerProps) {
 /** The tap felt the moment the presentation is fully off the screen, so
  * leaving it lands as one solid close. */
 function thud() {
-  if (Capacitor.isNativePlatform()) void Haptics.impact({ style: ImpactStyle.Medium })
+  feel.thud()
 }

@@ -56,7 +56,6 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin {
     /// Resolves once it's up; rejects with code UNAVAILABLE if there's no
     /// camera to use (the page then falls back to the browser camera).
     @objc func open(_ call: CAPPluginCall) {
-        CameraTiming.shared.beginOrMark("tap")
         DispatchQueue.main.async {
             // One already up (a double tap on the camera button): nothing to do.
             if let open = self.camera, open.presentingViewController != nil { return call.resolve() }
@@ -94,7 +93,6 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin {
             // frame (CameraViewController.start).
             camera.start {}
             host.present(camera, animated: true) {
-                CameraTiming.shared.mark("screen up")
                 if !settled {
                     settled = true
                     call.resolve()

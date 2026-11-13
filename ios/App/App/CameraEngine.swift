@@ -94,7 +94,6 @@ final class CameraEngine: NSObject, AVCapturePhotoCaptureDelegate {
     /// is up, the picture is nearly there. Only with access already granted.
     func warm() {
         guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { return }
-        CameraTiming.shared.begin("touch")
         DispatchQueue.main.async {
             _ = self.sharedPreview()
             self.queue.async { self.warmOnQueue() }
@@ -104,16 +103,10 @@ final class CameraEngine: NSObject, AVCapturePhotoCaptureDelegate {
     private func warmOnQueue() {
             self.pendingStop?.cancel()
             self.pendingStop = nil
-            if !self.configured {
-                try? self.configure()
-                CameraTiming.shared.mark("set up")
-            }
-            if self.session.isRunning {
-                CameraTiming.shared.mark("was on")
-            } else if self.configured {
+            if !self.configured { try? self.configure() }
+            if self.configured, !self.session.isRunning {
                 self.steadyPicture()
                 self.session.startRunning()
-                CameraTiming.shared.mark("sensors on")
             }
     }
 
@@ -129,9 +122,7 @@ final class CameraEngine: NSObject, AVCapturePhotoCaptureDelegate {
     }
 
     private func startOnQueue(granted: Bool, _ completion: @escaping (Result<Info, Failure>) -> Void) {
-            CameraTiming.shared.mark("access")
             self.queue.async {
-                CameraTiming.shared.mark("queue")
                 self.pendingStop?.cancel()
                 self.pendingStop = nil
                 do {
@@ -155,7 +146,6 @@ final class CameraEngine: NSObject, AVCapturePhotoCaptureDelegate {
                 if !self.session.isRunning {
                     self.steadyPicture()
                     self.session.startRunning()
-                    CameraTiming.shared.mark("sensors on")
                 }
                 let info = self.info()
                 DispatchQueue.main.async { completion(.success(info)) }
@@ -400,49 +390,3 @@ final class CameraEngine: NSObject, AVCapturePhotoCaptureDelegate {
     }
 }
 
-/// TEMPORARY, for measuring: how long each step of opening the camera takes,
-/// in ms from the finger touching the camera button (or from the tap, when
-/// there was no touch first). Shown on the camera screen, so a few openings
-/// on a real phone show where the wait is. Remove once measured.
-final class CameraTiming {
-    static let shared = CameraTiming()
-    private let lock = NSLock()
-    private var start = CACurrentMediaTime()
-    private var marks: [(String, Int)] = []
-    /// Called on the main queue whenever a step is marked.
-    var onChange: (() -> Void)?
-
-    /// A new opening starts: the touch on the camera button.
-    func begin(_ name: String) {
-        lock.lock()
-        start = CACurrentMediaTime()
-        marks = [(name, 0)]
-        lock.unlock()
-        notify()
-    }
-
-    /// The tap: part of the opening a touch began just before, or a new one.
-    func beginOrMark(_ name: String) {
-        lock.lock()
-        let stale = CACurrentMediaTime() - start > 3
-        lock.unlock()
-        if stale { begin(name) } else { mark(name) }
-    }
-
-    func mark(_ name: String) {
-        lock.lock()
-        marks.append((name, Int(((CACurrentMediaTime() - start) * 1000).rounded())))
-        lock.unlock()
-        notify()
-    }
-
-    var summary: String {
-        lock.lock()
-        defer { lock.unlock() }
-        return marks.map { "\($0.0) \($0.1)" }.joined(separator: " · ")
-    }
-
-    private func notify() {
-        DispatchQueue.main.async { self.onChange?() }
-    }
-}

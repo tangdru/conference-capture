@@ -71,8 +71,6 @@ final class CameraViewController: UIViewController {
     private let clipIcon = CAShapeLayer()
     private let clipCount = UILabel()
     private let hint = UILabel()
-    /// TEMPORARY: CameraTiming's readout, for measuring how long opening takes.
-    private let timing = UILabel()
 
     // MARK: - State
 
@@ -126,7 +124,6 @@ final class CameraViewController: UIViewController {
             guard let self = self else { return }
             switch result {
             case let .success(info):
-                CameraTiming.shared.mark("ready")
                 defer { ready() }
                 self.lenses = info.lenses
                 self.zoom = info.zoom
@@ -190,7 +187,6 @@ final class CameraViewController: UIViewController {
         layoutControls(animated: false)
         let hintHeight: CGFloat = 16
         hint.frame = CGRect(x: 0, y: height - view.safeAreaInsets.bottom - 20 - hintHeight, width: width, height: hintHeight)
-        timing.frame = CGRect(x: 12, y: hint.frame.minY - 34, width: width - 24, height: 30)
     }
 
     /// Shutter centre 124pt above the bottom safe area; the star 70pt right of
@@ -363,14 +359,6 @@ final class CameraViewController: UIViewController {
         hint.textAlignment = .center
         drawHint()
         view.addSubview(hint)
-
-        timing.textAlignment = .center
-        timing.numberOfLines = 0
-        timing.font = .monospacedSystemFont(ofSize: 10, weight: .regular)
-        timing.textColor = Palette.accent
-        view.addSubview(timing)
-        CameraTiming.shared.onChange = { [weak self] in self?.timing.text = CameraTiming.shared.summary }
-        timing.text = CameraTiming.shared.summary
     }
 
     private func buildGestures() {
@@ -417,26 +405,17 @@ final class CameraViewController: UIViewController {
     private func revealOnFirstFrame() {
         // Already live (kept on, or warmed by the touch): no fade to wait for.
         if #available(iOS 17.0, *), preview.previewLayer.isPreviewing {
-            CameraTiming.shared.mark("frame")
             revealed = true
             preview.alpha = 1
             return
         }
         if #available(iOS 17.0, *) {
-            var first = true
             previewingObservation = preview.previewLayer.observe(\.isPreviewing, options: [.initial, .new]) { [weak self] layer, _ in
                 guard layer.isPreviewing else { return }
-                if first {
-                    first = false
-                    CameraTiming.shared.mark("frame")
-                }
                 DispatchQueue.main.async { self?.revealPreview() }
             }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-            if self?.revealed == false { CameraTiming.shared.mark("timer") }
-            self?.revealPreview()
-        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in self?.revealPreview() }
     }
 
     private var revealed = false

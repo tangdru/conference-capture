@@ -16,6 +16,10 @@ export interface NativeCameraOptions {
 interface NativeCameraPlugin {
   /** Sets the camera up ahead of time so it opens at once; it stays off. */
   prepare(): Promise<void>
+  /** A finger is on the camera button: starts switching the camera on. */
+  warm(): Promise<void>
+  /** Switches off a camera kept on after closing (leaving the session). */
+  cool(): Promise<void>
   /** Opens the camera over the app. Rejects with code UNAVAILABLE when
    * there's no camera to use. */
   open(options: NativeCameraOptions): Promise<void>

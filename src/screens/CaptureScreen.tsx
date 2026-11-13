@@ -473,6 +473,7 @@ export function CaptureScreen({
     return () => {
       if (nativeCameraUp.current) void NativeCamera.close().catch(() => {})
       nativeCameraUp.current = false
+      void NativeCamera.cool().catch(() => {})
       void handles.then((list) => list.forEach((h) => void h.remove()))
     }
   }, [])
@@ -614,6 +615,9 @@ export function CaptureScreen({
         <button
           className="camera-trigger"
           onClick={() => void openCamera()}
+          onPointerDown={() => {
+            if (Capacitor.isNativePlatform() && !nativeCameraFailed) void NativeCamera.warm().catch(() => {})
+          }}
           aria-label="Capture photo"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">

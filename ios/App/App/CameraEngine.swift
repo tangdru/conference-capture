@@ -54,9 +54,24 @@ final class CameraEngine: NSObject, AVCapturePhotoCaptureDelegate {
         }
     }
 
+    /// Switching the sensor on takes most of a second, so this begins it as
+    /// soon as a finger touches the camera button -- by the time the screen
+    /// is up, the picture is nearly there. Only with access already granted.
+    func warm() {
+        guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { return }
+        queue.async {
+            self.pendingStop?.cancel()
+            self.pendingStop = nil
+            if !self.configured { try? self.configure() }
+            if self.configured, !self.session.isRunning { self.session.startRunning() }
+        }
+    }
+
     func start(completion: @escaping (Result<Info, Failure>) -> Void) {
         AVCaptureDevice.requestAccess(for: .video) { granted in
             self.queue.async {
+                self.pendingStop?.cancel()
+                self.pendingStop = nil
                 do {
                     if !self.configured { try self.configure() }
                 } catch {
@@ -82,10 +97,31 @@ final class CameraEngine: NSObject, AVCapturePhotoCaptureDelegate {
         }
     }
 
-    func stop() {
+    /// Switches the camera off, after `delay` seconds: closing the camera
+    /// keeps it on a little while, so opening it again straight away (the
+    /// next slide) is instant. Opening or warming it cancels the stop.
+    func stop(after delay: TimeInterval = 0) {
         queue.async {
-            if self.session.isRunning { self.session.stopRunning() }
+            self.pendingStop?.cancel()
+            let stop = DispatchWorkItem { [weak self] in
+                guard let self = self else { return }
+                self.pendingStop = nil
+                if self.session.isRunning { self.session.stopRunning() }
+            }
+            self.pendingStop = stop
+            self.queue.asyncAfter(deadline: .now() + delay, execute: stop)
         }
+    }
+
+    private var pendingStop: DispatchWorkItem?
+    private var backgroundObserver: NSObjectProtocol?
+
+    override init() {
+        super.init()
+        // Never left on in the background.
+        backgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: nil
+        ) { [weak self] _ in self?.stop() }
     }
 
     // MARK: - Zoom, focus, capture

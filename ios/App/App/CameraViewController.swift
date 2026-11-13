@@ -116,6 +116,9 @@ final class CameraViewController: UIViewController {
     /// camera at all, `onUnavailable` instead.
     func start(ready: @escaping () -> Void) {
         loadViewIfNeeded()
+        // Wired to the camera before it's switched on, so the picture shows on
+        // its very first frame (often already running from `warm`).
+        if preview.previewLayer.session == nil { preview.previewLayer.session = engine.session }
         engine.start { [weak self] result in
             guard let self = self else { return }
             switch result {
@@ -130,7 +133,6 @@ final class CameraViewController: UIViewController {
                     self.standInView.isHidden = false
                     self.revealPreview()
                 } else {
-                    self.preview.previewLayer.session = self.engine.session
                     self.steadyPreview()
                     self.revealOnFirstFrame()
                 }
@@ -154,7 +156,8 @@ final class CameraViewController: UIViewController {
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        engine.stop()
+        // Kept on briefly, so reopening for the next slide is instant.
+        engine.stop(after: 20)
         tiltTimer?.invalidate()
         clipTimer?.invalidate()
         motion.stopAccelerometerUpdates()

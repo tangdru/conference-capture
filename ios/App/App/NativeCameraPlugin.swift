@@ -15,6 +15,8 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "NativeCamera"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "prepare", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "warm", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "cool", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "open", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "update", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "close", returnType: CAPPluginReturnPromise),
@@ -34,6 +36,20 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func prepare(_ call: CAPPluginCall) {
         CameraEngine.shared.prepare()
         call.resolve()
+    }
+
+    /// A finger is on the camera button: start switching the camera on now.
+    @objc func warm(_ call: CAPPluginCall) {
+        CameraEngine.shared.warm()
+        call.resolve()
+    }
+
+    /// The session screen closed: no camera kept on for a quick reopen.
+    @objc func cool(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            if self.camera?.presentingViewController == nil { CameraEngine.shared.stop() }
+            call.resolve()
+        }
     }
 
     /// {showRemember, showClip, remembered, clipEndsAt}: opens the camera.

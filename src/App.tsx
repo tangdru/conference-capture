@@ -722,10 +722,6 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     openSession(sessionId, itemId)
   }
 
-  if (openDeck) {
-    return <DeckViewer title={openDeck.title} html={openDeck.html} onClose={() => setOpenDeck(null)} />
-  }
-
   return (
     <>
     {menu === 'menu' && (
@@ -821,6 +817,9 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         onClose={() => setAskAll(null)}
       />
     )}
+    {/* Over the session list (kept underneath), so swiping it away shows
+        the list sliding into view, as going back does elsewhere in iOS. */}
+    {openDeck && <DeckViewer title={openDeck.title} html={openDeck.html} onClose={() => setOpenDeck(null)} />}
     </>
   )
 }

@@ -47,3 +47,33 @@
   border: none;
   background: #fff;
 }
+
+/* Swiping back: the presentation follows the finger, then settles back or
+   slides off to the right. */
+.deck-viewer {
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform;
+}
+
+.deck-viewer--dragging {
+  transition: none;
+}
+
+.deck-viewer--moved {
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.45);
+}
+
+.deck-viewer__top-bar {
+  touch-action: pan-y;
+}
+
+/* A thin strip along the left edge, over the frame (which keeps its own
+   touches), that catches the back swipe. */
+.deck-viewer__edge {
+  position: absolute;
+  left: 0;
+  top: calc(52px + env(safe-area-inset-top));
+  bottom: 0;
+  width: 24px;
+  touch-action: pan-y;
+}

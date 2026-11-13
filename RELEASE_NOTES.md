@@ -15,6 +15,20 @@ Friends had build 64, which App Store Connect shows was also sent).
 
 ---
 
+## Build 77 — internal
+
+What to Test:
+
+```
+Haptics (feel them on the phone):
+- Swipe a presentation away: a light tick when you've dragged far enough that letting go closes it, then a solid tap the moment it's off the screen (the X does the tap too).
+- Swipe a session or an entry to open its menu: a light tick as it snaps open.
+- Pull the session list down to refresh: a light tick when pulled far enough.
+- New Session: a crisp click as recording starts.
+- Pause recording: a soft bump. Resume: a crisp click.
+- A clip that runs its whole countdown: a soft bump when it finishes (stopping it by hand doesn't add one).
+```
+
 ## Build 76 — internal
 
 What to Test:

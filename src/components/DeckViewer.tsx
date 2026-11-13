@@ -1,4 +1,6 @@
 import { useRef, useState, type PointerEvent } from 'react'
+import { Capacitor } from '@capacitor/core'
+import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import './DeckViewer.css'
 
 interface DeckViewerProps {
@@ -31,7 +33,10 @@ export function DeckViewer({ title, html, onClose }: DeckViewerProps) {
 
   function close() {
     if (leaving) return
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return onClose()
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      thud()
+      return onClose()
+    }
     setLeaving(true)
     setOffset(window.innerWidth)
   }
@@ -80,7 +85,10 @@ export function DeckViewer({ title, html, onClose }: DeckViewerProps) {
       className={`deck-viewer${dragging ? ' deck-viewer--dragging' : ''}${offset > 0 ? ' deck-viewer--moved' : ''}`}
       style={offset ? { transform: `translateX(${offset}px)` } : undefined}
       onTransitionEnd={(e) => {
-        if (leaving && e.target === e.currentTarget) onClose()
+        if (leaving && e.target === e.currentTarget) {
+          thud()
+          onClose()
+        }
       }}
     >
       <div className="deck-viewer__top-bar" {...handlers}>
@@ -93,4 +101,10 @@ export function DeckViewer({ title, html, onClose }: DeckViewerProps) {
       <div className="deck-viewer__edge" aria-hidden="true" {...handlers} />
     </div>
   )
+}
+
+/** The tap felt the moment the presentation is fully off the screen, so
+ * leaving it lands as one solid close. */
+function thud() {
+  if (Capacitor.isNativePlatform()) void Haptics.impact({ style: ImpactStyle.Medium })
 }

@@ -15,6 +15,15 @@ Friends had build 64, which App Store Connect shows was also sent).
 
 ---
 
+## Build 74 — internal
+
+What to Test:
+
+```
+- Tap the camera button: the live picture shows within a moment of the camera opening -- the viewfinder no longer stays black.
+- The camera still fades in (no slide up from the bottom).
+```
+
 ## Build 73 — internal
 
 What to Test:

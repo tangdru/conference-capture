@@ -15,6 +15,16 @@ once -- "Testing"; Friends had build 68).
 
 ---
 
+## Build 80 — internal (measuring build -- not for Friends)
+
+What to Test:
+
+```
+- The camera should open much faster: build 79's timings showed ~1.4 s lost after the sensors were already on (each opening rebuilt the running camera and re-asked for permission). Now one picture is reused and the picture shows as soon as frames come.
+- The timing line under the shutter is still there (TEMPORARY): please screenshot the same three cases as build 79 -- first opening after opening a session, an opening 20+ seconds after closing, and one within 20 seconds.
+- Check the camera still works as before: focus, zoom/lenses, flash, photos, closing and reopening.
+```
+
 ## Build 79 — internal (measuring build -- not for Friends)
 
 What to Test:

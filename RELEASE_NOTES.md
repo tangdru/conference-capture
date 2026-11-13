@@ -15,6 +15,16 @@ Friends had build 64, which App Store Connect shows was also sent).
 
 ---
 
+## Build 75 — internal
+
+What to Test:
+
+```
+- Tap the camera button: the live picture should show much sooner -- the camera starts switching on the moment your finger touches the button.
+- Close the camera and reopen it within 20 seconds: the picture is there at once.
+- After closing, the green camera dot stays on for about 20 seconds, then goes off. Leaving the session or switching apps turns it off straight away.
+```
+
 ## Build 74 — internal
 
 What to Test:

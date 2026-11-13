@@ -87,6 +87,13 @@ export function ClaudeKeySheet({ onBack }: ClaudeKeySheetProps) {
           Sparkle (presentations) and Ask use Claude. Add your own Claude API key and they run on your Anthropic
           account, billed by Anthropic to you.
         </p>
+        <p className="claude-key__note">
+          A Claude Pro or Max subscription doesn’t include API use. API keys come from the Claude Console, which
+          bills separately: add credit there before using your key.{' '}
+          <a className="claude-key__link claude-key__link--inline" href={CONSOLE_URL} target="_blank" rel="noopener">
+            Open the Claude Console
+          </a>
+        </p>
 
         {saved && (
           <div className="claude-key__saved">
@@ -171,11 +178,11 @@ export function ClaudeKeySheet({ onBack }: ClaudeKeySheetProps) {
 
         <div className="claude-key__help">
           <p>
-            <strong>Getting a key:</strong> sign in at the Anthropic Console, add credit under Billing, then create a key
+            <strong>Getting a key:</strong> sign in at the Claude Console (your Claude login works), add credit under Billing, then create a key
             under API keys and paste it here.
           </p>
           <a className="claude-key__link" href={CONSOLE_URL} target="_blank" rel="noopener">
-            Open the Anthropic Console
+            Open the Claude Console
           </a>
           <p>
             Your key is checked with Claude, then stored encrypted on the server and used only for your own Sparkle and

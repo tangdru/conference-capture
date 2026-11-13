@@ -11,6 +11,22 @@
   color: var(--text-primary);
 }
 
+.claude-key__note {
+  margin: -8px 0 20px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.claude-key__note .claude-key__link--inline {
+  display: inline;
+  margin: 0;
+}
+
 .claude-key__saved {
   display: grid;
   grid-template-columns: 1fr auto;

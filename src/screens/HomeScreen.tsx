@@ -88,6 +88,9 @@ interface HomeScreenProps {
   onDismissError: () => void
   /** Ask Claude the search text as a question, across all sessions. */
   onAskAll: (question: string) => void
+  /** A session is open over the list: it's out of reach (inert) and its
+   * clock stops, until swiped or tapped back to. */
+  covered?: boolean
 }
 
 export function HomeScreen({
@@ -107,6 +110,7 @@ export function HomeScreen({
   error,
   onDismissError,
   onAskAll,
+  covered = false,
 }: HomeScreenProps) {
   const [now, setNow] = useState(Date.now())
   const [revealedId, setRevealedId] = useState<string | null>(null)
@@ -137,9 +141,11 @@ export function HomeScreen({
   searchingRef.current = searching
 
   useEffect(() => {
+    if (covered) return
+    setNow(Date.now())
     const id = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(id)
-  }, [])
+  }, [covered])
 
   // Lift the bottom bar (and shorten the list) by the keyboard's height.
   const keyboardHeight = useKeyboardHeight()
@@ -312,6 +318,7 @@ export function HomeScreen({
     <div
       className={`home-screen${keyboardHeight ? ' home-screen--keyboard' : ''}`}
       style={{ height: `calc(100dvh - ${keyboardHeight}px)` }}
+      inert={covered}
     >
       <header className="home-header">
         <div className="home-header__row">

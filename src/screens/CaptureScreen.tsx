@@ -3,6 +3,7 @@ import { errorMessage } from '../networkError'
 import { onOutboxProblem } from '../itemOutbox'
 import { Capacitor } from '@capacitor/core'
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'
+import { useSwipeBack } from '../hooks/useSwipeBack'
 import { Keyboard } from '@capacitor/keyboard'
 import { useKeyboardHeight } from '../hooks/useKeyboardHeight'
 import { maybeStartSessionTour } from '../tour'
@@ -506,8 +507,16 @@ export function CaptureScreen({
     onResume().catch((err: unknown) => setSaveError(errorMessage(err)))
   }
 
+  // Swipe right from the left edge: back to the session list, as from a
+  // presentation (the list sits underneath this screen).
+  const swipeBack = useSwipeBack(onBack)
+
   return (
-    <div className="capture-screen" style={{ height: `calc(100dvh - ${keyboardHeight}px)` }}>
+    <div
+      {...swipeBack.rootProps}
+      className={`capture-screen${swipeBack.rootProps.className}`}
+      style={{ ...swipeBack.rootProps.style, height: `calc(100dvh - ${keyboardHeight}px)` }}
+    >
       <header className="capture-header">
         <div className="capture-header__row1">
           <button className="capture-header__back" onClick={onBack} aria-label="Back to home">
@@ -559,6 +568,10 @@ export function CaptureScreen({
         </div>
       )}
 
+      {/* The timeline, with a strip along its left edge for swiping back to
+          the session list (the rows keep their own sideways swipes). */}
+      <div className="capture-body">
+      <div className="swipe-back-edge" aria-hidden="true" {...swipeBack.edgeProps} />
       <Timeline
         items={session.items}
         onPhotoTap={setViewingPhotoId}
@@ -579,6 +592,7 @@ export function CaptureScreen({
         focusId={focusItemId}
         onTrimClip={canRecordClips ? trimClip : undefined}
       />
+      </div>
 
       <div className="save-notice" role="status">
         {savedPhotoNotice && <span>Saved to Photos</span>}

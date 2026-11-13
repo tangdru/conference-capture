@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
@@ -688,14 +688,20 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     )
   }
 
+  // An open session sits over the session list (kept underneath), so
+  // swiping it away shows the list sliding into view, as going back does
+  // elsewhere in iOS.
+  let captureView: ReactNode = null
   if (route.screen === 'capture') {
     const session = sessions.find((s) => s.id === route.sessionId)
     if (!session) {
       setRoute({ screen: 'home' })
       return null
     }
-    return (
+    captureView = (
+      <div className="capture-layer">
       <CaptureScreen
+        key={session.id}
         session={session}
         userId={userId}
         focusItemId={route.focusItemId}
@@ -712,6 +718,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         }}
         onBack={() => setRoute({ screen: 'home' })}
       />
+      </div>
     )
   }
 
@@ -789,6 +796,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     )}
     {addingEmail && <AddEmailSheet sessionCount={sessions.length} onClose={() => setAddingEmail(false)} />}
     <HomeScreen
+      covered={captureView !== null}
       sessions={sessions}
       onOpenSession={openSession}
       onNewSession={startNewSession}
@@ -828,6 +836,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     {/* Over the session list (kept underneath), so swiping it away shows
         the list sliding into view, as going back does elsewhere in iOS. */}
     {openDeck && <DeckViewer title={openDeck.title} html={openDeck.html} onClose={() => setOpenDeck(null)} />}
+    {captureView}
     </>
   )
 }

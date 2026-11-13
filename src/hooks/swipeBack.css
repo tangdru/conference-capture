@@ -1,0 +1,21 @@
+/* useSwipeBack: the view follows the finger (no easing), and has a shadow
+   on its left edge while it's moved over the session list. */
+.swipe-back--dragging {
+  transition: none !important;
+}
+
+.swipe-back--moved {
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.45);
+}
+
+/* A thin strip along the left edge that catches the swipe, on top of
+   content that keeps its own touches (a frame, a scrolling list). */
+.swipe-back-edge {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  z-index: 3;
+  touch-action: pan-y;
+}

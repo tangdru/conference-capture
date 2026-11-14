@@ -2,7 +2,8 @@
 -- private link to the `mcp` function, which lets Claude (desktop, claude.ai,
 -- the phone app) read that account's sessions, photos and presentations.
 -- The token in the link is long and random, so the link can't be guessed;
--- it reads only, and making a new link (or turning it off) stops the old one.
+-- it reads, and can save a presentation to a session; making a new link (or
+-- turning it off) stops the old one.
 create table if not exists public.cc_mcp_links (
   user_id uuid primary key references auth.users (id) on delete cascade,
   token text not null unique,

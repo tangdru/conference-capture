@@ -3,7 +3,9 @@
 // The Claude connector (menu > Use in Claude). An MCP server that lets Claude
 // -- desktop, claude.ai or the phone app -- read one account's sessions: list
 // and search them, read a session's transcript, notes and slide text, look at
-// its photos, and read its presentation. Read only.
+// its photos, and read its presentation -- and build a presentation in the
+// chat to Sparkle's own instructions and save it to the session (deck.ts).
+// Nothing else is ever changed.
 //
 // The account is picked by the private link it's reached at,
 // .../functions/v1/mcp/<token> (cc_mcp_links; made in the app). Reads use the
@@ -13,6 +15,7 @@
 // JSON-RPC message (or a batch) and gets a plain JSON reply.
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { encodeBase64 } from 'jsr:@std/encoding@1/base64'
+import { DeckError, preparePresentation, savePresentation } from './deck.ts'
 
 const SERVER_INFO = { name: 'conference-capture', title: 'Conference Capture', version: '1.0.0' }
 const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05']
@@ -25,7 +28,9 @@ const MAX_PHOTOS = 6
 
 const INSTRUCTIONS = `Conference Capture holds the conference talks this person captured on their phone: the speaker's words (auto-transcribed on the phone, so expect the odd misheard word), their own notes, photos of slides (with the text read off them), moments they marked "Remembered", entries they starred (★), short audio clips, and for many talks a presentation Claude made from it all.
 
-Start with list_sessions or search, then get_session for the full material of a talk. Times like 12:30 are minutes into that talk. Use get_photos to look at slides when the read-off text isn't enough. Say which talk (and when in it) each point comes from, and keep what the speaker said apart from the attendee's own notes. Don't present outside knowledge as if a speaker said it.`
+Start with list_sessions or search, then get_session for the full material of a talk. Times like 12:30 are minutes into that talk. Use get_photos to look at slides when the read-off text isn't enough. Say which talk (and when in it) each point comes from, and keep what the speaker said apart from the attendee's own notes. Don't present outside knowledge as if a speaker said it.
+
+To make a presentation of a talk (what the app calls Sparkle), call prepare_presentation and follow its instructions exactly, then save_presentation puts the page on the session in the app.`
 
 const TOOLS = [
   {
@@ -92,6 +97,34 @@ const TOOLS = [
       required: ['session_id'],
     },
     annotations: { readOnlyHint: true, openWorldHint: false },
+  },
+  {
+    name: 'prepare_presentation',
+    title: 'Start a presentation',
+    description:
+      "Step 1 of making a presentation of a session, the same page the app's Sparkle button makes: returns Sparkle's own instructions for this session (with the attendee's Presentation options) and everything captured in it. Follow them exactly, look at the photos with get_photos, write the complete HTML page, then call save_presentation.",
+    inputSchema: {
+      type: 'object',
+      properties: { session_id: { type: 'string', description: 'The session id.' } },
+      required: ['session_id'],
+    },
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  },
+  {
+    name: 'save_presentation',
+    title: 'Save a presentation to the app',
+    description:
+      "Step 2: saves the finished HTML page as the session's presentation in the Conference Capture app, as Sparkle would (photo and audio placeholders become the real files, the cover photo and read time are set), replacing any earlier one. Send the complete document.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_id: { type: 'string', description: 'The session id.' },
+        html: { type: 'string', description: 'The complete HTML document, from <!doctype html> to </html>.' },
+        title: { type: 'string', description: 'Only for a session that has no name yet: the title to give it.' },
+      },
+      required: ['session_id', 'html'],
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
   },
 ]
 
@@ -208,8 +241,9 @@ async function handle(admin: SupabaseClient, userId: string, msg: RpcMessage): P
         const content = await callTool(admin, userId, String(name), args)
         return rpcResult(msg.id, { content })
       } catch (err) {
-        if (!(err instanceof ToolError)) console.error(`mcp: ${name} failed`, err)
-        const text = err instanceof ToolError ? err.message : 'Something went wrong reading Conference Capture, try again.'
+        const known = err instanceof ToolError || err instanceof DeckError
+        if (!known) console.error(`mcp: ${name} failed`, err)
+        const text = known ? (err as Error).message : 'Something went wrong reading Conference Capture, try again.'
         return rpcResult(msg.id, { content: [{ type: 'text', text }], isError: true })
       }
     }
@@ -232,6 +266,13 @@ async function callTool(admin: SupabaseClient, userId: string, name: string, arg
       return await getPhotos(admin, userId, args.photo_ids)
     case 'get_presentation':
       return [{ type: 'text', text: await getPresentation(admin, userId, sessionIdArg(args.session_id)) }]
+    case 'prepare_presentation':
+      return [{ type: 'text', text: await preparePresentation(admin, userId, sessionIdArg(args.session_id)) }]
+    case 'save_presentation': {
+      const html = typeof args.html === 'string' ? args.html : ''
+      if (!html.trim()) throw new ToolError('Send the complete HTML page as html.')
+      return [{ type: 'text', text: await savePresentation(admin, userId, sessionIdArg(args.session_id), html, str(args.title)) }]
+    }
     default:
       throw new ToolError(`No tool called ${name}.`)
   }

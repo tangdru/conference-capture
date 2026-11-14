@@ -96,7 +96,7 @@ export function ClaudeConnectorSheet({ onBack }: ClaudeConnectorSheetProps) {
         <p className="claude-key__lead">
           Ask about your sessions in Claude itself (on your computer, at claude.ai or in the Claude app). Claude can
           search every talk, read the transcripts and your notes, look at your slide photos and read your
-          presentations.
+          presentations. It can also make a presentation the way Sparkle does and save it to the session here.
         </p>
 
         {connector === undefined && <p className="claude-connector__muted">Loading…</p>}
@@ -182,7 +182,7 @@ export function ClaudeConnectorSheet({ onBack }: ClaudeConnectorSheetProps) {
         <div className="claude-key__help">
           <p>
             <strong>Keep the link private.</strong> Anyone who has it can read your sessions, the same way Claude can.
-            It can only read, never change anything. If it gets out, make a new link here.
+            The only thing it can change is a session’s presentation. If it gets out, make a new link here.
           </p>
           <p>Custom connectors need a Claude Pro, Max, Team or Enterprise plan.</p>
         </div>

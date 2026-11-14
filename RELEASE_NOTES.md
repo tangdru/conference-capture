@@ -15,6 +15,26 @@ once -- "Testing"; Friends had build 75).
 
 ---
 
+## Build 85 — internal
+
+Replaces 84 (test this one; it has everything from 84). The only change: the sparkle now makes the presentation in Claude, and 84's extra speech-bubble-with-star swipe button is gone.
+
+What to Test:
+
+```
+CLAUDE DOES THE ASKING AND PRESENTATIONS
+- First open after updating (when not yet connected): a "Make presentations and ask questions in Claude" invitation. Connect to Claude opens the Claude app at Add custom connector with Name and URL filled in: tap Add. Not now closes it; it comes back after 3 days or 5 opens until you connect.
+- Coming back from Claude after Connect: a short tour of where Claude is used.
+- Session list: the search button is now a chat button. It opens a new Claude chat ready to ask about your sessions.
+- Swipe left on a session and tap the sparkle (Generate / Regenerate presentation), or tap a failed presentation's red icon: Claude opens ready to make the presentation. Tap send; the presentation, summary, action items and other entries appear in the app, and notes move next to what they're about.
+- Inside a session: the speech bubble opens Claude ready to ask about that talk.
+- Not connected yet? Those buttons show the invitation first.
+- Menu > Use in Claude: Add to Claude does the same as Connect; Copy and Share are for adding it on a computer.
+- In-app search and the in-app Ask Claude screens are gone.
+```
+
+---
+
 ## Build 84 — internal
 
 What to Test:

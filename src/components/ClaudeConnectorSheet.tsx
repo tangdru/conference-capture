@@ -182,7 +182,8 @@ export function ClaudeConnectorSheet({ onBack }: ClaudeConnectorSheetProps) {
         <div className="claude-key__help">
           <p>
             <strong>Keep the link private.</strong> Anyone who has it can read your sessions, the same way Claude can.
-            The only thing it can change is a session’s presentation. If it gets out, make a new link here.
+            The only thing it can change is a session’s presentation, and what Sparkle saves with it (the summary,
+            action items and the like, and where notes sit). If it gets out, make a new link here.
           </p>
           <p>Custom connectors need a Claude Pro, Max, Team or Enterprise plan.</p>
         </div>

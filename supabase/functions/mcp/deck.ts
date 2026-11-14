@@ -14,8 +14,11 @@
 //  - Claude looks at photos itself with get_photos, and leaves out repeat
 //    shots of one slide itself, instead of separate calls doing it;
 //  - an unnamed session's title comes with the save;
-//  - the summary, action items etc. aren't saved back into the session as
-//    entries (Sparkle's organizeSession).
+//  - Sparkle's organizeSession (summary, action items, speaker bio, acronyms
+//    and references saved as entries; unplaced notes and photos moved to
+//    just after the spoken line they're about) is asked of Claude in the same
+//    instructions and comes back with the save as session_entries; the asks
+//    and the saving are copied from organizeSession -- keep them in step.
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const DECKS_BUCKET = 'cc-decks'
@@ -51,6 +54,11 @@ interface PresentationOptions {
   skipRepeatSlides: boolean
   voice: 'neutral' | 'first_person' | 'brief'
   language: string
+  saveSummary: boolean
+  saveActionItems: boolean
+  saveSpeakerBio: boolean
+  saveAcronyms: boolean
+  saveReferences: boolean
 }
 
 const DEFAULT_OPTIONS: PresentationOptions = {
@@ -70,6 +78,25 @@ const DEFAULT_OPTIONS: PresentationOptions = {
   skipRepeatSlides: true,
   voice: 'neutral',
   language: 'auto',
+  saveSummary: true,
+  saveActionItems: true,
+  saveSpeakerBio: true,
+  saveAcronyms: true,
+  saveReferences: true,
+}
+
+type EntryKind = 'summary' | 'action_items' | 'speaker_bio' | 'acronyms' | 'references'
+const ENTRY_KINDS: EntryKind[] = ['summary', 'action_items', 'speaker_bio', 'acronyms', 'references']
+const KEY_FOR: Record<EntryKind, string> = {
+  summary: 'summary', action_items: 'actionItems', speaker_bio: 'speakerBio', acronyms: 'acronyms', references: 'references',
+}
+// organizeSession's asks, word for word.
+const ASKS: Record<EntryKind, string> = {
+  summary: 'summary: 2 or 3 plain sentences on what the talk was actually about.',
+  action_items: 'actionItems: commitments or follow-ups the SPEAKER made (e.g. "I\'ll share the slides", "it ships in Q2"), not things the attendee should do. Each {text, context}: the commitment and brief surrounding context. [] if none.',
+  speaker_bio: 'speakerBio: only if the content shows who the speaker is (a self-introduction, or a title or intro slide): {name, role, org, description} with a one-line description; empty string for any part not stated. If nothing says who is speaking but a title slide lists the authors, use the FIRST author listed on the title slide (with their affiliation as org, role empty unless stated, and a description saying they are the first author of the work presented). null if neither the speaker nor a title-slide author list is shown -- never guess.',
+  acronyms: 'acronyms: acronyms or jargon used but not explained by the speaker (skip ones they define). Each {term, expansion}. [] if none.',
+  references: 'references: papers, books, tools, products or URLs the speaker or slides explicitly named. Each {title, source, description, url}: source is the author, publisher or site; description one line; url only if one was actually given, else null. A link from a QR code on a slide photo counts as given: list each one with that exact url, titled by what the slide says it\'s for. [] if none.',
 }
 
 interface Row {
@@ -83,6 +110,8 @@ interface Row {
   duration_ms: number | null
   item_timestamp: string
   starred: boolean | null
+  position: number | null
+  placement_locked: boolean | null
 }
 
 interface Session {
@@ -103,6 +132,12 @@ interface Material {
   enrichment: Row[]
   highlights: Row[]
   clips: Row[]
+  /** Kinds of entry to save: wanted in the options and not hidden by the user. */
+  entryKinds: EntryKind[]
+  /** Last build's entries, replaced by a save. */
+  oldEntries: { id: string; subtype: string | null }[]
+  /** Notes and listed photos the user hasn't placed, which a save may move. */
+  movable: Row[]
 }
 
 const photoToken = (row: Row) => `PHOTO_${row.id.slice(0, 8)}`
@@ -122,7 +157,7 @@ async function loadMaterial(admin: SupabaseClient, userId: string, sessionId: st
   for (let from = 0; ; from += 1000) {
     const { data, error: itemsError } = await admin
       .from('cc_timeline_items')
-      .select('id, type, subtype, payload, text, caption, photo_path, duration_ms, item_timestamp, starred')
+      .select('id, type, subtype, payload, text, caption, photo_path, duration_ms, item_timestamp, starred, position, placement_locked')
       .eq('owner_id', userId)
       .eq('session_id', sessionId)
       .eq('excluded', false)
@@ -137,17 +172,41 @@ async function loadMaterial(admin: SupabaseClient, userId: string, sessionId: st
   const { data: settings } = await admin.from('cc_user_settings').select('presentation').eq('user_id', userId).maybeSingle()
   const options = { ...DEFAULT_OPTIONS, ...((settings?.presentation as Partial<PresentationOptions>) ?? {}) }
 
+  // Entries, hidden ones included: a kind the user hid is left alone.
+  const { data: entryRows, error: entryError } = await admin
+    .from('cc_timeline_items')
+    .select('id, subtype, excluded')
+    .eq('owner_id', userId)
+    .eq('session_id', sessionId)
+    .eq('type', 'enrichment')
+  if (entryError) throw entryError
+  const wanted: Record<EntryKind, boolean> = {
+    summary: options.saveSummary,
+    action_items: options.saveActionItems,
+    speaker_bio: options.saveSpeakerBio,
+    acronyms: options.saveAcronyms,
+    references: options.saveReferences,
+  }
+  const entryKinds = ENTRY_KINDS.filter((kind) =>
+    wanted[kind] && !(entryRows ?? []).some((r) => r.subtype === kind && r.excluded))
+
   const allPhotos = rows.filter((r) => r.type === 'photo' && r.photo_path)
+  const notes = rows.filter((r) => r.type === 'note' && r.text)
+  const photos = options.photos === 'none' ? [] : options.photos === 'starred' ? allPhotos.filter((r) => r.starred) : allPhotos
+  const unplaced = (r: Row) => !r.placement_locked && r.position === null
   return {
     session: session as Session,
     options,
-    notes: rows.filter((r) => r.type === 'note' && r.text),
+    notes,
     transcript: rows.filter((r) => r.type === 'transcript' && r.text),
     allPhotos,
-    photos: options.photos === 'none' ? [] : options.photos === 'starred' ? allPhotos.filter((r) => r.starred) : allPhotos,
+    photos,
     enrichment: rows.filter((r) => r.type === 'enrichment' && r.payload),
     highlights: rows.filter((r) => r.type === 'highlight'),
     clips: rows.filter((r) => r.type === 'audio' && typeof r.payload?.path === 'string'),
+    entryKinds,
+    oldEntries: (entryRows ?? []).filter((r) => !r.excluded && entryKinds.includes(r.subtype as EntryKind)),
+    movable: [...notes, ...photos.filter((r) => r.text || r.caption)].filter(unplaced),
   }
 }
 
@@ -160,12 +219,14 @@ export async function preparePresentation(admin: SupabaseClient, userId: string,
   }
   const startedAt = session.started_at
   const unnamed = !session.title.trim() || DEFAULT_TITLE.test(session.title.trim())
+  const placing = m.movable.length > 0 && m.transcript.length > 0
+  const movableIds = new Set(placing ? m.movable.map((r) => r.id) : [])
 
   const notesText = m.notes.length > 0
-    ? m.notes.map((n) => `- [${formatElapsed(startedAt, n.item_timestamp)}]${n.starred ? ' ★' : ''} ${n.text}`).join('\n')
+    ? m.notes.map((n) => `- [${formatElapsed(startedAt, n.item_timestamp)}]${n.starred ? ' ★' : ''}${movableIds.has(n.id) ? ` (note id ${n.id})` : ''} ${n.text}`).join('\n')
     : '(No written notes were captured -- build the piece from the transcript and photos alone.)'
   const transcriptText = m.transcript.length > 0
-    ? m.transcript.map((t) => `- [${formatElapsed(startedAt, t.item_timestamp)}]${t.starred ? ' ★' : ''} ${t.text}`).join('\n')
+    ? m.transcript.map((t, i) => `- [${formatElapsed(startedAt, t.item_timestamp)}] L${i + 1}${t.starred ? ' ★' : ''} ${t.text}`).join('\n')
     : '(No ambient transcript was captured for this talk.)'
   const photosText = m.photos.length > 0
     ? m.photos.map((p) => `- ${photoToken(p)} [${formatElapsed(startedAt, p.item_timestamp)}]${p.starred ? ' ★' : ''} (photo id ${p.id})${p.caption && p.caption !== 'Untitled photo' ? ` -- caption: "${p.caption}"` : ''}${formatSlideText(p.text ?? '')}`).join('\n')
@@ -213,6 +274,16 @@ ${presentationRequirements(o)}`
   if (o.photos !== 'none' && o.skipRepeatSlides && m.photos.length > 1) {
     extra.push('A slide that builds up step by step is often photographed at every step, and a slide is sometimes photographed twice. Leave a photo out only when another photo of the SAME slide shows everything it does (a later, fuller step, or a clearer shot); keep any photo that shows something the others don\'t, and always keep ★ photos. When unsure, keep it.')
   }
+  // Sparkle's organizeSession, asked in the same chat.
+  const tasks = m.entryKinds.map((k) => ASKS[k])
+  const keys = m.entryKinds.map((k) => KEY_FOR[k])
+  if (placing) {
+    tasks.push('placements: for EVERY note and slide photo whose listing above has a note id or photo id and some text, the spoken line (the L number in the transcript) it is about. A note is often typed, and a photo taken, a little after the moment it refers to, so look for the line whose subject matches rather than trusting its time. Each {id, after}: id is the full note or photo id, after is that line\'s number (e.g. 12), or null if no line is a better match than where it already is.')
+    keys.push('placements')
+  }
+  if (tasks.length > 0) {
+    extra.push(`Sparkle also saves to the session itself, so do this too and pass it to save_presentation as session_entries, one JSON object with exactly these keys: ${keys.join(', ')}. Grounded strictly in what was captured -- never invent, and never pad a list from filler or small talk:\n${tasks.map((t, i) => `  ${i + 1}. ${t}`).join('\n')}`)
+  }
   if (unnamed) extra.push('This session has no name yet. Give the talk a short, specific title (its real title if the slides or transcript show it), use it on the page, and pass it as title to save_presentation.')
   extra.push(
     `When the page is finished, call save_presentation with session_id ${session.id} and the complete HTML document as html. That puts it on the session in the Conference Capture app, as if Sparkle had made it, replacing any earlier presentation. Write the whole page before saving: don't show it to the user first unless they asked to review it.`,
@@ -229,6 +300,7 @@ export async function savePresentation(
   sessionId: string,
   html: string,
   title: string,
+  entries: Record<string, unknown> | null,
 ): Promise<string> {
   const m = await loadMaterial(admin, userId, sessionId)
   const { session } = m
@@ -284,13 +356,137 @@ export async function savePresentation(
     .eq('owner_id', userId)
   if (updateError) throw updateError
 
+  // Sparkle's organizeSession: after the page, so a refused page saves nothing.
+  const organized = entries ? await saveSessionEntries(admin, m, userId, entries) : null
+
   const shownTitle = newTitle ?? session.title
   const notes = [
     `Saved. "${shownTitle}" now has this presentation in the Conference Capture app (about ${minutes} min to read, ${usedPhotos.length} photo${usedPhotos.length === 1 ? '' : 's'}${usedClips.length ? `, ${usedClips.length} audio clip${usedClips.length === 1 ? '' : 's'}` : ''}${coverPhotoId ? ', with a cover photo' : ''}).`,
   ]
   if (newTitle) notes.push(`The session was renamed "${newTitle}".`)
+  if (organized) notes.push(organized)
+  else if (m.entryKinds.length > 0) notes.push('No session_entries came with it, so the summary and other entries weren\'t saved to the session; to save them, call save_presentation again with the same page and session_entries.')
   if (unknown.length) notes.push(`These placeholders didn't match any photo or clip in the session and were left as they are: ${unknown.join(', ')}.`)
   return notes.join(' ')
+}
+
+/** organizeSession's saving: entries replace the last build's, unplaced
+ * notes and photos move to just after the spoken line they're about. Returns
+ * what changed, for Claude to tell the user. */
+async function saveSessionEntries(
+  admin: SupabaseClient,
+  m: Material,
+  userId: string,
+  result: Record<string, unknown>,
+): Promise<string> {
+  const { session, transcript: spoken, movable, entryKinds: kinds } = m
+  const done: string[] = []
+
+  // Placements: just after the named line, a millisecond apart when several
+  // land on the same line, in the order they were captured.
+  let moved = 0
+  if (movable.length > 0 && spoken.length > 0 && Array.isArray(result.placements)) {
+    const spokenByNumber = new Map(spoken.map((r, i) => [i + 1, r]))
+    const nextSpoken = new Map(spoken.map((r, i) => [r.id, spoken[i + 1]]))
+    const perLine = new Map<number, Row[]>()
+    for (const p of result.placements as { id?: unknown; after?: unknown }[]) {
+      const row = movable.find((r) => r.id === p?.id)
+      const line = typeof p?.after === 'number' ? spokenByNumber.get(p.after) : undefined
+      if (!row || !line) continue
+      const list = perLine.get(p.after as number) ?? []
+      list.push(row)
+      perLine.set(p.after as number, list)
+    }
+    const updates: { id: string; at: string }[] = []
+    for (const [n, list] of perLine) {
+      const line = spokenByNumber.get(n)!
+      const base = new Date(line.item_timestamp).getTime()
+      const next = nextSpoken.get(line.id)
+      const room = next ? new Date(next.item_timestamp).getTime() - base : Infinity
+      list.sort((a, b) => a.item_timestamp.localeCompare(b.item_timestamp))
+      list.forEach((row, i) => {
+        // Inside the gap before the next spoken line, so it reads right after.
+        const offset = Math.min(1 + i, Math.max(0, room - 1) * ((i + 1) / (list.length + 1)))
+        const at = new Date(base + Math.max(offset, 0.001)).toISOString()
+        if (at !== new Date(row.item_timestamp).toISOString()) updates.push({ id: row.id, at })
+      })
+    }
+    for (const u of updates) {
+      const { error } = await admin.from('cc_timeline_items').update({ item_timestamp: u.at }).eq('id', u.id).eq('owner_id', userId)
+      if (error) throw error
+    }
+    moved = updates.length
+  }
+  if (moved > 0) done.push(`moved ${moved} note${moved === 1 ? '' : 's'}/photo${moved === 1 ? '' : 's'} to just after the line they're about`)
+
+  const list = (key: string) => (Array.isArray(result[key]) ? (result[key] as Record<string, unknown>[]) : [])
+  const payloads: Partial<Record<EntryKind, Record<string, unknown> | null>> = {}
+  // A kind only counts as answered when its key came back; one left out keeps
+  // what the session has.
+  const answered = (k: EntryKind) => kinds.includes(k) && KEY_FOR[k] in result
+  if (answered('summary')) {
+    payloads.summary = typeof result.summary === 'string' && result.summary.trim() ? { text: result.summary.trim() } : null
+  }
+  if (answered('action_items')) {
+    const items = list('actionItems').filter((i) => typeof i.text === 'string' && i.text)
+      .map((i) => ({ text: String(i.text), context: String(i.context ?? '') }))
+    payloads.action_items = items.length ? { items } : null
+  }
+  if (answered('speaker_bio')) {
+    const bio = result.speakerBio as Record<string, unknown> | null
+    payloads.speaker_bio = bio && typeof bio === 'object' && typeof bio.name === 'string' && bio.name.trim()
+      ? { name: String(bio.name), role: String(bio.role ?? ''), org: String(bio.org ?? ''), description: String(bio.description ?? '') }
+      : null
+  }
+  if (answered('acronyms')) {
+    const items = list('acronyms').filter((i) => typeof i.term === 'string' && typeof i.expansion === 'string')
+      .map((i) => ({ term: String(i.term), expansion: String(i.expansion) }))
+    payloads.acronyms = items.length ? { items } : null
+  }
+  if (answered('references')) {
+    const items = list('references').filter((i) => typeof i.title === 'string' && i.title)
+      .map((i) => ({
+        title: String(i.title),
+        source: String(i.source ?? ''),
+        description: String(i.description ?? ''),
+        url: typeof i.url === 'string' && i.url ? i.url : null,
+      }))
+    payloads.references = items.length ? { items } : null
+  }
+  const savedKinds = Object.keys(payloads) as EntryKind[]
+
+  // Replace what a previous build saved for these kinds.
+  const replaced = m.oldEntries.filter((r) => savedKinds.includes(r.subtype as EntryKind)).map((r) => r.id)
+  if (replaced.length > 0) {
+    const { error } = await admin.from('cc_timeline_items').delete().in('id', replaced).eq('owner_id', userId)
+    if (error) throw error
+  }
+
+  // The summary sits just before the talk's first moment; the rest go at the
+  // end, a beat apart so they keep this order.
+  const end = Date.now()
+  const order: EntryKind[] = ['action_items', 'speaker_bio', 'acronyms', 'references']
+  const newRows = (Object.entries(payloads) as [EntryKind, Record<string, unknown> | null][])
+    .filter(([, payload]) => payload)
+    .map(([kind, payload]) => ({
+      session_id: session.id,
+      owner_id: userId,
+      type: 'enrichment',
+      subtype: kind,
+      payload,
+      item_timestamp: kind === 'summary'
+        ? new Date(new Date(session.started_at).getTime() - 1000).toISOString()
+        : new Date(end + order.indexOf(kind) * 10).toISOString(),
+    }))
+  if (newRows.length > 0) {
+    const { error } = await admin.from('cc_timeline_items').insert(newRows)
+    if (error) throw error
+  }
+  const names: Record<EntryKind, string> = {
+    summary: 'summary', action_items: 'action items', speaker_bio: 'speaker bio', acronyms: 'acronyms', references: 'references',
+  }
+  if (newRows.length > 0) done.unshift(`saved the ${newRows.map((r) => names[r.subtype as EntryKind]).join(', ')}`)
+  return done.length > 0 ? `In the session it also ${done.join(' and ')}.` : 'Nothing in the session needed changing.'
 }
 
 async function signedLinks(admin: SupabaseClient, bucket: string, paths: string[]): Promise<Record<string, string>> {

@@ -4,8 +4,9 @@
 // -- desktop, claude.ai or the phone app -- read one account's sessions: list
 // and search them, read a session's transcript, notes and slide text, look at
 // its photos, and read its presentation -- and build a presentation in the
-// chat to Sparkle's own instructions and save it to the session (deck.ts).
-// Nothing else is ever changed.
+// chat to Sparkle's own instructions and save it to the session (deck.ts),
+// with what Sparkle saves alongside (summary, action items etc. as entries;
+// unplaced notes and photos moved to their line). Nothing else is changed.
 //
 // The account is picked by the private link it's reached at,
 // .../functions/v1/mcp/<token> (cc_mcp_links; made in the app). Reads use the
@@ -114,13 +115,18 @@ const TOOLS = [
     name: 'save_presentation',
     title: 'Save a presentation to the app',
     description:
-      "Step 2: saves the finished HTML page as the session's presentation in the Conference Capture app, as Sparkle would (photo and audio placeholders become the real files, the cover photo and read time are set), replacing any earlier one. Send the complete document.",
+      "Step 2: saves the finished HTML page as the session's presentation in the Conference Capture app, as Sparkle would (photo and audio placeholders become the real files, the cover photo and read time are set), replacing any earlier one, and saves session_entries (summary, action items etc.) to the session. Send the complete document.",
     inputSchema: {
       type: 'object',
       properties: {
         session_id: { type: 'string', description: 'The session id.' },
         html: { type: 'string', description: 'The complete HTML document, from <!doctype html> to </html>.' },
         title: { type: 'string', description: 'Only for a session that has no name yet: the title to give it.' },
+        session_entries: {
+          type: 'object',
+          description: "What prepare_presentation asks to save to the session (summary, actionItems, speakerBio, acronyms, references, placements -- the keys it names). Saved as entries in the session, replacing the last build's, and notes/photos are moved to the line they're about.",
+          additionalProperties: true,
+        },
       },
       required: ['session_id', 'html'],
     },
@@ -271,7 +277,7 @@ async function callTool(admin: SupabaseClient, userId: string, name: string, arg
     case 'save_presentation': {
       const html = typeof args.html === 'string' ? args.html : ''
       if (!html.trim()) throw new ToolError('Send the complete HTML page as html.')
-      return [{ type: 'text', text: await savePresentation(admin, userId, sessionIdArg(args.session_id), html, str(args.title)) }]
+      return [{ type: 'text', text: await savePresentation(admin, userId, sessionIdArg(args.session_id), html, str(args.title), entriesArg(args.session_entries)) }]
     }
     default:
       throw new ToolError(`No tool called ${name}.`)
@@ -542,6 +548,19 @@ function sessionIdArg(value: unknown): string {
   const id = str(value)
   if (!UUID.test(id)) throw new ToolError('Give a session id from list_sessions or search.')
   return id
+}
+
+/** session_entries as an object; some clients send it as a JSON string. */
+function entriesArg(value: unknown): Record<string, unknown> | null {
+  let v = value
+  if (typeof v === 'string' && v.trim()) {
+    try {
+      v = JSON.parse(v)
+    } catch {
+      throw new ToolError('session_entries must be a JSON object.')
+    }
+  }
+  return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null
 }
 
 function str(value: unknown): string {

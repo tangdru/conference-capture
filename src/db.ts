@@ -948,6 +948,44 @@ export async function removeClaudeKey(): Promise<void> {
   if (error) throw error
 }
 
+// --- Claude connector (menu > Use in Claude) --------------------------------
+
+export interface ClaudeConnector {
+  /** The private link pasted into Claude as a custom connector. */
+  url: string
+  createdAt: number
+  /** When Claude last used it, or null if it hasn't yet. */
+  lastUsedAt: number | null
+}
+
+function connectorUrl(token: string): string {
+  return `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mcp/${token}`
+}
+
+export async function fetchClaudeConnector(): Promise<ClaudeConnector | null> {
+  const { data, error } = await supabase.from('cc_mcp_links').select('token, created_at, last_used_at').maybeSingle()
+  if (error) throw error
+  return data
+    ? {
+        url: connectorUrl(data.token),
+        createdAt: new Date(data.created_at).getTime(),
+        lastUsedAt: data.last_used_at ? new Date(data.last_used_at).getTime() : null,
+      }
+    : null
+}
+
+/** Makes a new link; any earlier one stops working. */
+export async function createClaudeConnector(): Promise<ClaudeConnector> {
+  const { data, error } = await supabase.rpc('cc_create_mcp_link')
+  if (error) throw error
+  return { url: connectorUrl(data as string), createdAt: Date.now(), lastUsedAt: null }
+}
+
+export async function removeClaudeConnector(): Promise<void> {
+  const { error } = await supabase.rpc('cc_remove_mcp_link')
+  if (error) throw error
+}
+
 // --- Ask Claude threads (questions across all sessions) --------------------
 
 export interface AskThread {

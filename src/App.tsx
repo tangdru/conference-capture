@@ -19,6 +19,7 @@ import type { AskTurn } from './components/AskSheet'
 import { AskPanel, type AskOrigin } from './components/AskPanel'
 import { AppMenu } from './components/AppMenu'
 import { ClaudeKeySheet } from './components/ClaudeKeySheet'
+import { ClaudeConnectorSheet } from './components/ClaudeConnectorSheet'
 import { PresentationOptionsSheet } from './components/PresentationOptionsSheet'
 import { SessionOptionsSheet } from './components/SessionOptionsSheet'
 import { DeleteAccountSheet } from './components/DeleteAccountSheet'
@@ -48,7 +49,7 @@ export default function App() {
 function AuthedApp({ authSession }: { authSession: AuthSession }) {
   const userId = authSession.user.id
   const [addingEmail, setAddingEmail] = useState(false)
-  const [menu, setMenu] = useState<'menu' | 'session' | 'presentation' | 'claude-key' | 'delete-account' | null>(null)
+  const [menu, setMenu] = useState<'menu' | 'session' | 'presentation' | 'claude-key' | 'claude-connector' | 'delete-account' | null>(null)
   // Coming back to the menu from a screen it opened: no opening animation.
   const [menuReturning, setMenuReturning] = useState(false)
   const [sessions, setSessions] = useState<Session[] | null>(null)
@@ -784,6 +785,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         onSessionOptions={() => setMenu('session')}
         onPresentationOptions={() => setMenu('presentation')}
         onClaudeKey={() => setMenu('claude-key')}
+        onClaudeConnector={() => setMenu('claude-connector')}
         onDeleteAccount={() => setMenu('delete-account')}
         onTutorial={() => {
           setMenu(null)
@@ -825,6 +827,14 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     )}
     {menu === 'claude-key' && (
       <ClaudeKeySheet
+        onBack={() => {
+          setMenuReturning(true)
+          setMenu('menu')
+        }}
+      />
+    )}
+    {menu === 'claude-connector' && (
+      <ClaudeConnectorSheet
         onBack={() => {
           setMenuReturning(true)
           setMenu('menu')

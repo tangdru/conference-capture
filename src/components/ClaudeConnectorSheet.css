@@ -1,0 +1,63 @@
+.claude-connector__link {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  margin-bottom: 12px;
+}
+
+.claude-connector__label {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.claude-connector__url {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  word-break: break-all;
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+.claude-connector__status {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.claude-connector__buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.claude-connector__steps {
+  margin: 24px 0 12px;
+  padding-left: 22px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.claude-connector__steps li + li {
+  margin-top: 10px;
+}
+
+.claude-connector__steps strong {
+  font-weight: 600;
+}
+
+.claude-connector__muted {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.claude-connector__manage {
+  margin-top: 24px;
+}

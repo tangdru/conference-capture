@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react'
-import { fetchClaudeKey } from '../db'
+import { fetchClaudeConnector, fetchClaudeKey } from '../db'
 import { Logo } from './Logo'
 import './AppMenu.css'
 
@@ -12,6 +12,7 @@ interface AppMenuProps {
   onSessionOptions: () => void
   onPresentationOptions: () => void
   onClaudeKey: () => void
+  onClaudeConnector: () => void
   onDeleteAccount: () => void
   onTutorial: () => void
   onAddEmail: () => void
@@ -27,13 +28,18 @@ const SHOW_CLAUDE_KEY = false
 
 // The app's one menu. Items not built yet show "Coming soon" so the list is
 // already in its final order.
-export function AppMenu({ email, instant = false, onClose, onSessionOptions, onPresentationOptions, onClaudeKey, onDeleteAccount, onTutorial, onAddEmail, onSignOut }: AppMenuProps) {
+export function AppMenu({ email, instant = false, onClose, onSessionOptions, onPresentationOptions, onClaudeKey, onClaudeConnector, onDeleteAccount, onTutorial, onAddEmail, onSignOut }: AppMenuProps) {
   const [closing, setClosing] = useState(false)
   // Whether the account has its own Claude API key (null while checking).
   const [hasKey, setHasKey] = useState<boolean | null>(null)
   useEffect(() => {
     if (!SHOW_CLAUDE_KEY) return
     fetchClaudeKey().then((k) => setHasKey(!!k)).catch(() => {})
+  }, [])
+  // Whether the account has a Claude connector link (null while checking).
+  const [hasConnector, setHasConnector] = useState<boolean | null>(null)
+  useEffect(() => {
+    fetchClaudeConnector().then((c) => setHasConnector(!!c)).catch(() => {})
   }, [])
 
   // Play the opening in reverse, then close.
@@ -90,6 +96,13 @@ export function AppMenu({ email, instant = false, onClose, onSessionOptions, onP
           <li style={{ '--i': 2 } as CSSProperties}>
             <button className="app-menu__row" onClick={onTutorial}>
               <span className="app-menu__label">Tutorial</span>
+              <Chevron />
+            </button>
+          </li>
+          <li style={{ '--i': 3 } as CSSProperties}>
+            <button className="app-menu__row" onClick={onClaudeConnector}>
+              <span className="app-menu__label">Use in Claude</span>
+              {hasConnector === true && <span className="app-menu__value">On</span>}
               <Chevron />
             </button>
           </li>

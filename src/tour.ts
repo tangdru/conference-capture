@@ -2,7 +2,8 @@
 //
 // The home tour runs from the menu's Tutorial item, and by itself the first
 // time someone opens the app with no sessions. Finishing it queues the
-// session tour, which runs the next time a session is opened.
+// session tour, which runs the next time a session is opened. Connecting to
+// Claude queues the Claude tour, for the next time the session list shows.
 import { driver, type DriveStep } from 'driver.js'
 import 'driver.js/dist/driver.css'
 import './tour.css'
@@ -28,6 +29,7 @@ function swipeStep(target: TourRevealTarget, element: string, title: string, des
 
 const HOME_SEEN_KEY = 'cc-tour-home-seen'
 const SESSION_PENDING_KEY = 'cc-tour-session-pending'
+const CLAUDE_PENDING_KEY = 'cc-tour-claude-pending'
 
 function read(key: string): string | null {
   try {
@@ -120,14 +122,14 @@ export function startHomeTour() {
         'session-card',
         '.home-screen .swipe-actions',
         'Swipe left on a session',
-        'Edit opens the session itself. Then build its presentation, or once it’s ready, share it or rebuild it after you add more. Pin keeps a session at the top of the list. The last button deletes it.',
+        'Edit opens the session itself. Then build its presentation here, or in Claude, or once it’s ready, share it or rebuild it after you add more. Pin keeps a session at the top of the list. The last button deletes it.',
       ),
       {
-        element: '.home-searchbox',
+        element: '.home-chat',
         popover: {
-          title: 'Search and ask',
+          title: 'Ask Claude',
           description:
-            'Find anything you captured: titles, notes, transcripts and text on slides. Or type a question and tap Ask Claude at the top of the results to get an answer from all your sessions.',
+            'Opens the Claude app to ask about all your talks: what was said, what’s on the slides, what to follow up on. Connect Claude once to use it.',
           side: 'top',
           align: 'end',
         },
@@ -210,8 +212,8 @@ export function maybeStartSessionTour() {
     {
       element: '.ask-btn',
       popover: {
-        title: 'Ask',
-        description: 'Ask questions about this session. Answers come from what you captured.',
+        title: 'Ask Claude about this talk',
+        description: 'Opens the Claude app ready to ask about this session. Answers come from what you captured.',
         side: 'top',
         align: 'end',
       },
@@ -220,6 +222,49 @@ export function maybeStartSessionTour() {
       popover: {
         title: 'When the talk ends',
         description: 'Go back and swipe left on the session to build its presentation.',
+      },
+    },
+  ])
+}
+
+/** Queues the Claude tour (after tapping Connect to Claude). */
+export function queueClaudeTour() {
+  write(CLAUDE_PENDING_KEY, '1')
+}
+
+/** Runs the Claude tour if connecting queued it. Call when the session list
+ * is on screen, e.g. on coming back from adding the connector in Claude. */
+export function maybeStartClaudeTour() {
+  if (read(CLAUDE_PENDING_KEY) === null) return
+  if (document.querySelector('.driver-popover')) return
+  write(CLAUDE_PENDING_KEY, null)
+  run([
+    {
+      popover: {
+        title: 'Claude is connected',
+        description:
+          'Once you tap Add in Claude, it can read your talks. Here’s where to use it. If you haven’t added it yet, open menu › Use in Claude.',
+      },
+    },
+    {
+      element: '.home-chat',
+      popover: {
+        title: 'Ask Claude',
+        description: 'Opens a new Claude chat about your sessions. Ask anything across all your talks.',
+        side: 'top',
+        align: 'end',
+      },
+    },
+    swipeStep(
+      'session-card',
+      '.home-screen .swipe-actions',
+      'Make a presentation in Claude',
+      'Swipe left on a session and tap the speech bubble with the star. Claude opens ready to write the presentation, using your Presentation options, and saves it back here. Just tap send.',
+    ),
+    {
+      popover: {
+        title: 'Inside a session',
+        description: 'The speech bubble at the bottom right opens Claude ready to ask about that one talk.',
       },
     },
   ])

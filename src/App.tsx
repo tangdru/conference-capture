@@ -15,15 +15,16 @@ import { HomeScreen } from './screens/HomeScreen'
 import { CaptureScreen } from './screens/CaptureScreen'
 import { DeckViewer } from './components/DeckViewer'
 import { feel } from './haptics'
-import type { AskTurn } from './components/AskSheet'
-import { AskPanel, type AskOrigin } from './components/AskPanel'
+import { ClaudeInviteDialog } from './components/ClaudeInviteDialog'
 import { AppMenu } from './components/AppMenu'
 import { ClaudeKeySheet } from './components/ClaudeKeySheet'
 import { ClaudeConnectorSheet } from './components/ClaudeConnectorSheet'
 import { PresentationOptionsSheet } from './components/PresentationOptionsSheet'
 import { SessionOptionsSheet } from './components/SessionOptionsSheet'
 import { DeleteAccountSheet } from './components/DeleteAccountSheet'
-import { shouldAutoStartHomeTour, startHomeTour } from './tour'
+import { maybeStartClaudeTour, queueClaudeTour, shouldAutoStartHomeTour, startHomeTour } from './tour'
+import { addConnectorUrl, askAllPrompt, askSessionPrompt, makePresentationPrompt, newChatUrl, openExternal } from './claudeLinks'
+import { cacheConnectorUrl, cachedConnectorUrl, inviteDue, noteAppOpen, noteInviteShown } from './claudeInvite'
 import { onPhotoUploaded, pendingPhotos, syncPhotoUploadAuth } from './photoUploads'
 import { onOutboxProblem, startOutbox } from './itemOutbox'
 import { startDeckUploads, uploadDeckLater } from './deckUploads'
@@ -57,13 +58,16 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [homeError, setHomeError] = useState<string | null>(null)
   const [openDeck, setOpenDeck] = useState<{ title: string; html: string } | null>(null)
-  // Ask Claude across all sessions (the session list's search). Held here,
-  // not in HomeScreen, so it's still open on the same conversation on
-  // coming back from a session it cited.
-  const [askOrigin, setAskOrigin] = useState<AskOrigin | null>(null)
-  const [askThreads, setAskThreads] = useState<db.AskThread[] | null>(null)
-  const [askThreadsError, setAskThreadsError] = useState<string | null>(null)
-  const [askThreadId, setAskThreadId] = useState<string>(() => crypto.randomUUID())
+  // Claude: questions and presentations happen in the Claude app, through
+  // the account's connector link (menu > Use in Claude). Its URL as last
+  // known (null: none yet), and the invitation to connect.
+  const [connectorUrl, setConnectorUrl] = useState<string | null>(() => cachedConnectorUrl(userId))
+  const [connectorChecked, setConnectorChecked] = useState(false)
+  const [invite, setInvite] = useState<'invite' | 'needed' | null>(null)
+  const [inviteBusy, setInviteBusy] = useState(false)
+  const [inviteError, setInviteError] = useState<string | null>(null)
+  // Bumped each time the app opens or comes back, to re-check the invitation.
+  const [openCount, setOpenCount] = useState(0)
 
   useEffect(() => syncPhotoUploadAuth(), [])
   useEffect(() => startOutbox(), [])
@@ -116,6 +120,61 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       }
     })()
   }
+  function rememberConnector(url: string | null) {
+    setConnectorUrl(url)
+    cacheConnectorUrl(userId, url)
+  }
+
+  useEffect(() => {
+    db.fetchClaudeConnector()
+      .then((c) => rememberConnector(c?.url ?? null))
+      .catch(() => {
+        // Offline: go by what was last seen.
+      })
+      .finally(() => setConnectorChecked(true))
+    noteAppOpen(userId)
+    setOpenCount((n) => n + 1)
+    if (!Capacitor.isNativePlatform()) return
+    const listener = CapApp.addListener('appStateChange', ({ isActive }) => {
+      if (!isActive) return
+      noteAppOpen(userId)
+      setOpenCount((n) => n + 1)
+    })
+    return () => {
+      void listener.then((l) => l.remove())
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId])
+
+  /** Connect to Claude: makes the account's link if it has none, then opens
+   * Claude's Add custom connector form with it filled in. Counts as connected
+   * from here (the app can't see inside Claude). */
+  async function connectClaude() {
+    setInviteBusy(true)
+    setInviteError(null)
+    try {
+      const url = connectorUrl ?? (await db.createClaudeConnector()).url
+      rememberConnector(url)
+      queueClaudeTour()
+      setInvite(null)
+      openExternal(addConnectorUrl(url))
+    } catch (err) {
+      setInviteError(errorMessage(err))
+    } finally {
+      setInviteBusy(false)
+    }
+  }
+
+  /** Opens Claude with `text` typed in, or asks to connect first. */
+  function openInClaude(text: string) {
+    if (!connectorUrl) {
+      setInviteError(null)
+      setInvite('needed')
+      return
+    }
+    openExternal(newChatUrl(text))
+  }
+
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return
     const onUrl = (url: string | undefined) => {
@@ -610,6 +669,23 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     if (shouldAutoStartHomeTour(sessions.length)) window.setTimeout(startHomeTour, 700)
   }, [sessions, route.screen])
 
+  // On the session list after opening the app: the Claude tour if connecting
+  // queued it, else the invitation to connect when it's due. Not over a
+  // brand-new account's home tour; that one comes first.
+  useEffect(() => {
+    if (openCount === 0 || sessions === null || !connectorChecked || route.screen !== 'home' || menu !== null) return
+    if (connectorUrl) {
+      window.setTimeout(maybeStartClaudeTour, 700)
+      return
+    }
+    if (shouldAutoStartHomeTour(sessions.length) || invite || !inviteDue(userId)) return
+    noteInviteShown(userId)
+    setInviteError(null)
+    setInvite('invite')
+    // Only on opening (openCount), not as the list changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openCount, sessions === null, connectorChecked])
+
   // The talk being recorded keeps being heard while you look at the sessions
   // list or anything else -- leaving its screen used to stop the mic. Only a
   // session that recorded in this run of the app counts: one left "recording"
@@ -724,55 +800,10 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
           return resumeSession(session.id)
         }}
         onBack={() => setRoute({ screen: 'home' })}
+        onAskInClaude={() => openInClaude(askSessionPrompt(session.title, session.id))}
       />
       </div>
     )
-  }
-
-  /** A citation in a cross-session answer: open that session at the item
-   * nearest the cited time. */
-  function openAsk(origin: AskOrigin) {
-    setAskThreadId(crypto.randomUUID())
-    setAskOrigin(origin)
-    if (askThreads !== null && !askThreadsError) return
-    setAskThreadsError(null)
-    db.fetchAskThreads()
-      .then((loaded) =>
-        // Anything asked while these loaded stays on top.
-        setAskThreads((prev) => [...(prev ?? []), ...loaded.filter((t) => !prev?.some((p) => p.id === t.id))]),
-      )
-      .catch((err) => setAskThreadsError(`Couldn’t load your conversations. ${errorMessage(err)}`))
-  }
-
-  function updateAskThread(id: string, turns: AskTurn[]) {
-    if (turns.length === 0) {
-      setAskThreads((prev) => prev?.filter((t) => t.id !== id) ?? prev)
-      return
-    }
-    const thread: db.AskThread = { id, title: turns[0].content.slice(0, 300), turns, updatedAt: Date.now() }
-    setAskThreads((prev) => [thread, ...(prev ?? []).filter((t) => t.id !== id)])
-    // Kept once answered; a question still waiting isn't worth saving alone.
-    if (turns[turns.length - 1].role === 'assistant') {
-      db.saveAskThread(thread).catch((err) => console.warn('Saving the conversation failed', err))
-    }
-  }
-
-  function deleteAskThread(id: string) {
-    setAskThreads((prev) => prev?.filter((t) => t.id !== id) ?? prev)
-    db.deleteAskThread(id).catch((err) => setHomeError(`Couldn’t delete that conversation. ${errorMessage(err)}`))
-  }
-
-  function openCitation(sessionId: string, elapsedSeconds: number | null) {
-    const session = sessions?.find((s) => s.id === sessionId)
-    if (!session) return
-    let itemId: string | undefined
-    if (elapsedSeconds !== null && session.items.length > 0) {
-      const at = session.startedAt + elapsedSeconds * 1000
-      itemId = session.items.reduce((best, item) =>
-        Math.abs(item.timestamp - at) < Math.abs(best.timestamp - at) ? item : best,
-      ).id
-    }
-    openSession(sessionId, itemId)
   }
 
   return (
@@ -835,6 +866,8 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     )}
     {menu === 'claude-connector' && (
       <ClaudeConnectorSheet
+        onConnectorChange={rememberConnector}
+        onAddedToClaude={queueClaudeTour}
         onBack={() => {
           setMenuReturning(true)
           setMenu('menu')
@@ -873,22 +906,19 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       }}
       error={homeError}
       onDismissError={() => setHomeError(null)}
-      onOpenAsk={openAsk}
+      onAskClaude={() => openInClaude(askAllPrompt())}
+      onMakeInClaude={(id) => {
+        const session = sessions.find((s) => s.id === id)
+        if (session) openInClaude(makePresentationPrompt(session.title, session.id))
+      }}
     />
-    {askOrigin && (
-      <AskPanel
-        origin={askOrigin}
-        sessions={sessions}
-        threads={askThreads}
-        threadsError={askThreadsError}
-        threadId={askThreadId}
-        onThreadIdChange={setAskThreadId}
-        onThreadTurns={updateAskThread}
-        onDeleteThread={deleteAskThread}
-        ask={db.askAllSessions}
-        onOpenSession={openSession}
-        onOpenCitation={openCitation}
-        onClose={() => setAskOrigin(null)}
+    {invite && (
+      <ClaudeInviteDialog
+        reason={invite}
+        busy={inviteBusy}
+        error={inviteError}
+        onConnect={() => void connectClaude()}
+        onClose={() => setInvite(null)}
       />
     )}
     {/* Over the session list (kept underneath), so swiping it away shows

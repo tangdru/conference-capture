@@ -3,21 +3,27 @@ import { Capacitor } from '@capacitor/core'
 import { Share } from '@capacitor/share'
 import { createClaudeConnector, fetchClaudeConnector, removeClaudeConnector, type ClaudeConnector } from '../db'
 import { errorMessage } from '../networkError'
+import { addConnectorUrl, openExternal } from '../claudeLinks'
 import './AppMenu.css'
 import './ClaudeKeySheet.css'
 import './ClaudeConnectorSheet.css'
 
 interface ClaudeConnectorSheetProps {
   onBack: () => void
+  /** The link changed (made, replaced, or turned off: null). */
+  onConnectorChange: (url: string | null) => void
+  /** Add to Claude was tapped. */
+  onAddedToClaude: () => void
 }
 
 // Menu > Use in Claude. A private link that adds Conference Capture to Claude
 // (desktop, claude.ai, the phone app) as a custom connector, so Claude can
 // read every session -- transcripts, notes, slides, presentations -- in an
-// ordinary chat. The `mcp` function answers it; read only.
-export function ClaudeConnectorSheet({ onBack }: ClaudeConnectorSheetProps) {
+// ordinary chat, and save presentations it makes. The `mcp` function answers
+// it. Add to Claude opens Claude's Add custom connector form filled in.
+export function ClaudeConnectorSheet({ onBack, onConnectorChange, onAddedToClaude }: ClaudeConnectorSheetProps) {
   const [connector, setConnector] = useState<ClaudeConnector | null | undefined>(undefined)
-  const [busy, setBusy] = useState<'making' | 'removing' | null>(null)
+  const [busy, setBusy] = useState<'making' | 'adding' | 'removing' | null>(null)
   const [confirm, setConfirm] = useState<'replace' | 'remove' | null>(null)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -35,7 +41,9 @@ export function ClaudeConnectorSheet({ onBack }: ClaudeConnectorSheetProps) {
     setBusy('making')
     setError(null)
     try {
-      setConnector(await createClaudeConnector())
+      const made = await createClaudeConnector()
+      setConnector(made)
+      onConnectorChange(made.url)
       setConfirm(null)
       setCopied(false)
     } catch (err) {
@@ -51,7 +59,28 @@ export function ClaudeConnectorSheet({ onBack }: ClaudeConnectorSheetProps) {
     try {
       await removeClaudeConnector()
       setConnector(null)
+      onConnectorChange(null)
       setConfirm(null)
+    } catch (err) {
+      setError(errorMessage(err))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /** Makes the link if there's none, then opens Claude with it filled in. */
+  async function addToClaude() {
+    setBusy('adding')
+    setError(null)
+    try {
+      let current = connector
+      if (!current) {
+        current = await createClaudeConnector()
+        setConnector(current)
+        onConnectorChange(current.url)
+      }
+      onAddedToClaude()
+      openExternal(addConnectorUrl(current.url))
     } catch (err) {
       setError(errorMessage(err))
     } finally {
@@ -101,10 +130,15 @@ export function ClaudeConnectorSheet({ onBack }: ClaudeConnectorSheetProps) {
 
         {connector === undefined && <p className="claude-connector__muted">Loading…</p>}
 
-        {connector === null && (
-          <button className="claude-key__primary" onClick={() => void make()} disabled={busy !== null}>
-            {busy === 'making' ? 'Making your link…' : 'Make my link'}
+        {connector !== undefined && (
+          <button className="claude-key__primary" onClick={() => void addToClaude()} disabled={busy !== null}>
+            {busy === 'adding' ? 'Opening Claude…' : 'Add to Claude'}
           </button>
+        )}
+        {connector === null && (
+          <p className="claude-connector__muted">
+            Opens the Claude app with Conference Capture filled in. Tap Add there and you’re done.
+          </p>
         )}
 
         {connector && (
@@ -119,7 +153,7 @@ export function ClaudeConnectorSheet({ onBack }: ClaudeConnectorSheetProps) {
               </span>
             </div>
             <div className="claude-connector__buttons">
-              <button className="claude-key__primary" onClick={() => void copy()} disabled={busy !== null}>
+              <button className="claude-key__secondary" onClick={() => void copy()} disabled={busy !== null}>
                 {copied ? 'Copied' : 'Copy link'}
               </button>
               <button className="claude-key__secondary" onClick={() => void share()} disabled={busy !== null}>
@@ -129,19 +163,20 @@ export function ClaudeConnectorSheet({ onBack }: ClaudeConnectorSheetProps) {
 
             <ol className="claude-connector__steps">
               <li>
-                In Claude, open <strong>Settings › Connectors</strong> and choose <strong>Add custom connector</strong>.
+                Tap <strong>Add to Claude</strong>. Claude opens with Conference Capture filled in: tap <strong>Add</strong>.
               </li>
               <li>
-                Name it <strong>Conference Capture</strong>, paste the link as its URL, and add it.
+                Or on a computer: in Claude, open <strong>Settings › Connectors</strong>, choose <strong>Add custom
+                connector</strong>, name it <strong>Conference Capture</strong> and paste the link as its URL.
               </li>
               <li>
-                In a new chat, ask away, e.g. “What did the talks I saw say about accessibility?” If Claude doesn’t
-                look in your sessions, turn Conference Capture on in the chat’s tools menu.
+                Then ask away, e.g. “What did the talks I saw say about accessibility?” If Claude doesn’t look in
+                your sessions, turn Conference Capture on in the chat’s tools menu.
               </li>
             </ol>
             <p className="claude-connector__muted">
-              Share sends the link to your computer (AirDrop, Messages, Notes). Once it’s added in Claude, it works
-              there on every device you’re signed in on.
+              Copy or Share sends the link to your computer. Once it’s added in Claude, it works there on every device
+              you’re signed in on.
             </p>
           </>
         )}

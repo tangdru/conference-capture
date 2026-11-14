@@ -6,7 +6,6 @@ import {
   queueSessionDelete, queueSessionPatch, type ItemPatch, type QueuedRow, type SessionPatch, type StoredFile,
 } from './itemOutbox'
 import { MESSAGES } from './networkError'
-import type { AskTurn } from './components/AskSheet'
 import type { AudioItem, DeckStatus, EnrichmentItemData, HighlightItem, NoteItem, PhotoItem, Session, SessionStatus, TimelineItemData, TranscriptItem, VideoItem } from './types'
 
 const ITEM_COLUMNS = 'id, session_id, type, subtype, payload, text, caption, photo_path, video_path, duration_ms, item_timestamp, added_later, excluded, starred, position'
@@ -833,31 +832,6 @@ export async function generateDeck(sessionId: string): Promise<void> {
   if (error) throw await functionError(error)
 }
 
-/** "Ask a session": answered from what was captured in it. `history` is the
- * conversation so far, oldest first. */
-export async function askSession(
-  sessionId: string,
-  question: string,
-  history: { role: 'user' | 'assistant'; content: string }[],
-): Promise<string> {
-  await flushOutbox()
-  const { data, error } = await supabase.functions.invoke('ask-session', { body: { sessionId, question, history } })
-  if (error) throw await functionError(error)
-  return data.answer
-}
-
-/** Ask across every session. `sessions` maps the answer's citation labels
- * ([S2 12:30]) to session ids. */
-export async function askAllSessions(
-  question: string,
-  history: { role: 'user' | 'assistant'; content: string }[],
-): Promise<{ answer: string; sessions: Record<string, string> }> {
-  await flushOutbox()
-  const { data, error } = await supabase.functions.invoke('ask-session', { body: { scope: 'all', question, history } })
-  if (error) throw await functionError(error)
-  return { answer: data.answer, sessions: data.sessions ?? {} }
-}
-
 /** Re-fetches a session's items -- used after Sparkle saves entries into the
  * session server-side, so the timeline picks them up without a full reload. */
 export async function fetchSessionItems(sessionId: string): Promise<TimelineItemData[]> {
@@ -983,45 +957,5 @@ export async function createClaudeConnector(): Promise<ClaudeConnector> {
 
 export async function removeClaudeConnector(): Promise<void> {
   const { error } = await supabase.rpc('cc_remove_mcp_link')
-  if (error) throw error
-}
-
-// --- Ask Claude threads (questions across all sessions) --------------------
-
-export interface AskThread {
-  id: string
-  /** The first question. */
-  title: string
-  turns: AskTurn[]
-  updatedAt: number
-}
-
-export async function fetchAskThreads(): Promise<AskThread[]> {
-  const { data, error } = await supabase
-    .from('cc_ask_threads')
-    .select('id, title, turns, updated_at')
-    .order('updated_at', { ascending: false })
-    .limit(200)
-  if (error) throw error
-  return (data ?? []).map((row) => ({
-    id: row.id as string,
-    title: row.title as string,
-    turns: (row.turns ?? []) as AskTurn[],
-    updatedAt: Date.parse(row.updated_at as string),
-  }))
-}
-
-export async function saveAskThread(thread: AskThread): Promise<void> {
-  const { error } = await supabase.from('cc_ask_threads').upsert({
-    id: thread.id,
-    title: thread.title,
-    turns: thread.turns,
-    updated_at: new Date(thread.updatedAt).toISOString(),
-  })
-  if (error) throw error
-}
-
-export async function deleteAskThread(id: string): Promise<void> {
-  const { error } = await supabase.from('cc_ask_threads').delete().eq('id', id)
   if (error) throw error
 }

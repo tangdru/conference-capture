@@ -154,3 +154,17 @@ export function ErrorIcon() {
     </svg>
   )
 }
+
+/** A speech bubble: asking Claude. */
+export function ChatIcon() {
+  return (
+    <svg className="inline-icon" viewBox="2.2 2.7 19.6 18.6" fill="none" aria-hidden="true">
+      <path
+        d="M4 5.5A2 2 0 016 3.5h12a2 2 0 012 2v9a2 2 0 01-2 2h-7l-4.5 4v-4H6a2 2 0 01-2-2v-9z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}

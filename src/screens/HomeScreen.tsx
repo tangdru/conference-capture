@@ -5,10 +5,8 @@ import { formatSessionSubtitle } from '../format'
 import { isSessionActive, lastActivityAt } from '../sessionActivity'
 import { hasContentSinceDeck } from '../deck'
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
-import { useKeyboardHeight } from '../hooks/useKeyboardHeight'
 import { SessionCard } from '../components/SessionCard'
 import { groupByDay } from '../dayGroups'
-import type { AskOrigin } from '../components/AskPanel'
 import { SortMenu, SORT_OPTIONS, type SessionSort } from '../components/SortMenu'
 import {
   SwipeActions,
@@ -16,10 +14,12 @@ import {
   DeleteIcon,
   EditIcon,
   GenerateIcon,
+  MakeInClaudeIcon,
   PinIcon,
   ShareIcon,
 } from '../components/SwipeActions'
 import { Logo } from '../components/Logo'
+import { ChatIcon } from '../components/InlineIcons'
 import { TOUR_REVEAL_EVENT, type TourRevealTarget } from '../tour'
 import './HomeScreen.css'
 
@@ -85,8 +85,10 @@ interface HomeScreenProps {
   onRefresh: () => Promise<void>
   error: string | null
   onDismissError: () => void
-  /** Search: opens Ask Claude, growing out of the search button. */
-  onOpenAsk: (origin: AskOrigin) => void
+  /** The chat button: opens Claude to ask about the sessions. */
+  onAskClaude: () => void
+  /** Make in Claude: opens Claude to write a session's presentation. */
+  onMakeInClaude: (id: string) => void
   /** A session is open over the list: it's out of reach (inert) and its
    * clock stops, until swiped or tapped back to. */
   covered?: boolean
@@ -108,7 +110,8 @@ export function HomeScreen({
   onRefresh,
   error,
   onDismissError,
-  onOpenAsk,
+  onAskClaude,
+  onMakeInClaude,
   covered = false,
 }: HomeScreenProps) {
   const [now, setNow] = useState(Date.now())
@@ -116,7 +119,6 @@ export function HomeScreen({
   const [sort, setSort] = useState<SessionSort>(savedSort)
   // Days folded away, by date, remembered between opens.
   const [collapsed, setCollapsed] = useState<Set<string>>(savedCollapsed)
-  const searchInputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const { progress, refreshing } = usePullToRefresh(scrollRef, listRef, onRefresh)
@@ -139,17 +141,6 @@ export function HomeScreen({
     const id = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(id)
   }, [covered])
-
-  // Lift the bottom bar (and shorten the list) by the keyboard's height.
-  const keyboardHeight = useKeyboardHeight()
-
-  function openSearch(button: HTMLElement) {
-    // Focused now, inside the tap, so iOS raises the keyboard; Ask's own
-    // box takes the focus over as it opens.
-    searchInputRef.current?.focus()
-    const rect = button.getBoundingClientRect()
-    onOpenAsk({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, r: rect.width / 2 })
-  }
 
   function toggleDay(key: string) {
     setCollapsed((prev) => {
@@ -239,6 +230,9 @@ export function HomeScreen({
   }, [])
 
   function deckActions(session: Session): SwipeAction[] {
+    // Make in Claude: the same presentation, written in the Claude app on the
+    // user's plan and saved back here.
+    const inClaude: SwipeAction = { icon: <MakeInClaudeIcon />, label: 'Make presentation in Claude', onClick: () => onMakeInClaude(session.id) }
     switch (session.deckStatus) {
       case 'ready':
         // Tapping the card opens the presentation, so no View here.
@@ -246,14 +240,14 @@ export function HomeScreen({
           { icon: <ShareIcon />, label: 'Share presentation', onClick: () => onShareDeck(session.id) },
           // Regenerating only makes sense once there's something new to add.
           ...(hasContentSinceDeck(session)
-            ? [{ icon: <GenerateIcon />, label: 'Regenerate presentation', onClick: () => onGenerateDeck(session.id) }]
+            ? [{ icon: <GenerateIcon />, label: 'Regenerate presentation', onClick: () => onGenerateDeck(session.id) }, inClaude]
             : []),
         ]
       case 'generating':
       case 'queued':
         return []
       default:
-        return [{ icon: <GenerateIcon />, label: 'Generate presentation', onClick: () => onGenerateDeck(session.id) }]
+        return [{ icon: <GenerateIcon />, label: 'Generate presentation', onClick: () => onGenerateDeck(session.id) }, inClaude]
     }
   }
 
@@ -304,8 +298,7 @@ export function HomeScreen({
 
   return (
     <div
-      className={`home-screen${keyboardHeight ? ' home-screen--keyboard' : ''}`}
-      style={{ height: `calc(100dvh - ${keyboardHeight}px)` }}
+      className="home-screen"
       inert={covered}
     >
       <header className="home-header">
@@ -410,17 +403,10 @@ export function HomeScreen({
 
         {sessions.length > 0 && (
           <>
-            <div className="home-searchbox">
-              <button className="home-searchbox__open" onClick={(e) => openSearch(e.currentTarget)} aria-label="Search and ask Claude" />
-              <svg className="home-searchbox__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" strokeWidth="2" />
-                <path d="M15.5 15.5L20 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-              {/* Never seen: holds the keyboard for the moment Ask takes to open. */}
-              <input ref={searchInputRef} className="home-searchbox__input" aria-hidden="true" tabIndex={-1} />
-            </div>
+            <button className="home-chat" onClick={onAskClaude} aria-label="Ask Claude about your sessions">
+              <ChatIcon />
+            </button>
 
-            {/* Tucks away to the right while searching, then grows back as the field shrinks. */}
             <div className="home-footer__sort">
               {sessions.length > 1 && <SortMenu value={sort} onChange={changeSort} />}
             </div>

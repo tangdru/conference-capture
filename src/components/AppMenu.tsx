@@ -23,7 +23,9 @@ const FEEDBACK_ADDRESS = 'tangdru@gmail.com'
 // Hosted with the web version (public/privacy.html); the App Store listing
 // links here too.
 const PRIVACY_URL = 'https://tangdru.github.io/conference-capture/privacy.html'
-// The Claude API key screen is built but held for a later build.
+// The Claude API key screen stays hidden: everyone goes through the Claude
+// connector. The server's shared API key is only for approved accounts
+// (cc_free_users); flip this to let people add their own key.
 const SHOW_CLAUDE_KEY = false
 
 // The app's one menu. Items not built yet show "Coming soon" so the list is

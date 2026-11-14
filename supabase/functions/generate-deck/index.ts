@@ -43,25 +43,27 @@ const BUILD_SILENCE_MS = 6 * 60 * 1000
 // many times before giving up.
 const RATE_LIMIT_RETRIES = 4
 
-// Accounts without a key of their own still use the shared key while this is
-// true (testers on builds before the Claude API key screen can't add one).
-// false: Sparkle and Ask need the account's own key.
-const SHARED_KEY_FALLBACK = true
+// The API is not the normal route (the app goes through the Claude
+// connector). The shared server key (ANTHROPIC_API_KEY) is only for accounts
+// whose email is on the approved list (public.cc_free_users, edited by hand
+// in the Supabase dashboard); an account's own saved key still works too.
 
 /** The Claude API key for this request: the caller's own (menu > Claude API
  * key), read from Vault with the service role -- the only thing it's used for. */
 async function claudeKeyFor(supabase: ReturnType<typeof createClient>): Promise<string> {
   const { data: userData } = await supabase.auth.getUser()
   const userId = userData?.user?.id
-  if (userId) {
-    const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
-      auth: { persistSession: false },
-    })
-    const { data, error } = await admin.rpc('cc_claude_key_for', { p_user: userId })
-    if (error) throw new Error(`Couldn't read the Claude API key: ${error.message}`)
-    if (typeof data === 'string' && data) return data
-  }
-  const shared = SHARED_KEY_FALLBACK ? Deno.env.get('ANTHROPIC_API_KEY') : undefined
+  if (!userId) throw new Error('No Claude API key')
+  const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
+    auth: { persistSession: false },
+  })
+  const { data, error } = await admin.rpc('cc_claude_key_for', { p_user: userId })
+  if (error) throw new Error(`Couldn't read the Claude API key: ${error.message}`)
+  if (typeof data === 'string' && data) return data
+  // No key of their own: only approved accounts may use the shared one.
+  const { data: approved, error: approvedError } = await admin.rpc('cc_is_free_user', { p_user: userId })
+  if (approvedError) throw new Error(`Couldn't check the approved list: ${approvedError.message}`)
+  const shared = approved === true ? Deno.env.get('ANTHROPIC_API_KEY') : undefined
   if (shared) return shared
   throw new Error('No Claude API key')
 }

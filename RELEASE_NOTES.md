@@ -15,6 +15,21 @@ once -- "Testing"; Friends had build 75).
 
 ---
 
+## Build 83 — internal
+
+What to Test:
+
+```
+USE IN CLAUDE
+- Menu > Use in Claude: Make my link, then Copy link or Share it to your computer.
+- In Claude (Settings > Connectors > Add custom connector, no sign-in), paste the link and ask about your talks.
+- Ask Claude to make a presentation of a talk and save it to the app: it should appear on the session like a Sparkle one, with its cover photo, plus a summary, action items and other entries, and notes moved next to what they're about.
+- Status under the link shows "Connected · last used ..." once Claude has used it.
+- Make a new link stops the old one; Turn off stops Claude reading your sessions.
+```
+
+---
+
 ## Build 82 — internal
 
 What to Test:

@@ -122,7 +122,7 @@ export function startHomeTour() {
         'session-card',
         '.home-screen .swipe-actions',
         'Swipe left on a session',
-        'Edit opens the session itself. Then build its presentation here, or in Claude, or once it’s ready, share it or rebuild it after you add more. Pin keeps a session at the top of the list. The last button deletes it.',
+        'Edit opens the session itself. The sparkle builds its presentation in Claude, or once it’s ready, share it or rebuild it after you add more. Pin keeps a session at the top of the list. The last button deletes it.',
       ),
       {
         element: '.home-chat',
@@ -258,8 +258,8 @@ export function maybeStartClaudeTour() {
     swipeStep(
       'session-card',
       '.home-screen .swipe-actions',
-      'Make a presentation in Claude',
-      'Swipe left on a session and tap the speech bubble with the star. Claude opens ready to write the presentation, using your Presentation options, and saves it back here. Just tap send.',
+      'Make a presentation',
+      'Swipe left on a session and tap the sparkle. Claude opens ready to write the presentation with your Presentation options. Tap send: it saves the presentation back here, with the summary, action items and other entries added to the session.',
     ),
     {
       popover: {

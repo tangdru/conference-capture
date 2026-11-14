@@ -14,7 +14,6 @@ import {
   DeleteIcon,
   EditIcon,
   GenerateIcon,
-  MakeInClaudeIcon,
   PinIcon,
   ShareIcon,
 } from '../components/SwipeActions'
@@ -87,8 +86,6 @@ interface HomeScreenProps {
   onDismissError: () => void
   /** The chat button: opens Claude to ask about the sessions. */
   onAskClaude: () => void
-  /** Make in Claude: opens Claude to write a session's presentation. */
-  onMakeInClaude: (id: string) => void
   /** A session is open over the list: it's out of reach (inert) and its
    * clock stops, until swiped or tapped back to. */
   covered?: boolean
@@ -111,7 +108,6 @@ export function HomeScreen({
   error,
   onDismissError,
   onAskClaude,
-  onMakeInClaude,
   covered = false,
 }: HomeScreenProps) {
   const [now, setNow] = useState(Date.now())
@@ -230,9 +226,6 @@ export function HomeScreen({
   }, [])
 
   function deckActions(session: Session): SwipeAction[] {
-    // Make in Claude: the same presentation, written in the Claude app on the
-    // user's plan and saved back here.
-    const inClaude: SwipeAction = { icon: <MakeInClaudeIcon />, label: 'Make presentation in Claude', onClick: () => onMakeInClaude(session.id) }
     switch (session.deckStatus) {
       case 'ready':
         // Tapping the card opens the presentation, so no View here.
@@ -240,14 +233,14 @@ export function HomeScreen({
           { icon: <ShareIcon />, label: 'Share presentation', onClick: () => onShareDeck(session.id) },
           // Regenerating only makes sense once there's something new to add.
           ...(hasContentSinceDeck(session)
-            ? [{ icon: <GenerateIcon />, label: 'Regenerate presentation', onClick: () => onGenerateDeck(session.id) }, inClaude]
+            ? [{ icon: <GenerateIcon />, label: 'Regenerate presentation', onClick: () => onGenerateDeck(session.id) }]
             : []),
         ]
       case 'generating':
       case 'queued':
         return []
       default:
-        return [{ icon: <GenerateIcon />, label: 'Generate presentation', onClick: () => onGenerateDeck(session.id) }, inClaude]
+        return [{ icon: <GenerateIcon />, label: 'Generate presentation', onClick: () => onGenerateDeck(session.id) }]
     }
   }
 

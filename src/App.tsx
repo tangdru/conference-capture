@@ -165,6 +165,12 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     }
   }
 
+  /** Sparkle: Claude makes the session's presentation and saves it here. */
+  function makeInClaude(id: string) {
+    const session = sessions?.find((s) => s.id === id)
+    if (session) openInClaude(makePresentationPrompt(session.title, session.id))
+  }
+
   /** Opens Claude with `text` typed in, or asks to connect first. */
   function openInClaude(text: string) {
     if (!connectorUrl) {
@@ -893,7 +899,11 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         setMenuReturning(false)
         setMenu('menu')
       }}
-      onGenerateDeck={generateDeckForSession}
+      // Sparkle now hands the presentation to the Claude app (on the user's
+      // plan), which saves it back here with the summary and other entries.
+      // generateDeckForSession (the in-app build on the API key) stays until
+      // the console API calls are removed.
+      onGenerateDeck={makeInClaude}
       onViewDeck={viewDeck}
       onTogglePin={togglePin}
       onShareDeck={shareDeck}
@@ -907,10 +917,6 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       error={homeError}
       onDismissError={() => setHomeError(null)}
       onAskClaude={() => openInClaude(askAllPrompt())}
-      onMakeInClaude={(id) => {
-        const session = sessions.find((s) => s.id === id)
-        if (session) openInClaude(makePresentationPrompt(session.title, session.id))
-      }}
     />
     {invite && (
       <ClaudeInviteDialog

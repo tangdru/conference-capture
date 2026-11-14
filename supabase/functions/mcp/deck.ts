@@ -338,6 +338,11 @@ export async function savePresentation(
     .upload(deckPath, new Blob([finalHtml], { type: 'text/html' }), { contentType: 'text/html', upsert: true })
   if (uploadError) throw uploadError
 
+  // Sparkle's organizeSession, before the presentation is marked done: the
+  // app counts a session as live while anything in it is newer than its
+  // presentation, so the entries saved here must come first.
+  const organized = entries ? await saveSessionEntries(admin, m, userId, entries) : null
+
   const unnamed = !session.title.trim() || DEFAULT_TITLE.test(session.title.trim())
   const newTitle = unnamed && title ? title.slice(0, 200) : null
   const minutes = readMinutes(page)
@@ -346,7 +351,8 @@ export async function savePresentation(
     .update({
       deck_status: 'ready',
       deck_path: deckPath,
-      deck_generated_at: new Date().toISOString(),
+      // Just after the last entry (they're spaced a few ms apart).
+      deck_generated_at: new Date(Date.now() + 100).toISOString(),
       deck_error: null,
       deck_cover_photo_id: coverPhotoId,
       deck_read_minutes: minutes,
@@ -355,9 +361,6 @@ export async function savePresentation(
     .eq('id', sessionId)
     .eq('owner_id', userId)
   if (updateError) throw updateError
-
-  // Sparkle's organizeSession: after the page, so a refused page saves nothing.
-  const organized = entries ? await saveSessionEntries(admin, m, userId, entries) : null
 
   const shownTitle = newTitle ?? session.title
   const notes = [

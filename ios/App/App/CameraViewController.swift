@@ -11,19 +11,23 @@ import UIKit
 /// (hold one to see it larger), and the shutter centred 124pt above the
 /// bottom safe area with Remember this and the clip button beside it while a
 /// talk records. The volume buttons (and the Camera Control button) take a
-/// photo too. Swipe down to close.
+/// photo too. Hold the shutter (or a volume button) to record a video clip,
+/// up to 30 s (VideoClipRecorder). Swipe down to close.
 ///
 /// The screen stays portrait; held sideways, the photo comes out landscape
 /// and the icons turn to stay upright.
-final class CameraViewController: UIViewController {
+final class CameraViewController: UIViewController, UIGestureRecognizerDelegate {
     // What the page asks for, kept current through `update`.
     var showRemember = false { didSet { if isViewLoaded { layoutControls(animated: false) } } }
     var showClip = false { didSet { if isViewLoaded { layoutControls(animated: false) } } }
     var remembered = false { didSet { if isViewLoaded { drawStar() } } }
     var clipEndsAt: Date? { didSet { if isViewLoaded { clipTick() } } }
+    /// Session options › Chui's audio › Voice boost, for video clips' sound.
+    var videoBoost = false
 
     // What it tells the page.
     var onPhoto: ((Data) -> Void)?
+    var onVideo: ((VideoClipRecorder.Saved) -> Void)?
     var onRemember: (() -> Void)?
     var onClip: (() -> Void)?
     var onClose: (() -> Void)?
@@ -65,6 +69,8 @@ final class CameraViewController: UIViewController {
     private let flashSlash = CAShapeLayer()
     private let flashAuto = UILabel()
     private let shutter = UIButton(type: .custom)
+    private let shutterDisc = CAShapeLayer()
+    private let videoTime = UILabel()
     private let starButton = UIButton(type: .custom)
     private let starIcon = CAShapeLayer()
     private let clipButton = UIButton(type: .custom)
@@ -81,6 +87,18 @@ final class CameraViewController: UIViewController {
     // Off by default: a flash on a projected slide only adds glare.
     private var flash = "off"
     private var shots: [UIImage] = []
+    /// For each shot, its video when it's a clip (the image is its poster).
+    private var shotVideos: [URL?] = []
+    // Video clips: a hold past `holdSeconds` starts one.
+    private static let holdSeconds = 0.35
+    private var holdTimer: Timer?
+    private var videoTimer: Timer?
+    private var videoStartedAt: Date?
+    /// From the hold until the clip is saved.
+    private var videoBusy = false
+    private var stopWhenStarted = false
+    private var peekPlayer: AVPlayer?
+    private let peekVideo = AVPlayerLayer()
     private var tilt = 0
     private var pinchStartZoom: Double = 1
     // A pinch during the current touches: its end isn't a swipe down to close.
@@ -109,6 +127,15 @@ final class CameraViewController: UIViewController {
         drawStar()
         clipTick()
         haptic.prepare()
+        // Leaving the app ends a clip (the camera switches off), keeping it.
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(leavingApp), name: UIApplication.willResignActiveNotification, object: nil)
+    }
+
+    @objc private func leavingApp() {
+        holdTimer?.invalidate()
+        holdTimer = nil
+        endVideo()
     }
 
     /// Switches the camera on, then calls `ready` -- the plugin shows this
@@ -155,6 +182,7 @@ final class CameraViewController: UIViewController {
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         // Kept on briefly, so reopening for the next slide is instant.
+        endVideo()
         engine.stop(after: 20)
         tiltTimer?.invalidate()
         clipTimer?.invalidate()
@@ -181,6 +209,7 @@ final class CameraViewController: UIViewController {
         )
         layoutReticle()
         flashButton.frame = CGRect(x: width / 2 - 22, y: view.safeAreaInsets.top + 59 / 2 - 22, width: 44, height: 44)
+        videoTime.frame = CGRect(x: 0, y: view.safeAreaInsets.top + 59 / 2 - 14, width: width, height: 28)
         layoutLenses()
         layoutStrip()
         layoutPeek()
@@ -263,6 +292,8 @@ final class CameraViewController: UIViewController {
         peekImage.layer.cornerRadius = 4
         peekImage.clipsToBounds = true
         peek.addSubview(peekImage)
+        peekVideo.videoGravity = .resizeAspect
+        peek.layer.addSublayer(peekVideo)
         stage.addSubview(peek)
 
         lensPill.backgroundColor = UIColor.black.withAlphaComponent(0.35)
@@ -301,6 +332,11 @@ final class CameraViewController: UIViewController {
         flashAuto.frame = CGRect(x: 12.5 + 16 * 19 / 22 - 1, y: 12.5 + 13 * 19 / 22, width: 8, height: 8)
         flashButton.addSubview(flashAuto)
         view.addSubview(flashButton)
+
+        // While a video clip records, in the flash's place: "0:12 / 0:30".
+        videoTime.textAlignment = .center
+        videoTime.isHidden = true
+        view.addSubview(videoTime)
     }
 
     private func buildBottomBar() {
@@ -317,14 +353,14 @@ final class CameraViewController: UIViewController {
         ring.fillColor = nil
         ring.lineWidth = 3
         shutter.layer.addSublayer(ring)
-        let disc = CAShapeLayer()
-        disc.path = UIBezierPath(ovalIn: CGRect(x: 6, y: 6, width: 68, height: 68)).cgPath
-        disc.fillColor = Palette.accent.cgColor
-        shutter.layer.addSublayer(disc)
+        shutterDisc.path = Self.discPath
+        shutterDisc.fillColor = Palette.accent.cgColor
+        shutter.layer.addSublayer(shutterDisc)
         shutter.accessibilityLabel = "Capture photo"
+        shutter.accessibilityHint = "Hold to record a video clip"
         shutter.addTarget(self, action: #selector(shutterDown), for: .touchDown)
-        shutter.addTarget(self, action: #selector(shutterUp), for: [.touchUpOutside, .touchCancel])
-        shutter.addTarget(self, action: #selector(takePhoto), for: .touchUpInside)
+        shutter.addTarget(self, action: #selector(shutterLetGo), for: [.touchUpOutside, .touchCancel])
+        shutter.addTarget(self, action: #selector(shutterReleased), for: .touchUpInside)
         view.addSubview(shutter)
 
         starIcon.frame = CGRect(x: 11, y: 11, width: 26, height: 26)
@@ -365,18 +401,32 @@ final class CameraViewController: UIViewController {
         let tap = UITapGestureRecognizer(target: self, action: #selector(stageTapped(_:)))
         stage.addGestureRecognizer(tap)
         let pinch = UIPinchGestureRecognizer(target: self, action: #selector(pinched(_:)))
+        pinch.delegate = self
         view.addGestureRecognizer(pinch)
         let pan = UIPanGestureRecognizer(target: self, action: #selector(panned(_:)))
         pan.maximumNumberOfTouches = 1
+        pan.delegate = self
         view.addGestureRecognizer(pan)
     }
 
+    /// A finger on the shutter belongs to it alone: holding it to record and
+    /// sliding a little mustn't turn into a swipe that closes the camera.
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        !(touch.view?.isDescendant(of: shutter) ?? false)
+    }
+
     /// Volume up or down, or the Camera Control button: a press takes a
-    /// photo (and doesn't change the volume) while the camera is open.
+    /// photo (and doesn't change the volume) while the camera is open; a
+    /// hold records a video clip.
     private func buildVolumeShutter() {
         if #available(iOS 17.2, *) {
             let interaction = AVCaptureEventInteraction { [weak self] event in
-                if event.phase == .ended { self?.takePhoto() }
+                switch event.phase {
+                case .began: self?.beginHold()
+                case .ended: self?.shutterReleased()
+                case .cancelled: self?.shutterLetGo()
+                default: break
+                }
             }
             view.addInteraction(interaction)
             captureInteraction = interaction
@@ -506,6 +556,7 @@ final class CameraViewController: UIViewController {
         peekImage.bounds = CGRect(x: 0, y: 0, width: sideways ? box.height : box.width, height: sideways ? box.width : box.height)
         peekImage.center = CGPoint(x: peek.bounds.midX, y: peek.bounds.midY)
         peekImage.transform = iconTransform
+        peekVideo.frame = peek.bounds.insetBy(dx: 12, dy: 12)
     }
 
     private func drawFlash() {
@@ -603,6 +654,38 @@ final class CameraViewController: UIViewController {
 
     @objc private func shutterDown() {
         UIView.animate(withDuration: 0.08) { self.shutter.transform = CGAffineTransform(scaleX: 0.94, y: 0.94) }
+        beginHold()
+    }
+
+    /// A press: held long enough, it becomes a video clip.
+    private func beginHold() {
+        holdTimer?.invalidate()
+        guard errorLabel.isHidden, !videoBusy else { return }
+        holdTimer = Timer.scheduledTimer(withTimeInterval: Self.holdSeconds, repeats: false) { [weak self] _ in
+            self?.holdTimer = nil
+            self?.startVideo()
+        }
+    }
+
+    /// Let go on the shutter: ends a clip, or (a short press) takes a photo.
+    @objc private func shutterReleased() {
+        if holdTimer != nil {
+            holdTimer?.invalidate()
+            holdTimer = nil
+            takePhoto()
+        } else {
+            shutterUp()
+            endVideo()
+        }
+    }
+
+    /// The finger slid off the shutter (or the press was taken away): a clip
+    /// still ends and is kept; a short press takes nothing.
+    @objc private func shutterLetGo() {
+        holdTimer?.invalidate()
+        holdTimer = nil
+        shutterUp()
+        endVideo()
     }
 
     @objc private func shutterUp() {
@@ -628,8 +711,15 @@ final class CameraViewController: UIViewController {
     private func addShot(_ jpeg: Data) {
         onPhoto?(jpeg)
         guard let image = UIImage(data: jpeg) else { return }
+        addShot(image, video: nil)
+    }
+
+    /// A photo, or a video clip shown by its poster frame (with a play mark).
+    private func addShot(_ image: UIImage, video: URL?) {
         shots.append(image)
+        shotVideos.append(video)
         let visible = Array(shots.suffix(3))
+        let visibleVideos = Array(shotVideos.suffix(3))
         while thumbViews.count < visible.count {
             let thumb = UIImageView()
             thumb.contentMode = .scaleAspectFill
@@ -648,6 +738,7 @@ final class CameraViewController: UIViewController {
             check.backgroundColor = UIColor.black.withAlphaComponent(0.5)
             check.layer.cornerRadius = 6
             check.clipsToBounds = true
+            check.tag = 1
             thumb.addSubview(check)
             let hold = UILongPressGestureRecognizer(target: self, action: #selector(heldThumb(_:)))
             hold.minimumPressDuration = 0.18
@@ -655,7 +746,10 @@ final class CameraViewController: UIViewController {
             strip.addSubview(thumb)
             thumbViews.append(thumb)
         }
-        for (thumb, image) in zip(thumbViews, visible) { thumb.image = image }
+        for (i, (thumb, image)) in zip(thumbViews, visible).enumerated() {
+            thumb.image = image
+            (thumb.viewWithTag(1) as? UILabel)?.text = visibleVideos[i] == nil ? "✓" : "▶"
+        }
         layoutStrip()
         drawHint()
     }
@@ -664,19 +758,122 @@ final class CameraViewController: UIViewController {
     @objc private func heldThumb(_ gesture: UILongPressGestureRecognizer) {
         switch gesture.state {
         case .began:
-            guard let image = (gesture.view as? UIImageView)?.image else { return }
+            guard let thumb = gesture.view as? UIImageView, let image = thumb.image else { return }
             peekImage.image = image
+            // A clip plays, muted (the talk is still going on around you).
+            let videos = Array(shotVideos.suffix(3))
+            if let index = thumbViews.firstIndex(of: thumb), index < videos.count, let video = videos[index] {
+                let player = AVPlayer(url: video)
+                player.isMuted = true
+                peekVideo.player = player
+                peekPlayer = player
+                player.play()
+            }
             layoutPeek()
             stage.bringSubviewToFront(peek)
             stage.bringSubviewToFront(strip)
             haptic.impactOccurred()
             UIView.animate(withDuration: 0.12) { self.peek.alpha = 1 }
         case .ended, .cancelled, .failed:
-            UIView.animate(withDuration: 0.12) { self.peek.alpha = 0 }
+            UIView.animate(withDuration: 0.12) { self.peek.alpha = 0 } completion: { _ in
+                self.peekPlayer?.pause()
+                self.peekPlayer = nil
+                self.peekVideo.player = nil
+            }
         default:
             break
         }
     }
+
+    // MARK: - Video clips
+
+    private func startVideo() {
+        guard !videoBusy else { return }
+        videoBusy = true
+        stopWhenStarted = false
+        haptic.impactOccurred()
+        haptic.prepare()
+        drawRecording(true)
+        VideoClipRecorder.shared.start(degrees: tilt, boost: videoBoost) { [weak self] ok in
+            guard let self else { return }
+            guard ok else {
+                self.videoBusy = false
+                self.drawRecording(false)
+                return
+            }
+            self.videoStartedAt = Date()
+            self.videoTick()
+            self.videoTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in self?.videoTick() }
+            if self.stopWhenStarted { self.endVideo() }
+        }
+    }
+
+    /// Ends a clip being recorded (let go, 30 s up, or the camera closing).
+    private func endVideo() {
+        guard videoBusy else { return }
+        guard videoStartedAt != nil else {
+            // Still starting: end it as soon as it has.
+            stopWhenStarted = true
+            return
+        }
+        videoTimer?.invalidate()
+        videoTimer = nil
+        videoStartedAt = nil
+        drawRecording(false)
+        VideoClipRecorder.shared.stop { [weak self] saved in
+            self?.videoBusy = false
+            guard let saved else { return }
+            // The page hears of it even if the camera has closed meanwhile.
+            NativeCameraPlugin.videoSaved?(saved)
+            guard let self else { return }
+            self.haptic.impactOccurred()
+            self.haptic.prepare()
+            if let poster = UIImage(contentsOfFile: saved.poster.path) {
+                self.addShot(poster, video: saved.video)
+            }
+        }
+    }
+
+    private func videoTick() {
+        guard let started = videoStartedAt else { return }
+        let elapsed = Date().timeIntervalSince(started)
+        if elapsed >= VideoClipRecorder.maxSeconds {
+            endVideo()
+            return
+        }
+        let seconds = Int(elapsed)
+        let text = NSMutableAttributedString(string: "● ", attributes: [
+            .font: UIFont.systemFont(ofSize: 11), .foregroundColor: Palette.error,
+        ])
+        text.append(NSAttributedString(string: String(format: "0:%02d", seconds), attributes: [
+            .font: UIFont.monospacedDigitSystemFont(ofSize: 15, weight: .semibold), .foregroundColor: Palette.textPrimary,
+        ]))
+        text.append(NSAttributedString(string: " / 0:\(Int(VideoClipRecorder.maxSeconds))", attributes: [
+            .font: UIFont.monospacedDigitSystemFont(ofSize: 15, weight: .regular), .foregroundColor: Palette.textSecondary,
+        ]))
+        videoTime.attributedText = text
+        videoTime.accessibilityLabel = "Recording video, \(seconds) seconds"
+    }
+
+    /// Recording: the shutter's disc becomes a red rounded square, the time
+    /// shows where the flash was, and the photo strip steps aside.
+    private func drawRecording(_ on: Bool) {
+        let morph = CABasicAnimation(keyPath: "path")
+        morph.fromValue = shutterDisc.path
+        morph.duration = 0.2
+        morph.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        shutterDisc.path = on ? Self.stopPath : Self.discPath
+        shutterDisc.add(morph, forKey: "path")
+        shutterDisc.fillColor = (on ? Palette.error : Palette.accent).cgColor
+        shutter.accessibilityLabel = on ? "Stop recording" : "Capture photo"
+        videoTime.isHidden = !on
+        if on { videoTime.attributedText = nil }
+        flashButton.alpha = on ? 0 : 1
+        strip.alpha = on ? 0 : 1
+    }
+
+    private static let discPath = UIBezierPath(ovalIn: CGRect(x: 6, y: 6, width: 68, height: 68)).cgPath
+    private static let stopPath = UIBezierPath(roundedRect: CGRect(x: 26, y: 26, width: 28, height: 28), cornerRadius: 6).cgPath
 
     @objc private func cycleFlash() {
         guard !flashModes.isEmpty else { return }
@@ -732,7 +929,7 @@ final class CameraViewController: UIViewController {
     /// across the portrait screen.
     @objc private func panned(_ gesture: UIPanGestureRecognizer) {
         if gesture.state == .began, gesture.numberOfTouches == 1 { pinched = false }
-        guard gesture.state == .ended, !pinched else { return }
+        guard gesture.state == .ended, !pinched, !videoBusy else { return }
         let t = gesture.translation(in: view)
         let down = tilt == 90 ? t.x : tilt == 270 ? -t.x : tilt == 180 ? -t.y : t.y
         if down > 80 { close() }
@@ -740,6 +937,7 @@ final class CameraViewController: UIViewController {
 
     func close() {
         guard presentingViewController != nil else { return }
+        endVideo()
         dismiss(animated: true) { [weak self] in self?.onClose?() }
     }
 

@@ -9,6 +9,22 @@ export interface NativeCameraOptions {
   showClip?: boolean
   remembered?: boolean
   clipEndsAt?: number | null
+  /** Session options › Chui's audio › Voice boost, for video clips' sound. */
+  videoBoost?: boolean
+}
+
+/** A video clip recorded by holding the shutter (up to 30 s, 720p MP4 with
+ * the listening mic's sound), saved on the phone with a poster frame. */
+export interface NativeVideoClip {
+  id: string
+  /** file:// URLs */
+  path: string
+  posterPath: string
+  durationMs: number
+  width: number
+  height: number
+  /** ms since 1970, the first frame */
+  startedAt: number
 }
 
 /** Bridge to ios/App/App/NativeCameraPlugin.swift -- the native camera
@@ -27,6 +43,7 @@ interface NativeCameraPlugin {
   close(): Promise<void>
   /** A photo taken: a JPEG file (file:// URL), already turned upright. */
   addListener(event: 'photo', listener: (event: { path: string }) => void): Promise<PluginListenerHandle>
+  addListener(event: 'video', listener: (event: NativeVideoClip) => void): Promise<PluginListenerHandle>
   addListener(event: 'photoFailed', listener: (event: { message: string }) => void): Promise<PluginListenerHandle>
   /** The camera turned out unusable after its screen showed (it's closed). */
   addListener(event: 'unavailable', listener: (event: { message: string }) => void): Promise<PluginListenerHandle>

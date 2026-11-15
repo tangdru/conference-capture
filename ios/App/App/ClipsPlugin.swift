@@ -102,6 +102,31 @@ final class ClipRecorder {
         return capturing
     }
 
+    static var rate: Double { sampleRate }
+
+    /// How far the listening mic has got (samples heard), or nil when not
+    /// listening. A video clip notes this at its first frame (VideoClipRecorder).
+    var position: Int? {
+        lock.lock()
+        defer { lock.unlock() }
+        return capturing ? written : nil
+    }
+
+    /// What the mic heard from `start` until now, as far back as the buffer
+    /// still reaches; nil when not listening.
+    func samples(since start: Int) -> [Float]? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard capturing else { return nil }
+        let from = max(start, written - ring.count, 0)
+        guard written > from else { return nil }
+        var samples = [Float](repeating: 0, count: written - from)
+        for i in 0..<samples.count {
+            samples[i] = ring[(from + i) % ring.count]
+        }
+        return samples
+    }
+
     func begin() {
         lock.lock()
         capturing = true

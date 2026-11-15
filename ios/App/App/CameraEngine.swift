@@ -11,7 +11,7 @@ import UIKit
 /// Zoom values here are in the Camera app's units: 1 is the main (wide)
 /// lens, 0.5 the ultra-wide. The device's own zoom factor starts at the
 /// widest lens, so they're scaled by `wideFactor`.
-final class CameraEngine: NSObject, AVCapturePhotoCaptureDelegate {
+final class CameraEngine: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureVideoDataOutputSampleBufferDelegate {
     /// One camera for the app, set up once and reused: setting it up (finding
     /// the lenses, wiring them in) is what made the screen open to black.
     static let shared = CameraEngine()
@@ -32,6 +32,16 @@ final class CameraEngine: NSObject, AVCapturePhotoCaptureDelegate {
     let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "camera-engine")
     private let photoOutput = AVCapturePhotoOutput()
+    /// Frames for video clips (picture only; the sound comes from the
+    /// listening mic, see VideoClipRecorder). Wired in with the photo output
+    /// when that doesn't cost photos their zero shutter lag, else only while
+    /// a clip records.
+    private let videoOutput = AVCaptureVideoDataOutput()
+    private let videoQueue = DispatchQueue(label: "camera-video")
+    private var videoAttached = false
+    /// The clip being written, video queue only.
+    private var movie: MovieWriter?
+    private var standInTimer: DispatchSourceTimer?
     private var device: AVCaptureDevice?
     private var wideFactor: CGFloat = 1
     private var configured = false
@@ -274,6 +284,7 @@ final class CameraEngine: NSObject, AVCapturePhotoCaptureDelegate {
         session.addInput(input)
         session.addOutput(photoOutput)
         photoOutput.maxPhotoQualityPrioritization = .balanced
+        attachVideoUnlessItSlowsPhotos()
         if #available(iOS 17.0, *) {
             if photoOutput.isZeroShutterLagSupported { photoOutput.isZeroShutterLagEnabled = true }
             if photoOutput.isResponsiveCaptureSupported {
@@ -289,6 +300,97 @@ final class CameraEngine: NSObject, AVCapturePhotoCaptureDelegate {
         wideFactor = hasUltraWide ? CGFloat(truncating: device.virtualDeviceSwitchOverVideoZoomFactors.first ?? 1) : 1
         self.device = device
         configured = true
+    }
+
+    /// Inside a configuration. Video kept wired in makes holding the shutter
+    /// start recording at once; but if it turns off zero shutter lag for
+    /// photos, it's only wired in while a clip records instead.
+    private func attachVideoUnlessItSlowsPhotos() {
+        var lagFreeAlone = false
+        if #available(iOS 17.0, *) { lagFreeAlone = photoOutput.isZeroShutterLagSupported }
+        videoOutput.alwaysDiscardsLateVideoFrames = true
+        if #available(iOS 16.0, *) { videoOutput.deliversPreviewSizedOutputBuffers = true }
+        guard session.canAddOutput(videoOutput) else { return }
+        session.addOutput(videoOutput)
+        var lagFreeWithVideo = lagFreeAlone
+        if #available(iOS 17.0, *) { lagFreeWithVideo = photoOutput.isZeroShutterLagSupported }
+        if lagFreeAlone && !lagFreeWithVideo {
+            session.removeOutput(videoOutput)
+            NSLog("CameraEngine: video wired in only while recording (it would slow photos)")
+        } else {
+            videoAttached = true
+            NSLog("CameraEngine: video kept wired in")
+        }
+    }
+
+    // MARK: - Video clips
+
+    /// Starts writing the picture to `url` (MP4, at most 720 on the short
+    /// side), turned `degrees` clockwise as photos are. `started` runs on the
+    /// main queue at the first frame written, or with false if it couldn't
+    /// start.
+    func startVideo(to url: URL, degrees: Int, started: @escaping (Bool) -> Void) {
+        let report: (Bool) -> Void = { ok in DispatchQueue.main.async { started(ok) } }
+        queue.async {
+            if let standIn = self.standIn {
+                return self.startStandInVideo(standIn, to: url, degrees: degrees, report)
+            }
+            guard self.session.isRunning else { return report(false) }
+            if !self.videoAttached {
+                self.session.beginConfiguration()
+                if self.session.canAddOutput(self.videoOutput) {
+                    self.session.addOutput(self.videoOutput)
+                    self.videoAttached = true
+                }
+                self.session.commitConfiguration()
+                guard self.videoAttached else { return report(false) }
+            }
+            let writer = MovieWriter(url: url, degrees: degrees)
+            writer.onFirstFrame = { report(true) }
+            writer.onFailure = { report(false) }
+            self.videoQueue.async {
+                self.movie = writer
+                self.videoOutput.setSampleBufferDelegate(self, queue: self.videoQueue)
+            }
+        }
+    }
+
+    /// Ends the clip; `done` gets its length in seconds on the main queue,
+    /// or nil when nothing was written.
+    func stopVideo(done: @escaping (Double?) -> Void) {
+        videoQueue.async {
+            self.standInTimer?.cancel()
+            self.standInTimer = nil
+            self.videoOutput.setSampleBufferDelegate(nil, queue: nil)
+            guard let writer = self.movie else { return DispatchQueue.main.async { done(nil) } }
+            self.movie = nil
+            writer.finish { seconds in DispatchQueue.main.async { done(seconds) } }
+        }
+    }
+
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        guard let image = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        movie?.append(image, at: CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+    }
+
+    /// The Simulator: the stand-in slide, as a 15 fps clip.
+    private func startStandInVideo(_ standIn: UIImage, to url: URL, degrees: Int, _ report: @escaping (Bool) -> Void) {
+        guard let frame = MovieWriter.pixelBuffer(standIn) else { return report(false) }
+        let writer = MovieWriter(url: url, degrees: degrees)
+        writer.onFirstFrame = { report(true) }
+        writer.onFailure = { report(false) }
+        videoQueue.async {
+            self.movie = writer
+            var count: Int64 = 0
+            let timer = DispatchSource.makeTimerSource(queue: self.videoQueue)
+            timer.schedule(deadline: .now(), repeating: 1.0 / 15)
+            timer.setEventHandler { [weak self] in
+                self?.movie?.append(frame, at: CMTime(value: count, timescale: 15))
+                count += 1
+            }
+            self.standInTimer = timer
+            timer.resume()
+        }
     }
 
     private func setZoomFactor(_ factor: CGFloat, animated: Bool) {

@@ -8,6 +8,9 @@ import UIKit
 /// - "remember", "clip": the star or the clip button was tapped; the page
 ///   does what it does for them on the session screen, then calls `update`
 ///   with the result (star filled, clip's end time for its countdown).
+/// - "video" {id, path, posterPath, durationMs, width, height, startedAt}: a
+///   video clip recorded by holding the shutter (VideoClipRecorder), saved in
+///   Library/Videos with its poster frame.
 /// - "closed": the camera was swiped away.
 @objc(NativeCameraPlugin)
 public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin {
@@ -23,6 +26,14 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin {
     ]
 
     private var camera: CameraViewController?
+
+    /// Set while the plugin is loaded: a saved clip reaches the page even
+    /// when the camera closed while it was being saved.
+    static var videoSaved: ((VideoClipRecorder.Saved) -> Void)?
+
+    override public func load() {
+        Self.videoSaved = { [weak self] saved in self?.notifyListeners("video", data: saved.json, retainUntilConsumed: true) }
+    }
 
     /// Photos taken in the camera, until they're safely in the upload queue
     /// (which keeps its own copy) and no longer shown from here.
@@ -120,6 +131,7 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin {
         if let show = call.getBool("showRemember") { camera.showRemember = show }
         if let show = call.getBool("showClip") { camera.showClip = show }
         if let remembered = call.getBool("remembered") { camera.remembered = remembered }
+        if let boost = call.getBool("videoBoost") { camera.videoBoost = boost }
         if call.options["clipEndsAt"] != nil {
             let ms = call.getDouble("clipEndsAt")
             camera.clipEndsAt = ms.map { Date(timeIntervalSince1970: $0 / 1000) }

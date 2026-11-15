@@ -1,4 +1,5 @@
 import AVFoundation
+import Photos
 import UIKit
 
 /// Video clips: hold the shutter in the camera to record, up to 30 s.
@@ -95,6 +96,20 @@ final class VideoClipRecorder {
             DispatchQueue.global(qos: .userInitiated).async {
                 let saved = Self.save(current, seconds: seconds, startedAt: startedAt, heard: heard)
                 DispatchQueue.main.async { done(saved) }
+            }
+        }
+    }
+
+    /// TEST SHORTCUT (build 90, until clips show in the session -- step 2):
+    /// every clip is also copied to the Photos album, so picture and sound
+    /// can be checked there. Remove with step 2's Save to Photos.
+    static func copyToPhotosForTesting(_ saved: Saved) {
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            guard status == .authorized || status == .limited else { return }
+            PHPhotoLibrary.shared().performChanges({
+                PHAssetCreationRequest.forAsset().addResource(with: .video, fileURL: saved.video, options: nil)
+            }) { ok, error in
+                if !ok { NSLog("VideoClipRecorder: couldn't copy to Photos (\(error?.localizedDescription ?? "?"))") }
             }
         }
     }

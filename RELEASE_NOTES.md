@@ -15,6 +15,25 @@ once -- "Testing"; Friends had build 81).
 
 ---
 
+## Build 90 — internal
+
+Uploaded 2026-11-15. Video clips, step 1 (recording only). Clips don't show
+in the session yet; as a test shortcut every clip is also copied to the
+Photos album (to be removed with step 2).
+
+What to Test:
+
+```
+VIDEO CLIPS (first part)
+- In a session, open the camera and HOLD the shutter (or a volume button): it records video. The shutter's centre turns into a red square and a timer shows at the top (up to 0:30). Let go to stop; it stops on its own at 30 s.
+- A quick tap still takes a photo.
+- The clip appears in the camera's thumbnail strip with a play mark; hold it to watch (muted).
+- For now each clip is also saved to your Photos album (allow "Add to Photos" the first time). Check it there: picture upright, and the speaker's sound when the session was listening.
+- Clips don't appear in the session yet -- that's next.
+```
+
+---
+
 ## Build 89 — internal, Friends
 
 Uploaded 2026-11-15. Everything from 88, plus two haptics. Sent to Friends

@@ -15,6 +15,24 @@ once -- "Testing"; Friends had build 75).
 
 ---
 
+## Build 87 — internal
+
+Uploaded 2026-11-14. New Session options under "During a talk", and slide photos no longer keep a second, uncropped copy in storage.
+
+What to Test:
+
+```
+SESSION OPTIONS: DURING A TALK (Menu > Session options)
+- Live transcript (on): turn it off and record. Nothing is transcribed, the microphone stays off, a grey "Not transcribing" box says so, and the clip button is gone (Chui's audio greys out in Session options).
+- Show transcript while live (on): turn it off and record. The timeline shows only your photos, notes, stars and clips. In place of the scrolling words, a "Transcribing" box shows bars that move while the speaker talks and how many minutes are written down. It turns amber ("Not hearing anything") after 90 seconds of silence and red if transcription stops. Pause: the full transcript appears in the timeline. Clips still show their words.
+- Stay live after a pause (3 min): slide it to 30 sec or 10 min, pause a session, and check how long it stays at the top of your sessions.
+
+PHOTOS
+- Photograph a slide: it's cropped and straightened as before. Only the cropped photo is kept now (the unused uncropped copy is no longer uploaded).
+```
+
+---
+
 ## Build 86 — internal
 
 Uploaded 2026-11-14. Adds the free list. Accounts whose email is in Supabase's cc_free_users table use Andrew's Claude API key in the app; everyone else (Andrew included) uses Claude through the connector, as in 85. The list starts empty. The server still lets every account use the shared key until Friends have this build (FREE_LIST_ONLY off).

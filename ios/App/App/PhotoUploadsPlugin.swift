@@ -201,13 +201,15 @@ final class PhotoUploadQueue: NSObject, URLSessionTaskDelegate {
             row["text"] = scan.text
             row["photo_path"] = originalPath
             var uploads = [Upload(file: "original.jpg", objectPath: originalPath)]
+            var displayFile = "original.jpg"
             if let flattened = scan.flattened,
                (try? flattened.write(to: dir.appendingPathComponent("flattened.jpg"), options: .atomic)) != nil {
-                // The straightened slide is what's shown and goes in the deck;
-                // the original is kept alongside it.
+                // The straightened slide is what's shown and goes in the deck.
+                // The uncropped original isn't uploaded: nothing shows it, and
+                // it used to double the storage.
                 row["photo_path"] = flattenedPath
-                row["payload"] = ["originalPhotoPath": originalPath] as JSObject
-                uploads.append(Upload(file: "flattened.jpg", objectPath: flattenedPath))
+                uploads = [Upload(file: "flattened.jpg", objectPath: flattenedPath)]
+                displayFile = "flattened.jpg"
             }
             do {
                 let rowData = try JSONSerialization.data(withJSONObject: Self.plain(row))
@@ -215,7 +217,7 @@ final class PhotoUploadQueue: NSObject, URLSessionTaskDelegate {
                 uploads.append(Upload(file: "row.json", objectPath: nil))
                 let manifest = Manifest(
                     id: id, sessionId: sessionId,
-                    displayFile: uploads.count == 3 ? "flattened.jpg" : "original.jpg",
+                    displayFile: displayFile,
                     uploads: uploads
                 )
                 self.queue.async {

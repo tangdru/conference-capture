@@ -702,8 +702,8 @@ export async function addPhoto(sessionId: string, userId: string, blob: Blob): P
 }
 
 /** After on-device processing: a flattened slide, if one was found, becomes
- * the photo shown and used for the deck (the original stays in storage, its
- * path kept in `payload`), and the text read off it goes in `text`. */
+ * the photo shown and used for the deck (the uncropped original is deleted),
+ * and the text read off it goes in `text`. */
 export async function saveProcessedPhoto(
   item: PhotoItem,
   sessionId: string,
@@ -719,10 +719,14 @@ export async function saveProcessedPhoto(
       .upload(photoPath, result.flattened, { contentType: 'image/jpeg', upsert: false })
     if (uploadError) throw uploadError
     update.photo_path = photoPath
-    update.payload = { originalPhotoPath: item.photoPath }
   }
   const { error } = await supabase.from('cc_timeline_items').update(update).eq('id', item.id)
   if (error) throw error
+  // The uncropped original isn't kept: nothing shows it, and it doubled the
+  // storage. Best effort; a leftover is only wasted space.
+  if (result.flattened && item.photoPath && item.photoPath !== photoPath) {
+    void supabase.storage.from(PHOTOS_BUCKET).remove([item.photoPath]).catch(() => {})
+  }
   return {
     photoPath,
     slideText: result.text,

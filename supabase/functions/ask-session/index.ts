@@ -46,9 +46,8 @@ function explain(err: unknown): string {
 // accounts on the free list (table cc_free_users, edited in the dashboard).
 // Everyone else makes presentations and asks in Claude, through the
 // connector (the mcp function), on their own Claude plan.
-// While this is false, accounts off the list still get the shared key: Friends
-// on builds before 86 have no connector yet. Set true once they've updated.
-const FREE_LIST_ONLY = false
+// Turned on 2026-11-15, when Friends got build 89 (with the connector).
+const FREE_LIST_ONLY = true
 
 /** The Claude API key for this request: the shared one, for an account on the
  * free list (or for anyone while FREE_LIST_ONLY is off). */

@@ -15,6 +15,7 @@ import { CheckIcon, StarIcon, WarningIcon } from '../components/InlineIcons'
 import { CameraViewfinder } from '../components/CameraViewfinder'
 import { PhotoViewer } from '../components/PhotoViewer'
 import { VideoViewer } from '../components/VideoViewer'
+import { AskSheet, type AskTurn } from '../components/AskSheet'
 import { useWakeLock } from '../hooks/useWakeLock'
 import * as db from '../db'
 import { forgetCachedDeck } from '../deckCache'
@@ -43,13 +44,19 @@ interface CaptureScreenProps {
   onBack: () => void
   /** Opens Claude to ask about this talk. */
   onAskInClaude: () => void
+  /** Free list: ask about the talk here in the app instead. */
+  askInApp?: boolean
 }
 
 export function CaptureScreen({
-  session, userId, focusItemId, onUpdateLocal, liveText, transcriptionError, onPause, onResume, onBack, onAskInClaude,
+  session, userId, focusItemId, onUpdateLocal, liveText, transcriptionError, onPause, onResume, onBack, onAskInClaude, askInApp = false,
 }: CaptureScreenProps) {
   const [now, setNow] = useState(Date.now())
   const [cameraOpen, setCameraOpen] = useState(false)
+  const [askOpen, setAskOpen] = useState(false)
+  // Kept while the session is open, so closing Ask and reopening it picks up
+  // the same conversation.
+  const [askTurns, setAskTurns] = useState<AskTurn[]>([])
   const [saveError, setSaveError] = useState<string | null>(null)
   useEffect(() => onOutboxProblem(setSaveError), [])
   const [savedPhotoNotice, setSavedPhotoNotice] = useState(false)
@@ -653,7 +660,7 @@ export function CaptureScreen({
           )}
           {session.status === 'recording' && showClip && <ClipButton className="clip-btn" onTap={tapClip} />}
           {session.items.some((i) => i.type === 'transcript' || i.type === 'note' || i.type === 'photo') && (
-            <button className="ask-btn" onClick={onAskInClaude} aria-label="Ask Claude about this talk">
+            <button className="ask-btn" onClick={() => (askInApp ? setAskOpen(true) : onAskInClaude())} aria-label="Ask Claude about this talk">
               <svg className="inline-icon" viewBox="2.2 2.7 19.6 18.6" fill="none" aria-hidden="true">
                 <path
                   d="M4 5.5A2 2 0 016 3.5h12a2 2 0 012 2v9a2 2 0 01-2 2h-7l-4.5 4v-4H6a2 2 0 01-2-2v-9z"
@@ -673,6 +680,19 @@ export function CaptureScreen({
 
       {viewingVideo && (
         <VideoViewer item={viewingVideo} onClose={() => setViewingVideoId(null)} />
+      )}
+
+      {askOpen && (
+        <AskSheet
+          kicker="Ask about"
+          title={session.title}
+          hint="Answers come from this session’s transcript, notes and slides."
+          suggestions={['What were the main points?', 'What did the speaker recommend?', 'What should I follow up on?']}
+          ask={async (question, history) => ({ answer: await db.askSession(session.id, question, history) })}
+          turns={askTurns}
+          onTurnsChange={setAskTurns}
+          onClose={() => setAskOpen(false)}
+        />
       )}
 
       {cameraOpen && (

@@ -43,27 +43,31 @@ const BUILD_SILENCE_MS = 6 * 60 * 1000
 // many times before giving up.
 const RATE_LIMIT_RETRIES = 4
 
-// Accounts without a key of their own still use the shared key while this is
-// true (testers on builds before the Claude API key screen can't add one).
-// false: Sparkle and Ask need the account's own key.
-const SHARED_KEY_FALLBACK = true
+// Sparkle and Ask in the app run on the shared Claude API key only for
+// accounts on the free list (table cc_free_users, edited in the dashboard).
+// Everyone else makes presentations and asks in Claude, through the
+// connector (the mcp function), on their own Claude plan.
+// While this is false, accounts off the list still get the shared key: Friends
+// on builds before 86 have no connector yet. Set true once they've updated.
+const FREE_LIST_ONLY = false
 
-/** The Claude API key for this request: the caller's own (menu > Claude API
- * key), read from Vault with the service role -- the only thing it's used for. */
+/** The Claude API key for this request: the shared one, for an account on the
+ * free list (or for anyone while FREE_LIST_ONLY is off). */
 async function claudeKeyFor(supabase: ReturnType<typeof createClient>): Promise<string> {
+  const shared = Deno.env.get('ANTHROPIC_API_KEY')
+  if (!shared) throw new Error('No Claude API key')
+  if (!FREE_LIST_ONLY) return shared
   const { data: userData } = await supabase.auth.getUser()
   const userId = userData?.user?.id
   if (userId) {
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
       auth: { persistSession: false },
     })
-    const { data, error } = await admin.rpc('cc_claude_key_for', { p_user: userId })
-    if (error) throw new Error(`Couldn't read the Claude API key: ${error.message}`)
-    if (typeof data === 'string' && data) return data
+    const { data, error } = await admin.rpc('cc_is_free_user', { p_user: userId })
+    if (error) throw new Error(`Couldn't check the free list: ${error.message}`)
+    if (data === true) return shared
   }
-  const shared = SHARED_KEY_FALLBACK ? Deno.env.get('ANTHROPIC_API_KEY') : undefined
-  if (shared) return shared
-  throw new Error('No Claude API key')
+  throw new Error('Not on the free list')
 }
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void }
@@ -73,6 +77,7 @@ declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void }
 const MESSAGES = {
   credits: 'Out of Claude API credits',
   apiKey: 'Claude API key missing or rejected',
+  notListed: 'Presentations and questions now happen in Claude. Connect it in the menu under Use in Claude.',
   busy: 'Too many requests, even after the automatic retries',
   overloaded: 'Claude overloaded or down',
   refused: 'Claude refused to write it',
@@ -89,6 +94,7 @@ function explain(err: unknown): string {
   const text = err instanceof Error ? err.message : String(err)
   if (/credit balance/i.test(text)) return MESSAGES.credits
   if (/took too long|Couldn't continue/i.test(text)) return MESSAGES.stopped
+  if (/Not on the free list/.test(text)) return MESSAGES.notListed
   if (/ANTHROPIC_API_KEY|No Claude API key|Claude API key:|\b40[13]\b|authentication_error|permission_error|x-api-key/i.test(text)) return MESSAGES.apiKey
   if (/\b429\b|rate_limit/i.test(text)) return MESSAGES.busy
   if (/\b413\b|request_too_large|prompt is too long|too many total/i.test(text)) return MESSAGES.tooBig

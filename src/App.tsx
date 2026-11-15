@@ -16,15 +16,16 @@ import { CaptureScreen } from './screens/CaptureScreen'
 import { DeckViewer } from './components/DeckViewer'
 import { feel } from './haptics'
 import { ClaudeInviteDialog } from './components/ClaudeInviteDialog'
+import type { AskTurn } from './components/AskSheet'
+import { AskPanel, type AskOrigin } from './components/AskPanel'
 import { AppMenu } from './components/AppMenu'
-import { ClaudeKeySheet } from './components/ClaudeKeySheet'
 import { ClaudeConnectorSheet } from './components/ClaudeConnectorSheet'
 import { PresentationOptionsSheet } from './components/PresentationOptionsSheet'
 import { SessionOptionsSheet } from './components/SessionOptionsSheet'
 import { DeleteAccountSheet } from './components/DeleteAccountSheet'
 import { maybeStartClaudeTour, queueClaudeTour, shouldAutoStartHomeTour, startHomeTour } from './tour'
 import { addConnectorUrl, askAllPrompt, askSessionPrompt, makePresentationPrompt, newChatUrl, openExternal } from './claudeLinks'
-import { cacheConnectorUrl, cachedConnectorUrl, inviteDue, noteAppOpen, noteInviteShown } from './claudeInvite'
+import { cacheConnectorUrl, cacheFreeUser, cachedConnectorUrl, cachedFreeUser, inviteDue, noteAppOpen, noteInviteShown } from './claudeInvite'
 import { onPhotoUploaded, pendingPhotos, syncPhotoUploadAuth } from './photoUploads'
 import { onOutboxProblem, startOutbox } from './itemOutbox'
 import { startDeckUploads, uploadDeckLater } from './deckUploads'
@@ -50,7 +51,7 @@ export default function App() {
 function AuthedApp({ authSession }: { authSession: AuthSession }) {
   const userId = authSession.user.id
   const [addingEmail, setAddingEmail] = useState(false)
-  const [menu, setMenu] = useState<'menu' | 'session' | 'presentation' | 'claude-key' | 'claude-connector' | 'delete-account' | null>(null)
+  const [menu, setMenu] = useState<'menu' | 'session' | 'presentation' | 'claude-connector' | 'delete-account' | null>(null)
   // Coming back to the menu from a screen it opened: no opening animation.
   const [menuReturning, setMenuReturning] = useState(false)
   const [sessions, setSessions] = useState<Session[] | null>(null)
@@ -63,6 +64,17 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   // known (null: none yet), and the invitation to connect.
   const [connectorUrl, setConnectorUrl] = useState<string | null>(() => cachedConnectorUrl(userId))
   const [connectorChecked, setConnectorChecked] = useState(false)
+  // On the free list (cc_free_users): Sparkle and Ask run here in the app,
+  // on the shared Claude API key, instead of in Claude. As last known.
+  const [freeUser, setFreeUser] = useState(() => cachedFreeUser(userId))
+  const [freeChecked, setFreeChecked] = useState(false)
+  // Ask Claude across all sessions, in the app (free list only). Held here,
+  // not in HomeScreen, so it's still open on the same conversation on
+  // coming back from a session it cited.
+  const [askOrigin, setAskOrigin] = useState<AskOrigin | null>(null)
+  const [askThreads, setAskThreads] = useState<db.AskThread[] | null>(null)
+  const [askThreadsError, setAskThreadsError] = useState<string | null>(null)
+  const [askThreadId, setAskThreadId] = useState<string>(() => crypto.randomUUID())
   const [invite, setInvite] = useState<'invite' | 'needed' | null>(null)
   const [inviteBusy, setInviteBusy] = useState(false)
   const [inviteError, setInviteError] = useState<string | null>(null)
@@ -132,6 +144,15 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         // Offline: go by what was last seen.
       })
       .finally(() => setConnectorChecked(true))
+    db.fetchIsFreeUser()
+      .then((free) => {
+        setFreeUser(free)
+        cacheFreeUser(userId, free)
+      })
+      .catch(() => {
+        // Offline: go by what was last seen.
+      })
+      .finally(() => setFreeChecked(true))
     noteAppOpen(userId)
     setOpenCount((n) => n + 1)
     if (!Capacitor.isNativePlatform()) return
@@ -679,7 +700,9 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   // queued it, else the invitation to connect when it's due. Not over a
   // brand-new account's home tour; that one comes first.
   useEffect(() => {
-    if (openCount === 0 || sessions === null || !connectorChecked || route.screen !== 'home' || menu !== null) return
+    if (openCount === 0 || sessions === null || !connectorChecked || !freeChecked || route.screen !== 'home' || menu !== null) return
+    // The free list uses Claude here in the app: no invitation.
+    if (freeUser) return
     if (connectorUrl) {
       window.setTimeout(maybeStartClaudeTour, 700)
       return
@@ -690,7 +713,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     setInvite('invite')
     // Only on opening (openCount), not as the list changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openCount, sessions === null, connectorChecked])
+  }, [openCount, sessions === null, connectorChecked, freeChecked])
 
   // The talk being recorded keeps being heard while you look at the sessions
   // list or anything else -- leaving its screen used to stop the mic. Only a
@@ -806,10 +829,58 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
           return resumeSession(session.id)
         }}
         onBack={() => setRoute({ screen: 'home' })}
+        askInApp={freeUser}
         onAskInClaude={() => openInClaude(askSessionPrompt(session.title, session.id))}
       />
       </div>
     )
+  }
+
+  /** The chat button, in the app (free list): Ask Claude grows out of it. */
+  function openAsk(origin: AskOrigin) {
+    setAskThreadId(crypto.randomUUID())
+    setAskOrigin(origin)
+    if (askThreads !== null && !askThreadsError) return
+    setAskThreadsError(null)
+    db.fetchAskThreads()
+      .then((loaded) =>
+        // Anything asked while these loaded stays on top.
+        setAskThreads((prev) => [...(prev ?? []), ...loaded.filter((t) => !prev?.some((p) => p.id === t.id))]),
+      )
+      .catch((err) => setAskThreadsError(`Couldn’t load your conversations. ${errorMessage(err)}`))
+  }
+
+  function updateAskThread(id: string, turns: AskTurn[]) {
+    if (turns.length === 0) {
+      setAskThreads((prev) => prev?.filter((t) => t.id !== id) ?? prev)
+      return
+    }
+    const thread: db.AskThread = { id, title: turns[0].content.slice(0, 300), turns, updatedAt: Date.now() }
+    setAskThreads((prev) => [thread, ...(prev ?? []).filter((t) => t.id !== id)])
+    // Kept once answered; a question still waiting isn't worth saving alone.
+    if (turns[turns.length - 1].role === 'assistant') {
+      db.saveAskThread(thread).catch((err) => console.warn('Saving the conversation failed', err))
+    }
+  }
+
+  function deleteAskThread(id: string) {
+    setAskThreads((prev) => prev?.filter((t) => t.id !== id) ?? prev)
+    db.deleteAskThread(id).catch((err) => setHomeError(`Couldn’t delete that conversation. ${errorMessage(err)}`))
+  }
+
+  /** A citation in a cross-session answer: open that session at the item
+   * nearest the cited time. */
+  function openCitation(sessionId: string, elapsedSeconds: number | null) {
+    const session = sessions?.find((s) => s.id === sessionId)
+    if (!session) return
+    let itemId: string | undefined
+    if (elapsedSeconds !== null && session.items.length > 0) {
+      const at = session.startedAt + elapsedSeconds * 1000
+      itemId = session.items.reduce((best, item) =>
+        Math.abs(item.timestamp - at) < Math.abs(best.timestamp - at) ? item : best,
+      ).id
+    }
+    openSession(sessionId, itemId)
   }
 
   return (
@@ -821,7 +892,6 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         onClose={() => setMenu(null)}
         onSessionOptions={() => setMenu('session')}
         onPresentationOptions={() => setMenu('presentation')}
-        onClaudeKey={() => setMenu('claude-key')}
         onClaudeConnector={() => setMenu('claude-connector')}
         onDeleteAccount={() => setMenu('delete-account')}
         onTutorial={() => {
@@ -862,14 +932,6 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         }}
       />
     )}
-    {menu === 'claude-key' && (
-      <ClaudeKeySheet
-        onBack={() => {
-          setMenuReturning(true)
-          setMenu('menu')
-        }}
-      />
-    )}
     {menu === 'claude-connector' && (
       <ClaudeConnectorSheet
         onConnectorChange={rememberConnector}
@@ -899,11 +961,10 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         setMenuReturning(false)
         setMenu('menu')
       }}
-      // Sparkle now hands the presentation to the Claude app (on the user's
+      // Sparkle hands the presentation to the Claude app (on the user's
       // plan), which saves it back here with the summary and other entries.
-      // generateDeckForSession (the in-app build on the API key) stays until
-      // the console API calls are removed.
-      onGenerateDeck={makeInClaude}
+      // On the free list it's built here, on the shared API key.
+      onGenerateDeck={(id) => (freeUser ? void generateDeckForSession(id) : makeInClaude(id))}
       onViewDeck={viewDeck}
       onTogglePin={togglePin}
       onShareDeck={shareDeck}
@@ -916,8 +977,25 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       }}
       error={homeError}
       onDismissError={() => setHomeError(null)}
-      onAskClaude={() => openInClaude(askAllPrompt())}
+      onAskClaude={(origin) => (freeUser ? openAsk(origin) : openInClaude(askAllPrompt()))}
+      askInApp={freeUser}
     />
+    {askOrigin && (
+      <AskPanel
+        origin={askOrigin}
+        sessions={sessions}
+        threads={askThreads}
+        threadsError={askThreadsError}
+        threadId={askThreadId}
+        onThreadIdChange={setAskThreadId}
+        onThreadTurns={updateAskThread}
+        onDeleteThread={deleteAskThread}
+        ask={db.askAllSessions}
+        onOpenSession={openSession}
+        onOpenCitation={openCitation}
+        onClose={() => setAskOrigin(null)}
+      />
+    )}
     {invite && (
       <ClaudeInviteDialog
         reason={invite}

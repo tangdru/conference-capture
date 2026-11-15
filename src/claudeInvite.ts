@@ -67,3 +67,17 @@ export function cacheConnectorUrl(userId: string, url: string | null) {
   else delete all[userId]
   write(CONNECTED_KEY, all)
 }
+
+const FREE_KEY = 'cc-free-user'
+
+/** Whether the account was on the free list when last checked. */
+export function cachedFreeUser(userId: string): boolean {
+  return read<Record<string, boolean>>(FREE_KEY, {})[userId] === true
+}
+
+export function cacheFreeUser(userId: string, free: boolean) {
+  const all = read<Record<string, boolean>>(FREE_KEY, {})
+  if (free) all[userId] = true
+  else delete all[userId]
+  write(FREE_KEY, all)
+}

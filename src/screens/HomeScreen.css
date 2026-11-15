@@ -254,6 +254,20 @@
   cursor: pointer;
 }
 
+/* Never seen: holds the keyboard for the moment in-app Ask takes to open. */
+.home-chat__keyboard {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  font-size: 16px;
+  pointer-events: none;
+}
+
 .home-chat .inline-icon {
   width: 20px;
   height: 20px;

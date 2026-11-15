@@ -19,6 +19,7 @@ import {
 } from '../components/SwipeActions'
 import { Logo } from '../components/Logo'
 import { ChatIcon } from '../components/InlineIcons'
+import type { AskOrigin } from '../components/AskPanel'
 import { TOUR_REVEAL_EVENT, type TourRevealTarget } from '../tour'
 import './HomeScreen.css'
 
@@ -85,7 +86,10 @@ interface HomeScreenProps {
   error: string | null
   onDismissError: () => void
   /** The chat button: opens Claude to ask about the sessions. */
-  onAskClaude: () => void
+  onAskClaude: (origin: AskOrigin) => void
+  /** Ask opens here in the app (free list): the button holds the keyboard
+   * for the moment it takes to open. */
+  askInApp?: boolean
   /** A session is open over the list: it's out of reach (inert) and its
    * clock stops, until swiped or tapped back to. */
   covered?: boolean
@@ -108,6 +112,7 @@ export function HomeScreen({
   error,
   onDismissError,
   onAskClaude,
+  askInApp = false,
   covered = false,
 }: HomeScreenProps) {
   const [now, setNow] = useState(Date.now())
@@ -116,6 +121,7 @@ export function HomeScreen({
   // Days folded away, by date, remembered between opens.
   const [collapsed, setCollapsed] = useState<Set<string>>(savedCollapsed)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const askInputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const { progress, refreshing } = usePullToRefresh(scrollRef, listRef, onRefresh)
 
@@ -396,9 +402,20 @@ export function HomeScreen({
 
         {sessions.length > 0 && (
           <>
-            <button className="home-chat" onClick={onAskClaude} aria-label="Ask Claude about your sessions">
+            <button
+              className="home-chat"
+              onClick={(e) => {
+                // Focused now, inside the tap, so iOS raises the keyboard; Ask's
+                // own box takes the focus over as it opens.
+                if (askInApp) askInputRef.current?.focus()
+                const rect = e.currentTarget.getBoundingClientRect()
+                onAskClaude({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, r: rect.width / 2 })
+              }}
+              aria-label="Ask Claude about your sessions"
+            >
               <ChatIcon />
             </button>
+            {askInApp && <input ref={askInputRef} className="home-chat__keyboard" aria-hidden="true" tabIndex={-1} />}
 
             <div className="home-footer__sort">
               {sessions.length > 1 && <SortMenu value={sort} onChange={changeSort} />}

@@ -15,6 +15,21 @@ once -- "Testing"; Friends had build 75).
 
 ---
 
+## Build 86 — internal
+
+Uploaded 2026-11-14. Adds the free list. Accounts whose email is in Supabase's cc_free_users table use Andrew's Claude API key in the app; everyone else (Andrew included) uses Claude through the connector, as in 85. The list starts empty. The server still lets every account use the shared key until Friends have this build (FREE_LIST_ONLY off).
+
+What to Test:
+
+```
+FREE LIST AND CLAUDE
+- Your account (not on the free list): everything works as in 85. The sparkle, the chat button and a session's ask button all open Claude.
+- Menu: the hidden "Claude API key" screen is gone for good; nobody adds their own key.
+- An account on the free list (add its email in Supabase): no "Connect to Claude" invitation. The sparkle builds the presentation in the app, the chat button opens the in-app Search or ask screen, and a session's speech bubble opens in-app Ask about this talk.
+```
+
+---
+
 ## Build 85 — internal
 
 Replaces 84 (test this one; it has everything from 84). The only change: the sparkle now makes the presentation in Claude, and 84's extra speech-bubble-with-star swipe button is gone.

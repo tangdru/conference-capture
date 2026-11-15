@@ -1,7 +1,52 @@
 # Live points and Remember this lines
 
-Agreed with Andrew 2026-11-15. Replaces the backlog's "Running 'so far' card"
-and part of "Suggested moments".
+**Status: ON HOLD (2026-11-15).** Agreed with Andrew, but he can't test it:
+his phone is an iPhone 14, which has no Apple Intelligence, so the on-device
+model never runs on it. Pick this up once there's an Apple Intelligence iPhone
+to test on (15 Pro or newer). Top item in `design/backlog.md`.
+
+Replaces the backlog's "Running 'so far' card" and part of "Suggested
+moments".
+
+## Where the idea came from
+
+Andrew's picture: during the live transcript, the top 20-30% of the session
+screen builds a list of important things to remember, as one-liners, so you
+can keep tabs during the talk. If the user disagrees with one, they delete it
+quickly; he leans towards a small × on the right of each line. Kept points are
+treated like Remember this: each one keeps its text and its time.
+
+His next idea, the same day: give Remember this taps a one-liner too.
+
+## How things work today (2026-11-15)
+
+- Nothing analyses a talk while it's live. The phone transcribes the speaker
+  on the device and saves the transcript about every 30 s. Claude runs only
+  when a presentation is made (generate-deck) or a question is asked
+  (ask-session, or Claude through the connector).
+- A Remember this tap saves only its time (a `highlight` row, no text). The
+  timeline shows "Remembered this moment" and the time, plus a clip if Chui's
+  audio is on. Its meaning is worked out later by Claude: generate-deck (and
+  the connector's deck.ts) give it what was said from 90 s before the tap to
+  20 s after (`formatHighlights`); the connector's get_session shows
+  "[12:40] Remembered" among the transcript lines for Claude to read around.
+
+## Why the on-device model, not Claude
+
+- Claude live would mean Andrew's API key on every refresh. Under the free
+  list rule (see the Claude API key plan memory) only listed accounts use his
+  key; everyone else uses Claude through the connector, and the connector
+  can't push anything into the app (Claude only answers when someone talks to
+  it in Claude). So Claude could only do this for the free list, at a cost
+  per refresh.
+- Apple's on-device model: free, private (the talk never leaves the phone),
+  works offline on conference Wi-Fi, and good at short one-liners. Weaker than
+  Claude at deep analysis, which stays Claude's job in the presentation.
+  Limits: Apple Intelligence iPhones only, and a small context (about 4,000
+  tokens), so it reads the talk in chunks.
+- Checked 2026-11-15: Xcode 27.2's iOS SDK has FoundationModels.framework;
+  the app's deployment target is iOS 15, so the code sits behind
+  `#available(iOS 26)` like SpeechAnalyzerTranscriber.
 
 ## What it is
 
@@ -71,8 +116,9 @@ as today.
 
 The simulator can't transcribe, but the model runs in the simulator when the
 Mac has Apple Intelligence on, so the points can be checked by feeding it a
-saved transcript. Real talks on Andrew's phone check timing, battery and
-quality.
+saved transcript. Timing, battery and the quality of the lines in real talks
+need an Apple Intelligence iPhone, which is why this is on hold: Andrew's
+iPhone 14 can't run it, and on it the panel would simply never appear.
 
 ## Not in this
 

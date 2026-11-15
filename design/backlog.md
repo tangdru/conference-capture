@@ -3,6 +3,17 @@
 Ideas agreed worth doing but not scheduled yet (2026-10-31). Newest thinking
 on the native app is in `native-app-migration.md`.
 
+## Top ticket (on hold)
+
+- **Live points and Remember this lines.** A "So far" panel at the top of a
+  live session with one-line points written on the phone every couple of
+  minutes (× to remove one; kept ones count as Remember this moments), and a
+  one-line statement for each Remember this tap. Uses Apple's on-device model:
+  free, private, no API key. Full plan:
+  `design/plans/2026-11-15-live-points-plan.md`. **On hold** until there's an
+  Apple Intelligence iPhone (15 Pro or newer) to test on; Andrew's is an
+  iPhone 14. (Agreed 2026-11-15.)
+
 ## Capture
 
 *Dropped 2026-11-15:* an explicit End session, and a session photo album.
@@ -92,8 +103,7 @@ and starring any entry (2026-11-01). Rough order of value.
    - Suggested moments after the talk: Claude proposes 3-5 moments that
      mattered as dimmed cards; tap to keep (starred), swipe to dismiss.
      Nothing is added unless kept.
-   - Running "so far" card during long talks, refreshed every few minutes,
-     bullets starrable. Costs per refresh, so a setting.
+   - Running "so far" card: now the top ticket (live points), see above.
 4. **Turn it into things to do.**
    - Action items to Reminders with one tap (native Reminders).
    - QR codes and URLs on slide photos pulled out as tappable references.

@@ -132,7 +132,8 @@ export function SwipeActions({ id, revealedId, onReveal, actions, dragHandle, di
     const shouldOpen = finalPos < -revealWidth / 2
 
     setTransform(shouldOpen ? -revealWidth : 0, true)
-    if (shouldOpen && !isRevealed) feel.tick()
+    // A tick when the menu snaps open, and again when an open one snaps shut.
+    if (shouldOpen !== isRevealed) feel.tick()
     onReveal(shouldOpen ? id : null)
   }
 
@@ -149,6 +150,7 @@ export function SwipeActions({ id, revealedId, onReveal, actions, dragHandle, di
       e.stopPropagation()
       e.preventDefault()
       setTransform(0, true)
+      feel.tick()
       onReveal(null)
     }
   }

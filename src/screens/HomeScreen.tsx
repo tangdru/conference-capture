@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { feel } from '../haptics'
 import type { Session } from '../types'
 import type { SavedShare } from '../sharing'
 import { formatSessionSubtitle } from '../format'
@@ -145,6 +146,7 @@ export function HomeScreen({
   }, [covered])
 
   function toggleDay(key: string) {
+    feel.tick()
     setCollapsed((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)

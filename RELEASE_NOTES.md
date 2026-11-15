@@ -10,14 +10,15 @@ changes.
   review. When sending a build to Friends, combine the notes of every build
   since the last one Friends got (marked below).
 
-**Last build sent to Friends: 81** (added 2026-11-13 and approved at
-once -- "Testing"; Friends had build 75).
+**Last build sent to Friends: 89** (added 2026-11-15 and approved at
+once -- "Testing"; Friends had build 81).
 
 ---
 
-## Build 89 — internal
+## Build 89 — internal, Friends
 
-Uploaded 2026-11-15. Everything from 88, plus two haptics.
+Uploaded 2026-11-15. Everything from 88, plus two haptics. Sent to Friends
+2026-11-15.
 
 What to Test:
 
@@ -25,6 +26,33 @@ What to Test:
 HAPTICS
 - Session list: swipe a session (live, ended or one with a presentation) left to open its menu (a tick), then swipe it shut or tap the card: a second tick once it's fully closed. A half swipe that springs back stays silent.
 - Session list: tap a day heading to fold it, and again to open it: a tick each time.
+```
+
+For Friends (combined notes, builds 82–89 -- this is what went into App
+Store Connect; written for accounts not on the free list, which is all of
+Friends):
+
+```
+New since build 81:
+
+CLAUDE MAKES YOUR PRESENTATIONS AND ANSWERS QUESTIONS
+Presentations and questions now happen in Claude, which reads your sessions through a private link. You need the Claude app and a Claude Pro (or Max, Team, Enterprise) plan.
+- After updating, an invitation asks you to connect. Connect to Claude opens the Claude app with Conference Capture filled in: tap Add. Not now hides it for a few days.
+- Session list: the search button is now a chat button. It opens a new Claude chat ready to ask about all your sessions.
+- Swipe left on a session and tap the sparkle: Claude opens ready to make the presentation. Tap send. The presentation, summary, action items and the rest appear back in the app.
+- Inside a session, the speech bubble opens Claude ready to ask about that talk.
+- Menu > Use in Claude: add it in Claude, or copy or share your link to add it on a computer (Claude > Settings > Connectors > Add custom connector). Keep the link private.
+- Please try asking Claude about a talk while it's still going, too.
+
+SESSION OPTIONS: DURING A TALK (Menu > Session options)
+- Live transcript (on): turn it off and the microphone stays off: nothing is transcribed and there are no clips.
+- Show transcript while live (on): turn it off and the timeline shows only your photos, notes, stars and clips while recording. A Transcribing light at the top shows bars that move while the speaker talks and the time recorded; it turns amber after 90 seconds of silence and red if transcription stops. Pause, and the full transcript appears.
+- Stay live after a pause (3 min): how long a paused session stays at the top of your sessions, from 30 seconds to 10 minutes.
+
+HAPTICS
+- A light tick when a session's swipe menu snaps shut (as well as when it opens), and when you tap a day heading to fold or open it.
+
+Also: slide photos now keep only the cropped copy, which saves storage.
 ```
 
 ## Build 88 — internal

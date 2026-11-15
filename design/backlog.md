@@ -5,17 +5,9 @@ on the native app is in `native-app-migration.md`.
 
 ## Capture
 
-- **End session.** An explicit "End" in the session (and on the live card)
-  that stops recording and closes the session for good. Today there's no
-  end: a paused session stays in the top spot for 3 minutes (was 20 until 2026-11-11) after the last
-  capture, or until its presentation is built (2026-11-10). Ending could
-  offer to build the presentation right away. Ended sessions can still be
-  edited; recording again would reopen them. (Requested 2026-11-10.)
-- **Ask during a live session.** Ask questions about the talk while it's
-  still going (today Ask works on finished sessions). Answers would draw on
-  the transcript and photos captured so far. (Requested 2026-11-10.)
-- **Session photo album.** A grid of every photo in the session, opened from
-  the session, to browse them all at once. (Requested 2026-11-10.)
+*Dropped 2026-11-15:* an explicit End session, and a session photo album.
+Ask during a live session works through the Claude connector.
+
 - **Video clips: tap for a photo, hold the shutter for video.** Same camera,
   same shutter, like the iPhone camera. Claude can't take video directly
   (only images, text and PDFs), so the phone turns a clip into things it
@@ -38,8 +30,8 @@ Menu → Session options (account-wide, saved in
 `cc_user_settings.session_options`, `src/sessionOptions.ts`). Built in
 build 67 (2026-11-12): **Remember this** (on: shows the star) and **Chui's
 audio** (off: hides the clip button). Turning an option off only hides or
-stops something; it never removes anything already captured. Ideas
-discussed 2026-11-12, not scheduled:
+stops something; it never removes anything already captured. Nothing
+is waiting to be built here (2026-11-15).
 
 *Built 2026-11-14 (after build 86), under "During a talk":* **Live
 transcript** (on; off keeps the mic off, so no clips either), **Show
@@ -53,33 +45,15 @@ about a live session, at most ~30 s behind, which is useful), and "Quote with
 each clip" (a clip's words come from the transcript, which Ask and search
 already read).
 
-*Around the session*
-- **Build the presentation when a session ends.** Start Sparkle automatically
-  instead of waiting for a tap.
-- **Date format in new session names.** MM/DD (current, since build 67) or
-  DD/MM.
+*Built 2026-11-12 (commit d63acdc), under Chui's audio:* clip length
+before (0-60 s, default 5) and after (0-120 s, default 44), snap to
+sentences, voice boost (saved clip only), upload on Wi-Fi only, keep only the
+trimmed part, and clips in shared presentations (off). Clips go into
+presentations (Sparkle v20) with a caption.
 
-*Chui's audio (clips)* — today a clip keeps 15 s before the tap and 45 s
-after, can be trimmed, uploads, and plays in presentations with a caption.
-- **Clip length**, or split into:
-  - **Look-back length**: how far before the tap (15 s now; some will want
-    30). The most important of the clip settings to catch the moment.
-  - **Look-ahead length**: how long it keeps recording after the tap (45 s
-    now).
-- **Snap to sentences.** Trim the clip to whole sentences using the
-  transcript, so it doesn't start or end mid-word.
-- **Voice boost.** Reduce room noise and echo so the speaker is clearer.
-- **Upload on Wi-Fi only.** Hold clips on the phone until Wi-Fi, to save
-  mobile data at the venue.
-- **Keep only the trimmed part.** When a clip is trimmed, discard the rest
-  of the audio (less storage, less of the speaker's voice kept).
-
-*Clips in presentations* (may belong in Presentation options instead)
-- **Include clips in presentations.** Keep clips for yourself without
-  putting them in the deck.
-- **Clips in shared links.** Whether people with a shared link can play the
-  speaker's voice. A privacy and consent question, since it's someone else's
-  recording. Suggested as the first clip setting to add.
+*Dropped 2026-11-15:* building the presentation automatically when a session
+ends (presentations are made in Claude through the connector, which the app
+can't start), and a date format setting for session names.
 
 Open naming question: once capture settings and presentation settings both
 exist, the menu might simply say "Options" with two sections.

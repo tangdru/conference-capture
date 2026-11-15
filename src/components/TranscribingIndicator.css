@@ -1,16 +1,14 @@
-/* The "still transcribing" light shown in place of the hidden live transcript. */
+/* The "still transcribing" light at the top of the timeline while the live
+   transcript is hidden. No box: a line of its own under the session title. */
 .transcribing {
   --tone: var(--accent);
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
+  flex-shrink: 0;
   box-sizing: border-box;
-  margin: 6px 0;
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: 1px solid color-mix(in srgb, var(--tone) 35%, transparent);
-  background: color-mix(in srgb, var(--tone) 8%, transparent);
+  padding: 12px 20px 10px;
+  border-bottom: 1px dashed var(--border);
 }
 
 .transcribing--quiet {
@@ -55,6 +53,22 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  flex: 1;
+}
+
+.transcribing__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.transcribing__time {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .transcribing__label {

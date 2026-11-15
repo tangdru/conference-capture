@@ -137,7 +137,6 @@ export function CaptureScreen({
   const hideTranscript = recording && sessionOptions.liveTranscript && !sessionOptions.showTranscriptLive
   const timelineItems = hideTranscript ? session.items.filter((i) => i.type !== 'transcript') : session.items
   const transcriptCount = session.items.reduce((n, i) => (i.type === 'transcript' ? n + 1 : n), 0)
-  const heardMs = session.items.reduce((ms, i) => (i.type === 'transcript' ? ms + i.durationMs : ms), 0)
   // When words were last heard (the words in progress changing, or a passage
   // saved); from the start of this stretch of recording until then.
   const [lastHeardAt, setLastHeardAt] = useState(() => Date.now())
@@ -608,6 +607,17 @@ export function CaptureScreen({
 
       {/* The timeline, with a strip along its left edge for swiping back to
           the session list (the rows keep their own sideways swipes). */}
+      {/* Transcript hidden (or off) while live: the light that says it's
+          still transcribing sits at the top of the timeline. */}
+      {showIndicator && (
+        <TranscribingIndicator
+          state={transcribingState}
+          hearing={now - lastHeardAt < 4000}
+          recordedMs={elapsedMs}
+          message={stoppedReason}
+        />
+      )}
+
       <div className="capture-body">
       <div className="swipe-back-edge" aria-hidden="true" {...swipeBack.edgeProps} />
       <Timeline
@@ -626,17 +636,7 @@ export function CaptureScreen({
         onToggleStarred={toggleStarred}
         onSavePhoto={Capacitor.isNativePlatform() ? saveToAlbum : undefined}
         onReorder={placeItem}
-        liveTranscript={session.status === 'recording' ? liveText : null}
-        liveSlot={
-          showIndicator ? (
-            <TranscribingIndicator
-              state={transcribingState}
-              hearing={now - lastHeardAt < 4000}
-              heardMs={heardMs}
-              message={stoppedReason}
-            />
-          ) : undefined
-        }
+        liveTranscript={session.status === 'recording' && !showIndicator ? liveText : null}
         processingPhotoIds={processingPhotoIds}
         focusId={focusItemId}
         onTrimClip={canRecordClips ? trimClip : undefined}

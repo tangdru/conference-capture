@@ -15,6 +15,18 @@ once -- "Testing"; Friends had build 75).
 
 ---
 
+## Build 89 — internal
+
+Uploaded 2026-11-15. Everything from 88, plus two haptics.
+
+What to Test:
+
+```
+HAPTICS
+- Session list: swipe a session (live, ended or one with a presentation) left to open its menu (a tick), then swipe it shut or tap the card: a second tick once it's fully closed. A half swipe that springs back stays silent.
+- Session list: tap a day heading to fold it, and again to open it: a tick each time.
+```
+
 ## Build 88 — internal
 
 Uploaded 2026-11-14. Replaces 87's Transcribing box (test this one; it has everything from 87).

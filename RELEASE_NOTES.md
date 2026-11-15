@@ -15,6 +15,21 @@ once -- "Testing"; Friends had build 75).
 
 ---
 
+## Build 88 — internal
+
+Uploaded 2026-11-14. Replaces 87's Transcribing box (test this one; it has everything from 87).
+
+What to Test:
+
+```
+TRANSCRIBING LIGHT
+- Menu > Session options > Show transcript while live: off. Record: the Transcribing light now sits at the top of the timeline under the session title, with no box, and shows the time recorded ("1:32 recorded"). It stays put while the timeline scrolls.
+- Bars move while the speaker talks; amber "Not hearing anything" after 90 seconds of silence; red if transcription stops.
+- Everything else from 87 (Live transcript, Stay live after a pause, slide photos keep only the cropped copy).
+```
+
+---
+
 ## Build 87 — internal
 
 Uploaded 2026-11-14. New Session options under "During a talk", and slide photos no longer keep a second, uncropped copy in storage.

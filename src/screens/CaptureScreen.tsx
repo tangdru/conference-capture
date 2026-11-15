@@ -24,6 +24,7 @@ import { backgroundUploads, queuePhoto } from '../photoUploads'
 import { NativeCamera } from '../native/nativeCamera'
 import { canRecordClips, commitClipTrims, recordClip, setClipTrim, stopClip, useActiveClip } from '../audioClips'
 import { ClipButton } from '../components/ClipButton'
+import { TranscribingIndicator, type TranscribingState } from '../components/TranscribingIndicator'
 import { useSessionOptions } from '../sessionOptions'
 import { elapsedFor } from '../sessionActivity'
 import './CaptureScreen.css'
@@ -126,7 +127,40 @@ export function CaptureScreen({
   const activeClip = useActiveClip()
   // Which buttons the account's Session options show beside the camera.
   const sessionOptions = useSessionOptions()
-  const showClip = canRecordClips && sessionOptions.chuisAudio
+  // Clips come from the live transcript's microphone.
+  const showClip = canRecordClips && sessionOptions.chuisAudio && sessionOptions.liveTranscript
+
+  // Show transcript while live off: the transcript is still made, but the
+  // timeline keeps to what you added until recording stops, and a
+  // "Transcribing" light stands in for the scrolling words.
+  const recording = session.status === 'recording'
+  const hideTranscript = recording && sessionOptions.liveTranscript && !sessionOptions.showTranscriptLive
+  const timelineItems = hideTranscript ? session.items.filter((i) => i.type !== 'transcript') : session.items
+  const transcriptCount = session.items.reduce((n, i) => (i.type === 'transcript' ? n + 1 : n), 0)
+  const heardMs = session.items.reduce((ms, i) => (i.type === 'transcript' ? ms + i.durationMs : ms), 0)
+  // When words were last heard (the words in progress changing, or a passage
+  // saved); from the start of this stretch of recording until then.
+  const [lastHeardAt, setLastHeardAt] = useState(() => Date.now())
+  useEffect(() => {
+    if (recording) setLastHeardAt(Date.now())
+  }, [recording, liveText, transcriptCount])
+  // A transcription error counts until recording starts again.
+  const [stoppedReason, setStoppedReason] = useState<string | null>(null)
+  useEffect(() => {
+    if (transcriptionError && recording) setStoppedReason(transcriptionError.message)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transcriptionError])
+  useEffect(() => {
+    if (recording) setStoppedReason(null)
+  }, [recording])
+  const transcribingState: TranscribingState = !sessionOptions.liveTranscript
+    ? 'off'
+    : stoppedReason
+      ? 'error'
+      : now - lastHeardAt > 90_000
+        ? 'quiet'
+        : 'listening'
+  const showIndicator = recording && (hideTranscript || !sessionOptions.liveTranscript)
 
   // Keep only the trimmed part (Session options): applied on leaving the
   // session, so the trim handles can still reach out while you're in it.
@@ -577,7 +611,8 @@ export function CaptureScreen({
       <div className="capture-body">
       <div className="swipe-back-edge" aria-hidden="true" {...swipeBack.edgeProps} />
       <Timeline
-        items={session.items}
+        items={timelineItems}
+        allItems={hideTranscript ? session.items : undefined}
         onPhotoTap={setViewingPhotoId}
         onVideoTap={setViewingVideoId}
         activeId={activeId}
@@ -592,6 +627,16 @@ export function CaptureScreen({
         onSavePhoto={Capacitor.isNativePlatform() ? saveToAlbum : undefined}
         onReorder={placeItem}
         liveTranscript={session.status === 'recording' ? liveText : null}
+        liveSlot={
+          showIndicator ? (
+            <TranscribingIndicator
+              state={transcribingState}
+              hearing={now - lastHeardAt < 4000}
+              heardMs={heardMs}
+              message={stoppedReason}
+            />
+          ) : undefined
+        }
         processingPhotoIds={processingPhotoIds}
         focusId={focusItemId}
         onTrimClip={canRecordClips ? trimClip : undefined}

@@ -34,6 +34,7 @@ import { nextSessionTitle } from './sessionTitle'
 import { listSavedShares, lookupShared, openSavedShare, removeSavedShare, saveShare, prepareShareLink, publishShare, stopSharing, tokenFromLink, sharedWithClips, noteSharedWithClips, type SavedShare } from './sharing'
 import { getSessionOptions } from './sessionOptions'
 import { useAmbientTranscription } from './hooks/useAmbientTranscription'
+import { useSessionOptions } from './sessionOptions'
 import { useRecordingActivity } from './hooks/useRecordingActivity'
 import { elapsedFor } from './sessionActivity'
 import { App as CapApp } from '@capacitor/app'
@@ -726,7 +727,9 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     if (shownSession?.status === 'recording') setLiveId(shownSession.id)
   }, [shownSession?.id, shownSession?.status])
   const liveSession = (liveId && sessions?.find((s) => s.id === liveId)) || null
-  const listening = liveSession?.status === 'recording'
+  const sessionOptions = useSessionOptions()
+  // Session options > Live transcript off: the mic stays off while recording.
+  const listening = liveSession?.status === 'recording' && sessionOptions.liveTranscript
 
   // Words heard so far in the segment in progress, shown in the session.
   const [liveText, setLiveText] = useState('')

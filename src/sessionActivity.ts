@@ -1,10 +1,14 @@
 import type { Session } from './types'
+import { getSessionOptions } from './sessionOptions'
 
 /** How long a paused session stays in the home screen's active slot after
  * its last real activity (a capture, or a status change) before it drops
- * back into the regular list. There's no explicit "end" action -- a session
+ * back into the regular list: Session options > Stay live after a pause (3
+ * minutes unless changed). There's no explicit "end" action -- a session
  * just fades out of the spotlight once nothing's happening. */
-const INACTIVITY_MS = 3 * 60 * 1000
+function inactivityMs(): number {
+  return getSessionOptions().liveWindowS * 1000
+}
 
 export function lastActivityAt(session: Session): number {
   const itemTimes = session.items.map((i) => i.timestamp)
@@ -21,7 +25,7 @@ export function isSessionActive(session: Session, now: number): boolean {
     // the session joins the list (where a tap opens the presentation).
     const last = lastActivityAt(session)
     if (session.deckStatus === 'ready' && session.deckGeneratedAt !== null && session.deckGeneratedAt >= last) return false
-    return now - last < INACTIVITY_MS
+    return now - last < inactivityMs()
   }
   return false
 }

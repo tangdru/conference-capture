@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { errorMessage } from '../networkError'
 import type {
   AudioItem,
@@ -43,6 +43,11 @@ interface TimelineProps {
   onReorder: (orderedIds: string[], movedId: string) => void
   /** While listening: the words heard so far ('' before any). null when not listening. */
   liveTranscript: string | null
+  /** Shown instead of the live words (the transcript is hidden while live). */
+  liveSlot?: ReactNode
+  /** Every item, transcript included, when `items` leaves the transcript out:
+   * the words under each clip still come from it. */
+  allItems?: TimelineItemData[]
   /** Photos still being straightened and read on-device. */
   processingPhotoIds?: ReadonlySet<string>
   /** Scrolled to and flashed once on mount, instead of starting at the end. */
@@ -80,6 +85,8 @@ export function Timeline({
   onSavePhoto,
   onReorder,
   liveTranscript,
+  liveSlot,
+  allItems,
   processingPhotoIds,
   focusId,
   onTrimClip,
@@ -182,7 +189,7 @@ export function Timeline({
           <p className="timeline-empty__line1">Tap below to add your first note.</p>
           <p className="timeline-empty__line2">Tap 📷 to photograph a slide.</p>
           {/* liveTranscript is only non-null while recording. */}
-          {liveTranscript !== null && <p className="timeline-empty__line2">Audio is recording.</p>}
+          {liveTranscript !== null && !liveSlot && <p className="timeline-empty__line2">Audio is recording.</p>}
         </div>
       )}
 
@@ -261,9 +268,9 @@ export function Timeline({
               ) : item.type === 'transcript' ? (
                 <TranscriptRow item={item} />
               ) : item.type === 'highlight' ? (
-                <HighlightRow item={item} items={items} />
+                <HighlightRow item={item} items={allItems ?? items} />
               ) : item.type === 'audio' ? (
-                <AudioRow item={item} items={items} onTrim={onTrimClip} />
+                <AudioRow item={item} items={allItems ?? items} onTrim={onTrimClip} />
               ) : (
                 <EnrichmentRow item={item} />
               )}
@@ -275,7 +282,7 @@ export function Timeline({
       {liveTranscript !== null && (
         <>
           {!isEmpty && <div className="dot-divider" aria-hidden="true" />}
-          <LiveTranscriptRow text={liveTranscript} />
+          {liveSlot ?? <LiveTranscriptRow text={liveTranscript} />}
         </>
       )}
 

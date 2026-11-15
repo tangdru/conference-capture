@@ -41,16 +41,17 @@ audio** (off: hides the clip button). Turning an option off only hides or
 stops something; it never removes anything already captured. Ideas
 discussed 2026-11-12, not scheduled:
 
-*Buttons in the session bar*
-- **Ask during a live session.** Hide Ask while a talk is live, so it isn't
-  there while you're trying to listen.
+*Built 2026-11-14 (after build 86), under "During a talk":* **Live
+transcript** (on; off keeps the mic off, so no clips either), **Show
+transcript while live** (on; off hides transcript entries while recording,
+with a "Transcribing" light in their place: moving bars, minutes written
+down, amber after 90 s of nothing heard, red if it stopped), and **Stay live
+after a pause** (30 s-10 min, default 3 min).
 
-*What runs during a talk*
-- **Live transcript.** Turn ambient transcription off for a session that's
-  only notes and photos (battery, privacy). Suggested as the next one to add.
-- **Show transcript while live.** Keep transcribing but hide the scrolling
-  text so it's less distracting.
-- **Leave the live spot after a pause.** Fixed at 3 minutes today.
+*Dropped 2026-11-14:* hiding Ask during a live talk (Claude can already ask
+about a live session, at most ~30 s behind, which is useful), and "Quote with
+each clip" (a clip's words come from the transcript, which Ask and search
+already read).
 
 *Around the session*
 - **Build the presentation when a session ends.** Start Sparkle automatically
@@ -68,8 +69,6 @@ after, can be trimmed, uploads, and plays in presentations with a caption.
 - **Snap to sentences.** Trim the clip to whole sentences using the
   transcript, so it doesn't start or end mid-word.
 - **Voice boost.** Reduce room noise and echo so the speaker is clearer.
-- **Quote with each clip.** Save the clip's transcribed words as a note
-  under it, so it shows up in search and Ask.
 - **Upload on Wi-Fi only.** Hold clips on the phone until Wi-Fi, to save
   mobile data at the venue.
 - **Keep only the trimmed part.** When a clip is trimmed, discard the rest

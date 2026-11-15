@@ -6,6 +6,16 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 
 export interface SessionOptions {
+  // During a talk.
+  /** Transcribe the speaker on the phone. Off: the mic stays off (so no
+   * clips either). */
+  liveTranscript: boolean
+  /** Show the transcript in the timeline while recording. Off: it's still
+   * made, shown once recording stops, with an indicator meanwhile. */
+  showTranscriptLive: boolean
+  /** How long a paused session stays in the live spot on the session list
+   * (LIVE_WINDOW_MIN_S-LIVE_WINDOW_MAX_S). */
+  liveWindowS: number
   /** The star: marks a key moment while recording. */
   rememberThis: boolean
   /** The clip button ("Chui's audio"): keeps a minute of the speaker's voice. */
@@ -29,8 +39,13 @@ export interface SessionOptions {
 
 export const CLIP_BEFORE_MAX_S = 60
 export const CLIP_AFTER_MAX_S = 120
+export const LIVE_WINDOW_MIN_S = 30
+export const LIVE_WINDOW_MAX_S = 600
 
 export const DEFAULT_SESSION_OPTIONS: SessionOptions = {
+  liveTranscript: true,
+  showTranscriptLive: true,
+  liveWindowS: 180,
   rememberThis: true,
   chuisAudio: false,
   clipBeforeS: 5,

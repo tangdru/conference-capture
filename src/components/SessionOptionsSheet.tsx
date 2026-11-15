@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import {
   CLIP_AFTER_MAX_S,
   CLIP_BEFORE_MAX_S,
+  LIVE_WINDOW_MAX_S,
+  LIVE_WINDOW_MIN_S,
   fetchSessionOptions,
   getSessionOptions,
   saveSessionOptions,
@@ -47,7 +49,7 @@ const CLIP_SWITCHES: { key: BooleanKey; label: string; hint: string }[] = [
   },
 ]
 
-type NumberKey = 'clipBeforeS' | 'clipAfterS'
+type NumberKey = 'clipBeforeS' | 'clipAfterS' | 'liveWindowS'
 
 const CLIP_SLIDERS: { key: NumberKey; label: string; max: number }[] = [
   { key: 'clipBeforeS', label: 'Before the tap', max: CLIP_BEFORE_MAX_S },
@@ -106,7 +108,8 @@ export function SessionOptionsSheet({ userId, onBack }: SessionOptionsSheetProps
     [userId],
   )
 
-  const clipsOpen = options.chuisAudio
+  // Clips are cut from the transcript's microphone, so they need it on.
+  const clipsOpen = options.chuisAudio && options.liveTranscript
 
   return (
     <div className="app-menu" role="dialog" aria-modal="true" aria-label="Session options">
@@ -122,6 +125,85 @@ export function SessionOptionsSheet({ userId, onBack }: SessionOptionsSheetProps
       <div className="app-menu__body">
         {error && <p className="pres-options__error" role="alert">{error}</p>}
 
+        <h2 className="app-menu__section-title">During a talk</h2>
+        <ul className="app-menu__list">
+          <li>
+            <label className="app-menu__row">
+              <span className="app-menu__label">
+                Live transcript
+                <span className="app-menu__hint">
+                  Writes down what the speaker says, on the phone. Off: the microphone stays off, so Chui’s audio clips
+                  aren’t recorded either.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                role="switch"
+                className="pres-options__switch"
+                checked={options.liveTranscript}
+                aria-expanded={options.liveTranscript}
+                aria-controls="session-options-transcript"
+                onChange={(e) => set('liveTranscript', e.target.checked)}
+              />
+            </label>
+            <div
+              id="session-options-transcript"
+              className={`session-options__more${options.liveTranscript ? ' is-open' : ''}`}
+              aria-hidden={!options.liveTranscript}
+              inert={!options.liveTranscript}
+            >
+              <div className="session-options__more-inner">
+                <ul className="app-menu__list">
+                  <li>
+                    <label className="app-menu__row">
+                      <span className="app-menu__label">
+                        Show transcript while live
+                        <span className="app-menu__hint">
+                          Off: the timeline shows only your photos, notes, stars and clips while recording, with a
+                          “Transcribing” light so you know it’s still listening. The transcript appears when you pause.
+                        </span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        role="switch"
+                        className="pres-options__switch"
+                        checked={options.showTranscriptLive}
+                        onChange={(e) => set('showTranscriptLive', e.target.checked)}
+                      />
+                    </label>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </li>
+        </ul>
+        <label className="session-options__slider">
+          <span className="session-options__slider-top">
+            <span>
+              Stay live after a pause
+              <span className="app-menu__hint">How long a paused session stays at the top of your sessions</span>
+            </span>
+            <span className="session-options__value">{seconds(options.liveWindowS)}</span>
+          </span>
+          <input
+            type="range"
+            min={LIVE_WINDOW_MIN_S}
+            max={LIVE_WINDOW_MAX_S}
+            step={30}
+            value={options.liveWindowS}
+            onChange={(e) => slide('liveWindowS', Number(e.target.value))}
+            style={
+              {
+                '--fill': `${((options.liveWindowS - LIVE_WINDOW_MIN_S) / (LIVE_WINDOW_MAX_S - LIVE_WINDOW_MIN_S)) * 100}%`,
+              } as React.CSSProperties
+            }
+          />
+          <span className="session-options__range" aria-hidden="true">
+            <span>{seconds(LIVE_WINDOW_MIN_S)}</span>
+            <span>{seconds(LIVE_WINDOW_MAX_S)}</span>
+          </span>
+        </label>
+
         <h2 className="app-menu__section-title">In the session bar</h2>
         <p className="pres-options__section-hint">
           Buttons beside the camera while a talk is recording. Turning one off hides it; nothing you captured is removed.
@@ -132,13 +214,16 @@ export function SessionOptionsSheet({ userId, onBack }: SessionOptionsSheetProps
               <label className="app-menu__row">
                 <span className="app-menu__label">
                   {label}
-                  <span className="app-menu__hint">{hint}</span>
+                  <span className="app-menu__hint">
+                    {key === 'chuisAudio' && !options.liveTranscript ? 'Needs Live transcript: clips come from its microphone' : hint}
+                  </span>
                 </span>
                 <input
                   type="checkbox"
                   role="switch"
                   className="pres-options__switch"
                   checked={options[key]}
+                  disabled={key === 'chuisAudio' && !options.liveTranscript}
                   aria-expanded={key === 'chuisAudio' ? clipsOpen : undefined}
                   aria-controls={key === 'chuisAudio' ? 'session-options-clips' : undefined}
                   onChange={(e) => set(key, e.target.checked)}

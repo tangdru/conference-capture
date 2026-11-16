@@ -15,6 +15,21 @@ once -- "Testing"; Friends had build 81).
 
 ---
 
+## Build 91 — internal
+
+Uploaded 2026-11-16. Fixes build 90 closing when you open a session (the
+camera's background setup for video clips was rejected by iOS).
+
+What to Test:
+
+```
+CRASH FIX
+- Open an ended session (e.g. Session 1 : 11/12 or Session 2 : 11/12): it opens and shows its transcript, no longer closing the app.
+- Open the camera and HOLD the shutter to record a video clip as in build 90; a tap still takes a photo.
+```
+
+---
+
 ## Build 90 — internal
 
 Uploaded 2026-11-15. Video clips, step 1 (recording only). Clips don't show

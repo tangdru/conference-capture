@@ -171,11 +171,17 @@ final class VideoClipRecorder {
         let fm = FileManager.default
         try? fm.removeItem(at: out)
         let video = AVURLAsset(url: picture)
-        guard let sound,
+        // Kept in a variable: a track only works while its asset is alive (an
+        // asset made and dropped in one expression left the clips silent).
+        let heard = sound.map { AVURLAsset(url: $0) }
+        guard let heard,
               let pictureTrack = video.tracks(withMediaType: .video).first,
-              let soundTrack = AVURLAsset(url: sound).tracks(withMediaType: .audio).first else {
+              let soundTrack = heard.tracks(withMediaType: .audio).first else {
+            if sound != nil { NSLog("VideoClipRecorder: couldn't read the sound, keeping the picture only") }
             return (try? fm.copyItem(at: picture, to: out)) != nil
         }
+        // Both assets stay alive until the export is done.
+        defer { withExtendedLifetime((video, heard)) {} }
         let composition = AVMutableComposition()
         let length = video.duration
         guard let v = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
@@ -184,7 +190,12 @@ final class VideoClipRecorder {
         else { return (try? fm.copyItem(at: picture, to: out)) != nil }
         v.preferredTransform = pictureTrack.preferredTransform
         let soundLength = CMTimeMinimum(length, soundTrack.timeRange.duration)
-        try? a.insertTimeRange(CMTimeRange(start: .zero, duration: soundLength), of: soundTrack, at: .zero)
+        do {
+            try a.insertTimeRange(CMTimeRange(start: .zero, duration: soundLength), of: soundTrack, at: .zero)
+        } catch {
+            NSLog("VideoClipRecorder: couldn't lay the sound under (\(error.localizedDescription)), keeping the picture only")
+            return (try? fm.copyItem(at: picture, to: out)) != nil
+        }
 
         guard let export = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetPassthrough) else {
             return (try? fm.copyItem(at: picture, to: out)) != nil

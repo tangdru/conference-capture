@@ -309,7 +309,12 @@ final class CameraEngine: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureVide
         var lagFreeAlone = false
         if #available(iOS 17.0, *) { lagFreeAlone = photoOutput.isZeroShutterLagSupported }
         videoOutput.alwaysDiscardsLateVideoFrames = true
-        if #available(iOS 16.0, *) { videoOutput.deliversPreviewSizedOutputBuffers = true }
+        // iOS throws (and the app closes) if preview-sized frames are asked
+        // for while the output still sizes its own frames: turn that off first.
+        if #available(iOS 16.0, *) {
+            videoOutput.automaticallyConfiguresOutputBufferDimensions = false
+            videoOutput.deliversPreviewSizedOutputBuffers = true
+        }
         guard session.canAddOutput(videoOutput) else { return }
         session.addOutput(videoOutput)
         var lagFreeWithVideo = lagFreeAlone

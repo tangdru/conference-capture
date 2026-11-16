@@ -15,6 +15,23 @@ once -- "Testing"; Friends had build 81).
 
 ---
 
+## Build 92 — internal
+
+Uploaded 2026-11-16. Video clips now have sound (build 90's clips were saved
+picture-only: the step that lays the sound under the picture failed). Also
+has build 91's crash fix. Each clip is still copied to Photos for testing.
+
+What to Test:
+
+```
+VIDEO CLIPS: SOUND
+- In a live session (listening), open the camera and HOLD the shutter while someone talks. Let go, then open the clip in Photos: you should hear them.
+- Pause the session (or turn Live transcript off), record another clip: it should have sound too (from the camera's own mic).
+- Clips still don't show in the session yet; each one is copied to Photos for checking.
+```
+
+---
+
 ## Build 91 — internal
 
 Uploaded 2026-11-16. Fixes build 90 closing when you open a session (the

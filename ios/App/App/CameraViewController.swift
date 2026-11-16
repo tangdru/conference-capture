@@ -825,7 +825,6 @@ final class CameraViewController: UIViewController, UIGestureRecognizerDelegate 
             guard let saved else { return }
             // The page hears of it even if the camera has closed meanwhile.
             NativeCameraPlugin.videoSaved?(saved)
-            VideoClipRecorder.copyToPhotosForTesting(saved)
             guard let self else { return }
             self.haptic.impactOccurred()
             self.haptic.prepare()

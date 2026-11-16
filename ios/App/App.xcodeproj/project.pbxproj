@@ -23,6 +23,7 @@
 		A1C0FFEE0000000000000E02 /* CameraEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE0000000000000E01 /* CameraEngine.swift */; };
 		A1C0FFEE0000000000000E06 /* FeelPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE0000000000000E05 /* FeelPlugin.swift */; };
 		A1C0FFEE0000000000000E08 /* VideoClips.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE0000000000000E07 /* VideoClips.swift */; };
+		A1C0FFEE0000000000000E0A /* VideoClipsPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE0000000000000E09 /* VideoClipsPlugin.swift */; };
 		A1C0FFEE00000000000000D2 /* NativeCameraPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE00000000000000D1 /* NativeCameraPlugin.swift */; };
 		A1C0FFEE00000000000000E2 /* SlideScannerPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE00000000000000E1 /* SlideScannerPlugin.swift */; };
 		A1C0FFEE00000000000000F2 /* SpeechAnalyzerTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE00000000000000F1 /* SpeechAnalyzerTranscriber.swift */; };
@@ -79,6 +80,7 @@
 		A1C0FFEE0000000000000E03 /* CameraViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraViewController.swift; sourceTree = "<group>"; };
 		A1C0FFEE0000000000000E05 /* FeelPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeelPlugin.swift; sourceTree = "<group>"; };
 		A1C0FFEE0000000000000E07 /* VideoClips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoClips.swift; sourceTree = "<group>"; };
+		A1C0FFEE0000000000000E09 /* VideoClipsPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoClipsPlugin.swift; sourceTree = "<group>"; };
 		A1C0FFEE00000000000000C1 /* DeviceTiltPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTiltPlugin.swift; sourceTree = "<group>"; };
 		A1C0FFEE00000000000000D1 /* NativeCameraPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeCameraPlugin.swift; sourceTree = "<group>"; };
 		A1C0FFEE00000000000000E1 /* SlideScannerPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlideScannerPlugin.swift; sourceTree = "<group>"; };
@@ -144,6 +146,7 @@
 				A1C0FFEE0000000000000E01 /* CameraEngine.swift */,
 				A1C0FFEE0000000000000E05 /* FeelPlugin.swift */,
 				A1C0FFEE0000000000000E07 /* VideoClips.swift */,
+				A1C0FFEE0000000000000E09 /* VideoClipsPlugin.swift */,
 				A1C0FFEE00000000000000D1 /* NativeCameraPlugin.swift */,
 				A1C0FFEE00000000000000E1 /* SlideScannerPlugin.swift */,
 				A1C0FFEE00000000000000F1 /* SpeechAnalyzerTranscriber.swift */,
@@ -301,6 +304,7 @@
 				A1C0FFEE0000000000000E02 /* CameraEngine.swift in Sources */,
 				A1C0FFEE0000000000000E06 /* FeelPlugin.swift in Sources */,
 				A1C0FFEE0000000000000E08 /* VideoClips.swift in Sources */,
+				A1C0FFEE0000000000000E0A /* VideoClipsPlugin.swift in Sources */,
 				A1C0FFEE00000000000000D2 /* NativeCameraPlugin.swift in Sources */,
 				A1C0FFEE00000000000000E2 /* SlideScannerPlugin.swift in Sources */,
 				A1C0FFEE00000000000000F2 /* SpeechAnalyzerTranscriber.swift in Sources */,

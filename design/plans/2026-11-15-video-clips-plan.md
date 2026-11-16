@@ -1,6 +1,6 @@
 # Video clips
 
-**Status: agreed 2026-11-15, not built.** Requested 2026-11-10 (backlog,
+**Status: agreed 2026-11-15. Steps 1-2 built (2026-11-16, builds 90-92 and step 2); steps 3-5 to do.** Requested 2026-11-10 (backlog,
 Capture). Andrew's decisions on 2026-11-15:
 
 1. Up to **30 seconds** per clip, for now.
@@ -38,8 +38,9 @@ kept warm for the whole session), not Apple's Camera app. So:
   (an `AVMutableComposition`), so the saved file has sound with no fight over
   the mic. Voice boost (Session options › Chui's audio) applies the same way.
 - **When the session isn't listening** (paused, or Live transcript off), the
-  camera records its own sound for the clip.
-- **720p, HEVC, 30 fps**: about 12-15 MB for 30 s.
+  camera records its own sound for the clip, set up like the listening mic
+  (raw, 24 kHz, voice boost) so both sound the same.
+- **720p, H.264, 30 fps** (H.264 rather than HEVC so every browser plays it in a presentation): about 13 MB for 30 s.
 - **Screen while recording:** the shutter turns into a red stop square inside
   the ring, a red timer shows `0:12 / 0:30`, the last-photos strip hides. The
   same tick as the shutter when it starts; haptics stay muted while the mic
@@ -53,12 +54,14 @@ kept warm for the whole session), not Apple's Camera app. So:
 - New entry type **`video`**, mirroring `audio`: `payload` holds `path`,
   `startedAt`, `durationMs`, `trimStartMs`, `trimEndMs`, `width`, `height`,
   `poster` (the poster frame's path).
-- **Timeline row:** the poster frame with a play button and the length;
-  tap plays inline (muted autoplay never; tap for sound), tap again pauses.
-- **Trim:** the same two handles as AudioRow, over a strip of frames instead
-  of a waveform; the playhead plays only the kept part. Like audio clips,
-  trim handles show only on the phone that recorded it (it holds the full
-  file); other devices and the web play the uploaded cut.
+- **Timeline row:** the poster frame with a play mark and the kept length.
+  Tap opens the full-screen viewer, which plays only the kept part.
+- **Trim (as built):** in the viewer, two handles over a strip of 10 frames
+  (made on the phone when the clip is saved). Like audio clips, trimming is
+  only on the phone that recorded it (it holds the full file); other
+  devices and the web play the uploaded cut.
+- **While the session listens** the viewer plays without sound: the mic holds
+  the sound (same reason audio clips don't play then).
 - **Keep only the trimmed part** (existing Chui's audio option) applies to
   video too, when leaving the session.
 - Swipe menu as for other rows: Delete, Exclude from presentation, Star.

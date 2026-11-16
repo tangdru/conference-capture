@@ -23,6 +23,8 @@ import { SlideScanner, blobToBase64 } from '../native/slideScanner'
 import { backgroundUploads, queuePhoto } from '../photoUploads'
 import { NativeCamera } from '../native/nativeCamera'
 import { canRecordClips, commitClipTrims, recordClip, setClipTrim, stopClip, useActiveClip } from '../audioClips'
+import { addRecordedClip, commitVideoTrims, removeVideoClip, saveVideoToPhotos, setVideoTrim } from '../videoClips'
+import type { NativeVideoClip } from '../native/nativeCamera'
 import { ClipButton } from '../components/ClipButton'
 import { TranscribingIndicator, type TranscribingState } from '../components/TranscribingIndicator'
 import { useSessionOptions } from '../sessionOptions'
@@ -174,6 +176,10 @@ export function CaptureScreen({
       void commitClipTrims(sessionId, audio, (next) =>
         latestUpdate.current((s) => ({ ...s, items: s.items.map((i) => (i.id === next.id ? next : i)) })),
       )
+      const videos = latestItems.current.filter((i): i is VideoItem => i.type === 'video')
+      void commitVideoTrims(sessionId, videos, (next) =>
+        latestUpdate.current((s) => ({ ...s, items: s.items.map((i) => (i.id === next.id ? next : i)) })),
+      )
     }
   }, [session.id])
   /** The clip button: starts a clip, or stops the one counting down. */
@@ -204,6 +210,35 @@ export function CaptureScreen({
     setClipTrim(session.id, userId, item).catch((err: unknown) => setSaveError(errorMessage(err)))
   }
 
+  /** A clip recorded by holding the camera's shutter. */
+  async function addVideoClip(clip: NativeVideoClip) {
+    try {
+      const item = await addRecordedClip(session.id, userId, clip)
+      onUpdateLocal((s) => (s.items.some((i) => i.id === item.id) ? s : { ...s, items: [...s.items, item] }))
+    } catch (err) {
+      setSaveError(errorMessage(err))
+    }
+  }
+
+  function trimVideo(item: VideoItem) {
+    onUpdateLocal((s) => ({ ...s, items: s.items.map((i) => (i.id === item.id ? item : i)) }))
+    setVideoTrim(session.id, item).catch((err: unknown) => setSaveError(errorMessage(err)))
+  }
+
+  async function saveVideoToAlbum(item: VideoItem) {
+    try {
+      await saveVideoToPhotos(item)
+      setSavedPhotoNotice(true)
+      void Haptics.notification({ type: NotificationType.Success })
+    } catch (err) {
+      setSaveError(
+        (err as { code?: string }).code === 'denied'
+          ? PHOTOS_DENIED_MESSAGE
+          : "Couldn't save this video. Only the phone that recorded it can save it.",
+      )
+    }
+  }
+
   async function commitNoteEdit(id: string, text: string) {
     setActiveId(null)
     onUpdateLocal((s) => ({
@@ -223,6 +258,7 @@ export function CaptureScreen({
     // The presentation saved on the phone may show this photo: download it
     // again next time, without it.
     if (item.type === 'photo') void forgetCachedDeck(session.id)
+    if (item.type === 'video') void removeVideoClip(item.id)
     try {
       await db.deleteTimelineItem(session.id, item)
     } catch (err) {
@@ -479,9 +515,10 @@ export function CaptureScreen({
   const showClipInCamera = session.status === 'recording' && showClip
   const nativeCameraUp = useRef(false)
   const [nativeCameraFailed, setNativeCameraFailed] = useState(false)
-  const cameraHandlers = useRef({ photo: (_path: string) => {}, remember: () => {}, clip: () => {} })
+  const cameraHandlers = useRef({ photo: (_path: string) => {}, video: (_clip: NativeVideoClip) => {}, remember: () => {}, clip: () => {} })
   cameraHandlers.current = {
     photo: (path) => void queueNativePhoto({ filePath: path }),
+    video: (clip) => void addVideoClip(clip),
     remember: () => void rememberThis(),
     clip: () => void tapClip(),
   }
@@ -497,6 +534,7 @@ export function CaptureScreen({
     void NativeCamera.prepare().catch(() => {})
     const handles = Promise.all([
       NativeCamera.addListener('photo', ({ path }) => cameraHandlers.current.photo(path)),
+      NativeCamera.addListener('video', (clip) => cameraHandlers.current.video(clip)),
       NativeCamera.addListener('photoFailed', () => setSaveError("Couldn't save this photo")),
       NativeCamera.addListener('remember', () => cameraHandlers.current.remember()),
       NativeCamera.addListener('clip', () => cameraHandlers.current.clip()),
@@ -636,6 +674,7 @@ export function CaptureScreen({
         onToggleExcluded={toggleExcluded}
         onToggleStarred={toggleStarred}
         onSavePhoto={Capacitor.isNativePlatform() ? saveToAlbum : undefined}
+        onSaveVideo={Capacitor.isNativePlatform() ? saveVideoToAlbum : undefined}
         onReorder={placeItem}
         liveTranscript={session.status === 'recording' && !showIndicator ? liveText : null}
         processingPhotoIds={processingPhotoIds}
@@ -725,7 +764,12 @@ export function CaptureScreen({
       )}
 
       {viewingVideo && (
-        <VideoViewer item={viewingVideo} onClose={() => setViewingVideoId(null)} />
+        <VideoViewer
+          item={viewingVideo}
+          onClose={() => setViewingVideoId(null)}
+          onTrim={Capacitor.isNativePlatform() ? trimVideo : undefined}
+          listening={Capacitor.isNativePlatform() && session.status === 'recording' && sessionOptions.liveTranscript}
+        />
       )}
 
       {askOpen && (

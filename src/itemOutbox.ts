@@ -16,7 +16,7 @@ export interface QueuedRow {
   id: string
   session_id: string
   owner_id: string
-  type: 'transcript' | 'highlight' | 'note' | 'audio'
+  type: 'transcript' | 'highlight' | 'note' | 'audio' | 'video'
   item_timestamp: string
   text?: string
   duration_ms?: number

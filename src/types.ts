@@ -34,14 +34,24 @@ export interface PhotoItem {
   position?: number
 }
 
+/** A video clip: held the camera's shutter (videoClips.ts), or recorded in
+ * the browser by an early prototype (those have only videoPath). */
 export interface VideoItem {
   id: string
   type: 'video'
   /** Object URL for immediate playback. Present once resolved (freshly captured, or lazily fetched from storage). */
   dataUrl?: string
-  /** Storage path in the cc-videos bucket — the persisted source of truth. */
+  /** The kept part in the cc-videos bucket; '' until uploaded. */
   videoPath: string
+  /** The whole recording, trims included. */
   durationMs: number
+  /** The part kept (played, saved to Photos, uploaded). */
+  trimStartMs: number
+  trimEndMs: number
+  /** Epoch ms of the first frame. */
+  startedAt?: number
+  width?: number
+  height?: number
   timestamp: number
   addedLater?: boolean
   excluded?: boolean

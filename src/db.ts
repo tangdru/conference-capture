@@ -147,11 +147,18 @@ function itemFromRow(row: ItemRow): TimelineItemData | null {
     return { id: row.id, type: 'note', text: row.text ?? '', timestamp, addedLater: row.added_later, excluded, starred, position: row.position ?? undefined }
   }
   if (row.type === 'video') {
+    const p = (row.payload ?? {}) as Partial<VideoPayload>
+    const durationMs = row.duration_ms ?? 0
     return {
       id: row.id,
       type: 'video',
-      videoPath: row.video_path ?? '',
-      durationMs: row.duration_ms ?? 0,
+      videoPath: typeof p.path === 'string' ? p.path : row.video_path ?? '',
+      durationMs,
+      trimStartMs: typeof p.trimStartMs === 'number' ? p.trimStartMs : 0,
+      trimEndMs: typeof p.trimEndMs === 'number' ? p.trimEndMs : durationMs,
+      startedAt: typeof p.startedAt === 'number' ? p.startedAt : undefined,
+      width: typeof p.width === 'number' ? p.width : undefined,
+      height: typeof p.height === 'number' ? p.height : undefined,
       timestamp,
       addedLater: row.added_later,
       excluded,
@@ -437,6 +444,15 @@ function applyItemPatch(item: TimelineItemData, p: ItemPatch): TimelineItemData 
   if (p.excluded !== undefined) next.excluded = p.excluded || undefined
   if (p.item_timestamp !== undefined) next.timestamp = new Date(p.item_timestamp).getTime()
   if (p.position !== undefined && 'position' in next) next.position = p.position ?? undefined
+  if (next.type === 'video' && (p.payload !== undefined || p.duration_ms !== undefined)) {
+    const video = itemFromRow({
+      id: next.id, session_id: '', type: 'video', subtype: null, text: null, caption: null, photo_path: null, video_path: next.videoPath || null,
+      payload: p.payload ?? videoPayload(next) as unknown as Record<string, unknown>,
+      duration_ms: p.duration_ms ?? next.durationMs,
+      item_timestamp: new Date(next.timestamp).toISOString(), added_later: false, excluded: !!next.excluded, starred: !!next.starred, position: null,
+    })
+    if (video?.type === 'video') return video
+  }
   if (next.type === 'audio' && (p.payload !== undefined || p.duration_ms !== undefined)) {
     const audio = itemFromRow({
       id: next.id, session_id: '', type: 'audio', subtype: null, text: null, caption: null, photo_path: null, video_path: null,
@@ -457,6 +473,14 @@ function queuedItem(row: QueuedRow): TimelineItemData {
   }
   if (row.type === 'note') {
     return { ...shared, type: 'note', text: row.text ?? '', starred: row.starred || undefined, position: row.position ?? undefined }
+  }
+  if (row.type === 'video') {
+    const video = itemFromRow({
+      id: row.id, session_id: row.session_id, type: 'video', subtype: null, text: null, caption: null, photo_path: null, video_path: null,
+      payload: row.payload ?? null, duration_ms: row.duration_ms ?? 0, item_timestamp: row.item_timestamp,
+      added_later: false, excluded: !!row.excluded, starred: !!row.starred, position: null,
+    })
+    if (video) return video
   }
   if (row.type === 'audio') {
     const audio = itemFromRow({
@@ -615,6 +639,46 @@ export async function addAudioClip(sessionId: string, userId: string): Promise<A
 /** Saves a clip's audio details (length, trim, waveform, uploaded file). */
 export async function updateAudioClip(sessionId: string, item: AudioItem): Promise<void> {
   await queueItemPatch(item.id, sessionId, { duration_ms: item.durationMs, payload: audioPayload(item) as unknown as Record<string, unknown> })
+}
+
+/** A video clip's details, kept in the row's payload. */
+export interface VideoPayload {
+  startedAt: number | null
+  trimStartMs: number
+  trimEndMs: number
+  width: number | null
+  height: number | null
+  /** The kept part, uploaded to cc-videos. */
+  path: string | null
+}
+
+export function videoPayload(item: VideoItem): VideoPayload {
+  return {
+    startedAt: item.startedAt ?? null, trimStartMs: item.trimStartMs, trimEndMs: item.trimEndMs,
+    width: item.width ?? null, height: item.height ?? null, path: item.videoPath || null,
+  }
+}
+
+/** A clip recorded in the camera: its entry, at the moment it started. */
+export async function addVideoClip(
+  sessionId: string,
+  userId: string,
+  clip: { id: string; durationMs: number; width: number; height: number; startedAt: number },
+): Promise<VideoItem> {
+  const item: VideoItem = {
+    id: clip.id, type: 'video', videoPath: '', durationMs: clip.durationMs, trimStartMs: 0, trimEndMs: clip.durationMs,
+    startedAt: clip.startedAt, width: clip.width, height: clip.height, timestamp: clip.startedAt,
+  }
+  await queueRow({
+    id: item.id, session_id: sessionId, owner_id: userId, type: 'video', duration_ms: item.durationMs,
+    payload: videoPayload(item) as unknown as Record<string, unknown>, item_timestamp: new Date(item.timestamp).toISOString(),
+  })
+  return item
+}
+
+/** Saves a clip's length and trim. */
+export async function updateVideoClip(sessionId: string, item: VideoItem): Promise<void> {
+  await queueItemPatch(item.id, sessionId, { duration_ms: item.durationMs, payload: videoPayload(item) as unknown as Record<string, unknown> })
 }
 
 export async function updateNoteText(sessionId: string, itemId: string, text: string): Promise<void> {
@@ -782,6 +846,8 @@ export async function addVideo(
     type: 'video',
     videoPath: path,
     durationMs,
+    trimStartMs: 0,
+    trimEndMs: durationMs,
     timestamp: new Date(data.item_timestamp).getTime(),
     dataUrl: URL.createObjectURL(blob),
   }

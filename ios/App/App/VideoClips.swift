@@ -22,6 +22,8 @@ final class VideoClipRecorder {
         let id: String
         let video: URL
         let poster: URL
+        /// A strip of small frames across the clip, for the trim bar.
+        let frames: [URL]
         let durationMs: Int
         let width: Int
         let height: Int
@@ -30,6 +32,7 @@ final class VideoClipRecorder {
 
         var json: [String: Any] {
             ["id": id, "path": video.absoluteString, "posterPath": poster.absoluteString,
+             "frames": frames.map(\.absoluteString),
              "durationMs": durationMs, "width": width, "height": height, "startedAt": startedAt]
         }
     }
@@ -100,30 +103,19 @@ final class VideoClipRecorder {
         }
     }
 
-    /// TEST SHORTCUT (build 90, until clips show in the session -- step 2):
-    /// every clip is also copied to the Photos album, so picture and sound
-    /// can be checked there. Remove with step 2's Save to Photos.
-    static func copyToPhotosForTesting(_ saved: Saved) {
-        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
-            guard status == .authorized || status == .limited else { return }
-            PHPhotoLibrary.shared().performChanges({
-                PHAssetCreationRequest.forAsset().addResource(with: .video, fileURL: saved.video, options: nil)
-            }) { ok, error in
-                if !ok { NSLog("VideoClipRecorder: couldn't copy to Photos (\(error?.localizedDescription ?? "?"))") }
-            }
-        }
-    }
-
     // MARK: - Saving
 
     private static func save(_ recording: Recording, seconds: Double, startedAt: Date, heard: [Float]?) -> Saved? {
         let fm = FileManager.default
-        let video = directory.appendingPathComponent("\(recording.id).mp4")
-        let poster = directory.appendingPathComponent("\(recording.id).jpg")
+        let video = videoURL(recording.id)
         defer { try? fm.removeItem(at: recording.picture) }
 
-        var sound: URL? = recording.ownSound?.url
-        if let heard, !heard.isEmpty {
+        // Either way the sound ends up as the listening mic's: 24 kHz raw
+        // samples, voice boost if it's on, then AAC.
+        var sound: URL?
+        let ownSamples = recording.ownSound.flatMap { readSamples($0.url) }
+        if let own = recording.ownSound { try? fm.removeItem(at: own.url) }
+        if let heard = heard ?? ownSamples, !heard.isEmpty {
             let url = fm.temporaryDirectory.appendingPathComponent("\(recording.id)-sound.m4a")
             let samples = recording.boost ? ClipRecorder.voiceBoost(heard) : heard
             if (try? writeSound(samples, rate: ClipRecorder.rate, to: url)) != nil { sound = url }
@@ -131,22 +123,115 @@ final class VideoClipRecorder {
         defer { if let sound { try? fm.removeItem(at: sound) } }
 
         guard combine(picture: recording.picture, sound: sound, into: video) else { return nil }
+        return stills(id: recording.id, startedAt: Int((startedAt.timeIntervalSince1970 * 1000).rounded()))
+    }
+
+    // MARK: - A saved clip's files (VideoClipsPlugin)
+
+    static func videoURL(_ id: String) -> URL { directory.appendingPathComponent("\(id).mp4") }
+    static func posterURL(_ id: String) -> URL { directory.appendingPathComponent("\(id).jpg") }
+    static let frameCount = 10
+    static func frameURL(_ id: String, _ i: Int) -> URL { directory.appendingPathComponent("\(id)-f\(i).jpg") }
+
+    /// The clip on this phone, or nil (deleted, or recorded on another phone).
+    /// `startedAt` is passed through (it's kept in the session, not here).
+    static func info(id: String, startedAt: Int = 0) -> Saved? {
+        let video = videoURL(id)
+        guard FileManager.default.fileExists(atPath: video.path) else { return nil }
+        let frames = (0..<frameCount).map { frameURL(id, $0) }
+        if !FileManager.default.fileExists(atPath: posterURL(id).path) || !frames.allSatisfy({ FileManager.default.fileExists(atPath: $0.path) }) {
+            return stills(id: id, startedAt: startedAt)
+        }
         let asset = AVURLAsset(url: video)
         guard let track = asset.tracks(withMediaType: .video).first else { return nil }
         let size = track.naturalSize.applying(track.preferredTransform)
+        return Saved(id: id, video: video, poster: posterURL(id), frames: frames,
+                     durationMs: Int((asset.duration.seconds * 1000).rounded()),
+                     width: Int(abs(size.width).rounded()), height: Int(abs(size.height).rounded()), startedAt: startedAt)
+    }
+
+    /// Makes the poster frame and the trim bar's strip of frames.
+    private static func stills(id: String, startedAt: Int) -> Saved? {
+        let video = videoURL(id)
+        let asset = AVURLAsset(url: video)
+        guard let track = asset.tracks(withMediaType: .video).first else { return nil }
+        let size = track.naturalSize.applying(track.preferredTransform)
+        let seconds = asset.duration.seconds
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 1280, height: 1280)
-        let at = CMTime(seconds: min(0.5, seconds / 2), preferredTimescale: 600)
-        if let image = try? generator.copyCGImage(at: at, actualTime: nil),
-           let jpeg = UIImage(cgImage: image).jpegData(compressionQuality: 0.8) {
-            try? jpeg.write(to: poster, options: .atomic)
+        generator.requestedTimeToleranceBefore = CMTime(value: 1, timescale: 10)
+        generator.requestedTimeToleranceAfter = CMTime(value: 1, timescale: 10)
+        func still(at time: Double, maxSide: CGFloat, to url: URL, quality: CGFloat) {
+            generator.maximumSize = CGSize(width: maxSide, height: maxSide)
+            if let image = try? generator.copyCGImage(at: CMTime(seconds: time, preferredTimescale: 600), actualTime: nil),
+               let jpeg = UIImage(cgImage: image).jpegData(compressionQuality: quality) {
+                try? jpeg.write(to: url, options: .atomic)
+            }
         }
-        return Saved(
-            id: recording.id, video: video, poster: poster,
-            durationMs: Int((asset.duration.seconds * 1000).rounded()),
-            width: Int(abs(size.width).rounded()), height: Int(abs(size.height).rounded()),
-            startedAt: Int((startedAt.timeIntervalSince1970 * 1000).rounded()))
+        still(at: min(0.5, seconds / 2), maxSide: 1280, to: posterURL(id), quality: 0.8)
+        let frames = (0..<frameCount).map { frameURL(id, $0) }
+        for (i, url) in frames.enumerated() {
+            still(at: seconds * (Double(i) + 0.5) / Double(frameCount), maxSide: 160, to: url, quality: 0.6)
+        }
+        return Saved(id: id, video: video, poster: posterURL(id), frames: frames,
+                     durationMs: Int((seconds * 1000).rounded()),
+                     width: Int(abs(size.width).rounded()), height: Int(abs(size.height).rounded()), startedAt: startedAt)
+    }
+
+    /// The kept part as its own MP4 (a temporary file), cut without
+    /// re-encoding. Done on the calling thread; call off the main one.
+    static func exportTrimmed(id: String, startMs: Int, endMs: Int) throws -> URL {
+        let asset = AVURLAsset(url: videoURL(id))
+        guard asset.tracks(withMediaType: .video).first != nil else { throw CocoaError(.fileNoSuchFile) }
+        let out = FileManager.default.temporaryDirectory.appendingPathComponent("\(id)-\(startMs)-\(endMs).mp4")
+        try? FileManager.default.removeItem(at: out)
+        guard let export = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetPassthrough) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        export.outputURL = out
+        export.outputFileType = .mp4
+        export.shouldOptimizeForNetworkUse = true
+        let end = endMs > startMs ? CMTime(value: CMTimeValue(endMs), timescale: 1000) : asset.duration
+        export.timeRange = CMTimeRange(start: CMTime(value: CMTimeValue(max(startMs, 0)), timescale: 1000), end: CMTimeMinimum(end, asset.duration))
+        let finished = DispatchSemaphore(value: 0)
+        export.exportAsynchronously { finished.signal() }
+        finished.wait()
+        withExtendedLifetime(asset) {}
+        guard export.status == .completed else { throw export.error ?? CocoaError(.fileWriteUnknown) }
+        return out
+    }
+
+    /// Keep only the trimmed part: the clip's file becomes the kept part.
+    static func commitTrim(id: String, startMs: Int, endMs: Int, startedAt: Int) throws -> Saved? {
+        let cut = try exportTrimmed(id: id, startMs: startMs, endMs: endMs)
+        _ = try FileManager.default.replaceItemAt(videoURL(id), withItemAt: cut)
+        return stills(id: id, startedAt: startedAt + startMs)
+    }
+
+    static func remove(id: String) {
+        let fm = FileManager.default
+        for url in [videoURL(id), posterURL(id)] + (0..<frameCount).map({ frameURL(id, $0) }) {
+            try? fm.removeItem(at: url)
+        }
+    }
+
+    /// Saves the kept part to the photo album (add-only access).
+    static func saveToPhotos(id: String, startMs: Int, endMs: Int, done: @escaping (String?) -> Void) {
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            guard status == .authorized || status == .limited else { return done("denied") }
+            let cut: URL
+            do {
+                cut = try exportTrimmed(id: id, startMs: startMs, endMs: endMs)
+            } catch {
+                return done(error.localizedDescription)
+            }
+            PHPhotoLibrary.shared().performChanges({
+                PHAssetCreationRequest.forAsset().addResource(with: .video, fileURL: cut, options: nil)
+            }) { ok, error in
+                try? FileManager.default.removeItem(at: cut)
+                done(ok ? nil : error?.localizedDescription ?? "The video couldn't be saved")
+            }
+        }
     }
 
     private static func writeSound(_ samples: [Float], rate: Double, to url: URL) throws {
@@ -164,6 +249,16 @@ final class VideoClipRecorder {
             ], commonFormat: .pcmFormatFloat32, interleaved: false)
             try file.write(from: buffer)
         }
+    }
+
+    /// The clip's own recording as samples (it's already 24 kHz mono).
+    private static func readSamples(_ url: URL) -> [Float]? {
+        guard let file = try? AVAudioFile(forReading: url),
+              file.processingFormat.channelCount >= 1,
+              let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)),
+              (try? file.read(into: buffer)) != nil,
+              let channel = buffer.floatChannelData?[0] else { return nil }
+        return Array(UnsafeBufferPointer(start: channel, count: Int(buffer.frameLength)))
     }
 
     /// The picture with the sound under it (from its start), as one MP4.
@@ -217,12 +312,15 @@ final class VideoClipRecorder {
         let session = AVAudioSession.sharedInstance()
         guard session.recordPermission == .granted else { return nil }
         do {
-            try session.setCategory(.record, mode: .default, options: [])
+            // Same as the listening mic (AmbientTranscriptionPlugin): raw
+            // sound, no iOS voice processing, 24 kHz so voice boost applies.
+            try session.setCategory(.record, mode: .measurement, options: [])
             try session.setActive(true)
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(id)-own.m4a")
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(id)-own.caf")
             let recorder = try AVAudioRecorder(url: url, settings: [
-                AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 44_100,
-                AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 96_000,
+                AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: ClipRecorder.rate,
+                AVNumberOfChannelsKey: 1, AVLinearPCMBitDepthKey: 32,
+                AVLinearPCMIsFloatKey: true, AVLinearPCMIsNonInterleaved: false,
             ])
             guard recorder.record() else { return nil }
             return recorder

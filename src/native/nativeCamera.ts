@@ -20,6 +20,8 @@ export interface NativeVideoClip {
   /** file:// URLs */
   path: string
   posterPath: string
+  /** A strip of small frames across the clip, for the trim bar. */
+  frames: string[]
   durationMs: number
   width: number
   height: number

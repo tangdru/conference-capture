@@ -12,6 +12,8 @@ export function useVideoUrl(item: VideoItem): string | undefined {
       setUrl(item.dataUrl)
       return
     }
+    // Not uploaded yet (a clip still only on the phone that recorded it).
+    if (!item.videoPath) return
     let cancelled = false
     resolveVideoUrl(item.videoPath)
       .then((resolved) => {

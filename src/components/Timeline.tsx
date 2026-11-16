@@ -13,6 +13,7 @@ import type {
 import { formatClock, formatClipDuration } from '../format'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
 import { useVideoUrl } from '../hooks/useVideoUrl'
+import { useLocalVideo } from '../videoClips'
 import { SwipeActions, DeleteIcon, ExcludeIcon, IncludeIcon, SaveIcon, StarActionIcon, type DragHandle } from './SwipeActions'
 import { CheckIcon, PauseIcon, PlayIcon, StarIcon } from './InlineIcons'
 import { seekClip, togglePlay, useClip, usePlayback } from '../clips'
@@ -39,6 +40,8 @@ interface TimelineProps {
   onToggleStarred: (item: TimelineItemData) => void
   /** Saves a photo to the phone's album. Absent where there's no album to save to. */
   onSavePhoto?: (item: PhotoItem) => void
+  /** A video clip's kept part, from the phone that recorded it. */
+  onSaveVideo?: (item: VideoItem) => void
   /** The new order, and the entry the user dragged. */
   onReorder: (orderedIds: string[], movedId: string) => void
   /** While listening: the words heard so far ('' before any). null when not listening. */
@@ -83,6 +86,7 @@ export function Timeline({
   onToggleExcluded,
   onToggleStarred,
   onSavePhoto,
+  onSaveVideo,
   onReorder,
   liveTranscript,
   liveSlot,
@@ -234,6 +238,12 @@ export function Timeline({
                   ? [{ icon: <SaveIcon />, label: 'Save to Photos', onClick: () => {
                       setRevealedId(null)
                       onSavePhoto(item)
+                    } }]
+                  : []),
+                ...(item.type === 'video' && onSaveVideo
+                  ? [{ icon: <SaveIcon />, label: 'Save to Photos', onClick: () => {
+                      setRevealedId(null)
+                      onSaveVideo(item)
                     } }]
                   : []),
                 ...(item.type === 'highlight' || item.type === 'enrichment' || item.type === 'audio'
@@ -823,8 +833,11 @@ function TranscriptRow({ item }: { item: TranscriptItem }) {
 }
 
 function VideoRow({ item, onTap }: { item: VideoItem; onTap: () => void }) {
+  const localVideo = useLocalVideo(item.id)
+  // Recorded elsewhere and uploaded: the uploaded cut stands in as its picture.
   const resolvedUrl = useVideoUrl(item)
-  const clipLabel = `Video, ${formatClipDuration(item.durationMs)}`
+  const keptMs = item.trimEndMs - item.trimStartMs
+  const clipLabel = `Video, ${formatClipDuration(keptMs)}`
 
   return (
     <button
@@ -833,18 +846,20 @@ function VideoRow({ item, onTap }: { item: VideoItem; onTap: () => void }) {
       aria-label={`${clipLabel}, captured at ${formatClock(item.timestamp)}`}
     >
       <div className="photo-row__thumb">
-        {resolvedUrl && (
-          <video className="photo-row__thumb-img" src={resolvedUrl} muted playsInline preload="metadata" />
+        {localVideo ? (
+          <img className="photo-row__thumb-img" src={localVideo.poster} alt="" />
+        ) : (
+          resolvedUrl && <video className="photo-row__thumb-img" src={resolvedUrl} muted playsInline preload="metadata" />
         )}
         <span className="video-row__play" aria-hidden="true">
           <svg viewBox="0 0 26 26" width="14" height="14">
             <path d="M7 3L7 23L21 13Z" fill="#fff" />
           </svg>
         </span>
-        <span className="video-row__duration">{formatClipDuration(item.durationMs)}</span>
+        <span className="video-row__duration">{formatClipDuration(keptMs)}</span>
       </div>
       <div className="photo-row__body">
-        <p className={`photo-row__caption${item.addedLater ? ' photo-row__caption--later' : ''}`}>Video</p>
+        <p className={`photo-row__caption${item.addedLater ? ' photo-row__caption--later' : ''}`}>Video clip</p>
         {item.excluded && <ExcludedBadge />}
       </div>
       <span className="row-time photo-row__timestamp">

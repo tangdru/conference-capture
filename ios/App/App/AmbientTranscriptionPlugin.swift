@@ -344,7 +344,7 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
                         try engine.interruptionEnded()
                     } catch {
                         self.notifyListeners("error", data: [
-                            "message": "Recording stopped after an interruption — pause and resume the session to restart it.",
+                            "message": "Recording stopped after an interruption — pause and resume to restart transcription.",
                         ])
                     }
                 @unknown default:
@@ -363,7 +363,7 @@ public class AmbientTranscriptionPlugin: CAPPlugin, CAPBridgedPlugin {
                     self.startSegment()
                 } catch {
                     self.notifyListeners("error", data: [
-                        "message": "Recording stopped after an interruption — pause and resume the session to restart it.",
+                        "message": "Recording stopped after an interruption — pause and resume to restart transcription.",
                     ])
                 }
             @unknown default:

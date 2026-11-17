@@ -133,3 +133,88 @@
   border-radius: 3px;
   background: var(--accent);
 }
+
+.video-viewer__stage {
+  position: relative;
+}
+
+.video-viewer__stage--settling {
+  transition: transform var(--duration-base, 200ms) var(--easing-base, ease-out);
+}
+
+/* Shown over the paused video; the tap goes to the stage. */
+.video-viewer__big-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 64px;
+  height: 64px;
+  margin: -32px 0 0 -32px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.video-viewer__big-play svg {
+  width: 26px;
+  height: 26px;
+  margin-left: 3px;
+}
+
+.video-viewer__controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.video-viewer__controls > .video-trim,
+.video-viewer__controls > .video-seek {
+  flex: 1;
+  min-width: 0;
+}
+
+.video-viewer__play {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* Clips from another phone: the uploaded cut, so no trim, just a seek bar. */
+.video-seek {
+  position: relative;
+  height: 44px;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.video-seek::before,
+.video-seek__fill {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 2px;
+}
+
+.video-seek::before {
+  right: 0;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.video-seek__fill {
+  background: #fff;
+}

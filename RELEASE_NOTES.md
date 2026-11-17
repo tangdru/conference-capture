@@ -15,6 +15,29 @@ once -- "Testing"; Friends had build 81).
 
 ---
 
+## Build 93 — internal
+
+Uploaded 2026-11-16. Video clips step 2: clips show in the session, play,
+trim, save to Photos and delete. Clips recorded while the session isn't
+listening now sound like the others (raw mic, voice boost). The automatic
+copy of every clip to Photos (build 90-92 test) is gone.
+
+What to Test:
+
+```
+VIDEO CLIPS IN THE SESSION
+- Hold the shutter to record a clip. Back in the session, a "Video clip" row shows at the time you started, with its first frame and length.
+- Tap the row: it plays full screen. While the session is listening it plays without sound (the mic is busy); pause the session to hear it.
+- Drag the handles on the strip of frames under the video to trim it. Close: the row shows the new length.
+- Swipe the row left: Save to Photos saves just the kept part. Delete removes it.
+- Leave the session and come back: a trimmed clip is cut down for good (Keep only the trimmed part).
+- Record a clip with the session paused: its sound should match one recorded while listening.
+- Check the X on the video player closes in one tap.
+- Clips stay on this phone for now (no upload, not in presentations yet).
+```
+
+---
+
 ## Build 92 — internal
 
 Uploaded 2026-11-16. Video clips now have sound (build 90's clips were saved

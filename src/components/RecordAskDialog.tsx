@@ -37,26 +37,36 @@ export function RecordAskDialog({
         </h2>
         <p id="record-ask-text" className="claude-invite__fine">
           {other
-            ? `It keeps recording while you read here. Recording in ${title} instead ends ${otherTitle}.`
+            ? `It keeps recording while you read here. Recording here ends ${otherTitle}.`
             : endedAt !== undefined
               ? `This talk ended at ${clockTime(endedAt)}, ${ago(endedAt)}.`
               : 'This talk has ended.'}
         </p>
-        <button className="claude-key__primary" onClick={onKeepReading}>
-          Keep reading
-        </button>
         {other ? (
-          <button className="claude-key__secondary" onClick={onGoToOther}>
-            Go to {otherTitle}
-          </button>
+          <>
+            <button className="claude-key__primary" onClick={onKeepReading}>
+              Continue reading
+            </button>
+            <button className="claude-key__secondary" onClick={onRecordHere}>
+              Record here
+            </button>
+            <button className="claude-key__secondary" onClick={onGoToOther}>
+              Go to {otherTitle}
+            </button>
+          </>
         ) : (
-          <button className="claude-key__secondary" onClick={onNewSession}>
-            New session
-          </button>
+          <>
+            <button className="claude-key__primary" onClick={onRecordHere}>
+              Resume recording
+            </button>
+            <button className="claude-key__secondary" onClick={onNewSession}>
+              New session
+            </button>
+            <button className="claude-key__secondary" onClick={onKeepReading}>
+              Cancel
+            </button>
+          </>
         )}
-        <button className="claude-key__secondary" onClick={onRecordHere}>
-          Record in {title}
-        </button>
       </div>
     </div>
   )

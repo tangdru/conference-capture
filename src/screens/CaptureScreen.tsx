@@ -28,7 +28,7 @@ import type { NativeVideoClip } from '../native/nativeCamera'
 import { ClipButton } from '../components/ClipButton'
 import { TranscribingIndicator, type TranscribingState } from '../components/TranscribingIndicator'
 import { useSessionOptions } from '../sessionOptions'
-import { elapsedFor } from '../sessionActivity'
+import { elapsedFor, isSessionActive } from '../sessionActivity'
 import './CaptureScreen.css'
 
 interface CaptureScreenProps {
@@ -44,6 +44,8 @@ interface CaptureScreenProps {
   transcriptionError: { message: string } | null
   onPause: () => Promise<void>
   onResume: () => Promise<void>
+  /** End the talk (top right): the mic stops and it leaves the live slot. */
+  onEnd: () => Promise<void>
   onBack: () => void
   /** Opens Claude to ask about this talk. */
   onAskInClaude: () => void
@@ -52,7 +54,7 @@ interface CaptureScreenProps {
 }
 
 export function CaptureScreen({
-  session, userId, focusItemId, onUpdateLocal, liveText, transcriptionError, onPause, onResume, onBack, onAskInClaude, askInApp = false,
+  session, userId, focusItemId, onUpdateLocal, liveText, transcriptionError, onPause, onResume, onEnd, onBack, onAskInClaude, askInApp = false,
 }: CaptureScreenProps) {
   const [now, setNow] = useState(Date.now())
   const [cameraOpen, setCameraOpen] = useState(false)
@@ -95,7 +97,10 @@ export function CaptureScreen({
   const viewingVideo = session.items.find(
     (i): i is VideoItem => i.type === 'video' && i.id === viewingVideoId,
   )
-  const isLive = session.status === 'recording' || session.status === 'suspended'
+  // An ended talk keeps its record pill: tapping it asks first (RecordAskDialog).
+  const isLive = session.status === 'recording' || session.status === 'suspended' || session.status === 'complete'
+  // End shows while the talk is recording or paused and still live.
+  const canEnd = session.status === 'recording' || (session.status === 'suspended' && isSessionActive(session, now))
 
   async function commitNewNote(text: string) {
     // The editor stays mounted until the save returns, so a blur (keyboard
@@ -583,6 +588,10 @@ export function CaptureScreen({
     onResume().catch((err: unknown) => setSaveError(errorMessage(err)))
   }
 
+  function end() {
+    onEnd().catch((err: unknown) => setSaveError(errorMessage(err)))
+  }
+
   // Swipe right from the left edge: back to the session list, as from a
   // presentation (the list sits underneath this screen).
   const swipeBack = useSwipeBack(onBack)
@@ -599,6 +608,12 @@ export function CaptureScreen({
             ‹
           </button>
           <EditableTitle title={session.title} onCommit={commitTitle} />
+          {canEnd && (
+            // Top right, away from the capture buttons along the bottom.
+            <button className="capture-header__end" onClick={end}>
+              End
+            </button>
+          )}
         </div>
 
         {!isLive && (

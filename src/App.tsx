@@ -36,7 +36,8 @@ import { getSessionOptions } from './sessionOptions'
 import { useAmbientTranscription } from './hooks/useAmbientTranscription'
 import { useSessionOptions } from './sessionOptions'
 import { useRecordingActivity } from './hooks/useRecordingActivity'
-import { elapsedFor } from './sessionActivity'
+import { elapsedFor, isSessionActive, lastActivityAt } from './sessionActivity'
+import { RecordAskDialog, type RecordAsk } from './components/RecordAskDialog'
 import { App as CapApp } from '@capacitor/app'
 import { MESSAGES, OFFLINE_MESSAGE, errorMessage } from './networkError'
 
@@ -475,9 +476,9 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
 
   async function startNewSession() {
     feel.rigid()
-    // The talk still recording stops first; left "recording", it showed as
-    // live for good and took the mic back whenever it was opened.
-    if (liveId) await pauseSession(liveId).catch((err: unknown) => setHomeError(errorMessage(err)))
+    // A new talk means the last one is over: it ends first. Left "recording",
+    // it showed as live for good and took the mic back whenever it was opened.
+    if (liveId) await endSession(liveId).catch((err: unknown) => setHomeError(errorMessage(err)))
     const session = await db.createSession(userId, nextSessionTitle(sessions ?? []))
     setSessions((prev) => (prev ? [session, ...prev] : [session]))
     setRoute({ screen: 'capture', sessionId: session.id })
@@ -727,7 +728,13 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
   const shownSession = openSessionId ? sessions?.find((s) => s.id === openSessionId) : undefined
   const [liveId, setLiveId] = useState<string | null>(null)
   useEffect(() => {
-    if (shownSession?.status === 'recording') setLiveId(shownSession.id)
+    if (shownSession?.status !== 'recording') return
+    // Opening a session someone left "recording" doesn't take the mic from
+    // the talk being recorded now.
+    setLiveId((prev) => {
+      const current = prev ? sessionsRef.current?.find((s) => s.id === prev) : undefined
+      return current?.status === 'recording' ? prev : shownSession.id
+    })
   }, [shownSession?.id, shownSession?.status])
   const liveSession = (liveId && sessions?.find((s) => s.id === liveId)) || null
   const sessionOptions = useSessionOptions()
@@ -770,9 +777,46 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
     await db.updateSession(id, { status: 'suspended', accumulatedMs, liveSpanStartedAt: null })
   }
 
+  /** End the talk: the mic stops, the Lock Screen recording goes, and the
+   * session leaves the live slot at once. It can still be edited and added to,
+   * and record asks first before picking it up again (RecordAskDialog). */
+  async function endSession(id: string) {
+    const session = sessionsRef.current?.find((s) => s.id === id)
+    if (!session || (session.status !== 'recording' && session.status !== 'suspended')) return
+    const accumulatedMs = elapsedFor(session, Date.now())
+    updateSessionLocally(id, (s) => ({ ...s, status: 'complete', accumulatedMs, liveSpanStartedAt: null, updatedAt: Date.now() }))
+    await db.updateSession(id, { status: 'complete', accumulatedMs, liveSpanStartedAt: null })
+  }
+
+  /** Record tapped in a paused or ended session. Picking up the live talk
+   * again just resumes; anything else asks first. */
+  const [recordAsk, setRecordAsk] = useState<RecordAsk | null>(null)
+  async function requestRecord(id: string) {
+    const session = sessionsRef.current?.find((s) => s.id === id)
+    if (!session) return
+    const live = liveId ? sessionsRef.current?.find((s) => s.id === liveId) : undefined
+    if (live && live.id !== id && live.status === 'recording') {
+      setRecordAsk({ kind: 'other', sessionId: id, otherId: live.id })
+      return
+    }
+    if (!isSessionActive(session, Date.now())) {
+      setRecordAsk({ kind: 'old', sessionId: id })
+      return
+    }
+    feel.rigid()
+    await resumeSession(id)
+  }
+
+  async function recordHere(ask: RecordAsk) {
+    setRecordAsk(null)
+    feel.rigid()
+    if (ask.kind === 'other') await endSession(ask.otherId)
+    await resumeSession(ask.sessionId)
+  }
+
   async function resumeSession(id: string) {
     const session = sessionsRef.current?.find((s) => s.id === id)
-    if (!session || session.status !== 'suspended') return
+    if (!session || (session.status !== 'suspended' && session.status !== 'complete')) return
     const liveSpanStartedAt = Date.now()
     setLiveId(id)
     updateSessionLocally(id, (s) => ({ ...s, status: 'recording', liveSpanStartedAt, updatedAt: Date.now() }))
@@ -830,9 +874,10 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
           feel.soft()
           return pauseSession(session.id)
         }}
-        onResume={() => {
-          feel.rigid()
-          return resumeSession(session.id)
+        onResume={() => requestRecord(session.id)}
+        onEnd={() => {
+          feel.soft()
+          return endSession(session.id)
         }}
         onBack={() => setRoute({ screen: 'home' })}
         askInApp={freeUser}
@@ -1015,6 +1060,31 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         the list sliding into view, as going back does elsewhere in iOS. */}
     {openDeck && <DeckViewer title={openDeck.title} html={openDeck.html} onClose={() => setOpenDeck(null)} />}
     {captureView}
+    {recordAsk && (() => {
+      const here = sessions.find((s) => s.id === recordAsk.sessionId)
+      const other = recordAsk.kind === 'other' ? sessions.find((s) => s.id === recordAsk.otherId) : undefined
+      if (!here) return null
+      return (
+        <RecordAskDialog
+          ask={recordAsk}
+          title={here.title}
+          otherTitle={other?.title}
+          endedAt={lastActivityAt(here)}
+          onKeepReading={() => setRecordAsk(null)}
+          onGoToOther={() => {
+            setRecordAsk(null)
+            if (other) openSession(other.id)
+          }}
+          onNewSession={() => {
+            setRecordAsk(null)
+            startNewSession().catch((err: unknown) => setHomeError(errorMessage(err)))
+          }}
+          onRecordHere={() => {
+            recordHere(recordAsk).catch((err: unknown) => setHomeError(errorMessage(err)))
+          }}
+        />
+      )
+    })()}
     </>
   )
 }

@@ -31,6 +31,25 @@
   gap: 8px;
 }
 
+/* End the talk: magenta outline (the recording dot's color), white label. */
+.capture-header__end {
+  margin-left: auto;
+  flex-shrink: 0;
+  min-height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--recording-dot);
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.capture-header__end:active {
+  transform: scale(0.96);
+}
+
 .capture-header__back {
   width: 32px;
   height: 44px;

@@ -3,7 +3,7 @@ import type { VideoItem } from '../types'
 import { useVideoUrl } from '../hooks/useVideoUrl'
 import { useLocalVideo } from '../videoClips'
 import { formatClipDuration, formatClock } from '../format'
-import { PauseIcon, PlayIcon } from './InlineIcons'
+import { PlayIcon } from './InlineIcons'
 import './VideoViewer.css'
 
 interface VideoViewerProps {
@@ -25,7 +25,7 @@ const CLOSE_SPEED = 0.6 // px per ms
 /** Plays a video clip's kept part. On the phone that recorded it, the strip
  * of frames below has two handles to trim it, like an audio clip's.
  *
- * Its own play button rather than the system's controls: those offer
+ * Tap the video to play or pause, rather than the system's controls: those offer
  * unmute (which takes the mic from the transcript), full screen and
  * picture in picture, none of which the app wants. */
 export function VideoViewer({ item, onClose, onTrim, listening }: VideoViewerProps) {
@@ -252,13 +252,6 @@ export function VideoViewer({ item, onClose, onTrim, listening }: VideoViewerPro
       {src && (
         <div className="video-viewer__bottom">
           <div className="video-viewer__controls">
-            <button
-              className="video-viewer__play"
-              onClick={togglePlay}
-              aria-label={playing ? 'Pause' : 'Play'}
-            >
-              {playing ? <PauseIcon /> : <PlayIcon />}
-            </button>
           {canTrim && localVideo ? (
             <div className="video-trim" ref={stripRef} onPointerDown={(e) => seek(e, stripRef.current)}>
               <div className="video-trim__frames" aria-hidden="true">

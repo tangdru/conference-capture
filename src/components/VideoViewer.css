@@ -177,20 +177,6 @@
   min-width: 0;
 }
 
-.video-viewer__play {
-  width: 44px;
-  height: 44px;
-  flex-shrink: 0;
-  border: none;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
 /* Clips from another phone: the uploaded cut, so no trim, just a seek bar. */
 .video-seek {
   position: relative;

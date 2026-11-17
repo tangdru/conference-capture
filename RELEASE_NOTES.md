@@ -15,6 +15,33 @@ once -- "Testing"; Friends had build 81).
 
 ---
 
+## Build 95 — internal
+
+Uploaded 2026-11-17. End session button, and a check before recording in a
+session that isn't live. Fixes from Chui's conference day: a new session no
+longer leaves the last one recording, lines are no longer saved into two
+sessions when the mic moves, and the mic no longer goes quiet after
+switching sessions.
+
+What to Test:
+
+```
+END A SESSION
+- While recording (or paused), tap End at the top right. The mic stops, the Lock Screen recording goes away, and the session moves into past sessions right away.
+- An ended session can still be edited: notes, photos, stars, trimming, presentations.
+- Start a new session while one is recording: the old one ends and the new one gets the mic.
+
+RECORDING IN ANOTHER SESSION
+- While a talk is recording, open an older session and tap its record button. A box asks first: Keep reading (the talk keeps recording), Go to that talk, or Record here (which ends the other one).
+- With nothing recording, tap record in a session that ended a while ago. A box asks: Keep reading, New session, or Record here.
+- Pausing and resuming the talk you're in never asks.
+
+FIXES
+- Opening a session that was left recording no longer takes the mic from the talk being recorded.
+- Moving the mic between sessions no longer saves the last line in both.
+- After switching sessions, transcription starts again right away instead of going quiet until pause and resume.
+```
+
 ## Build 94 — internal
 
 Uploaded 2026-11-17. Video player: its own play button instead of the

@@ -15,6 +15,24 @@ once -- "Testing"; Friends had build 81).
 
 ---
 
+## Build 94 — internal
+
+Uploaded 2026-11-17. Video player: its own play button instead of the
+system controls (no unmute, full screen or picture in picture), swipe down
+to close, tap the strip to jump. Clearer interruption message.
+
+What to Test:
+
+```
+VIDEO PLAYER
+- While the session is listening, a clip plays without sound and there's no way to unmute it. The note under it says sound plays when transcription isn't running. Transcription keeps going.
+- Pause the session: the clip plays with sound.
+- No full screen or new window buttons in the top left.
+- Tap the video or the play button to play or pause. Tap the strip of frames to jump to that point.
+- Swipe down on the video to close it, like a photo. A short drag springs back.
+- If transcription is ever interrupted, the message now says to pause and resume to restart transcription.
+```
+
 ## Build 93 — internal
 
 Uploaded 2026-11-16. Video clips step 2: clips show in the session, play,

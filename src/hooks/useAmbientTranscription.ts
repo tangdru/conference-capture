@@ -215,23 +215,32 @@ function startNativeTranscription(
   onError: (message: string) => void,
 ): () => void {
   let stopped = false
-  const listeners = Promise.all([
+  // Moving the mic to another session stops and restarts it. The old stop
+  // hands over the last line heard; it must reach only the old session, so
+  // this start's listeners attach once that stop is done.
+  // (Never more than 3 s: a stop that hangs mustn't keep the mic off.)
+  const previousStop = Promise.race([nativeStopping, new Promise((resolve) => window.setTimeout(resolve, 3000))])
+  const listeners = previousStop.then(() => Promise.all([
     AmbientTranscription.addListener('segment', onSegment),
     AmbientTranscription.addListener('partial', ({ text }) => onPartial(text)),
     AmbientTranscription.addListener('error', ({ message }) => onError(message)),
-  ])
+  ]))
   const started = listeners
     .then(() => (stopped ? undefined : AmbientTranscription.start()))
     .catch((err: unknown) => onError(err instanceof Error ? err.message : 'Microphone unavailable.'))
 
   return () => {
     stopped = true
-    void started
+    nativeStopping = started
       .then(() => AmbientTranscription.stop())
       .catch(() => {})
       .finally(() => listeners.then((handles) => handles.forEach((h) => h.remove())))
+      .catch(() => {})
   }
 }
+
+/** The native stop in progress, if any; see startNativeTranscription. */
+let nativeStopping: Promise<unknown> = Promise.resolve()
 
 function rms(samples: Float32Array): number {
   let sum = 0

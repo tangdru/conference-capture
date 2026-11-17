@@ -475,6 +475,9 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
 
   async function startNewSession() {
     feel.rigid()
+    // The talk still recording stops first; left "recording", it showed as
+    // live for good and took the mic back whenever it was opened.
+    if (liveId) await pauseSession(liveId).catch((err: unknown) => setHomeError(errorMessage(err)))
     const session = await db.createSession(userId, nextSessionTitle(sessions ?? []))
     setSessions((prev) => (prev ? [session, ...prev] : [session]))
     setRoute({ screen: 'capture', sessionId: session.id })

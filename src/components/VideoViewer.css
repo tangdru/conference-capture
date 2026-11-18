@@ -4,23 +4,40 @@
   left: 0;
   right: 0;
   height: 100dvh;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
   background: #000;
   display: flex;
   flex-direction: column;
   z-index: 30;
 }
 
-.video-viewer__top-bar {
-  height: 56px;
-  flex-shrink: 0;
+/* The space above the video (time) and below the strip (swipe hint),
+   each centred in its share of what's left. */
+.video-viewer__space {
+  flex: 1 1 0;
+  min-height: 40px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  padding-top: env(safe-area-inset-top);
+  justify-content: center;
 }
 
+.video-viewer__hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.video-viewer__chevron {
+  color: var(--accent);
+}
+
+/* Web only: the phone closes it with a swipe down. */
 .video-viewer__close {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 6px);
+  right: 12px;
+  z-index: 1;
   width: 44px;
   height: 44px;
   background: none;
@@ -31,7 +48,7 @@
 }
 
 .video-viewer__stage {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
   display: flex;
   align-items: center;
@@ -39,8 +56,11 @@
 }
 
 .video-viewer__video {
-  max-width: 100%;
-  max-height: 100%;
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 64dvh;
+  object-fit: contain;
 }
 
 .video-viewer__note {
@@ -56,15 +76,14 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px 24px;
-  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  padding: 12px 24px 0;
 }
 
 /* Trim bar: the clip's frames, the cut parts dimmed, a handle at each end
    of the kept part. */
 .video-trim {
   position: relative;
-  height: 52px;
+  height: 40px;
   touch-action: none;
 }
 

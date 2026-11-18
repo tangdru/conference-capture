@@ -580,11 +580,9 @@ final class CameraViewController: UIViewController, UIGestureRecognizerDelegate 
         let text = NSMutableAttributedString(string: "Swipe down to return to notes", attributes: [
             .font: UIFont.systemFont(ofSize: 12), .foregroundColor: Palette.textMuted,
         ])
-        if !shots.isEmpty {
-            text.append(NSAttributedString(string: " ↓", attributes: [
-                .font: UIFont.systemFont(ofSize: 12), .foregroundColor: Palette.accent,
-            ]))
-        }
+        text.append(NSAttributedString(string: " ↓", attributes: [
+            .font: UIFont.systemFont(ofSize: 12), .foregroundColor: Palette.accent,
+        ]))
         hint.attributedText = text
     }
 

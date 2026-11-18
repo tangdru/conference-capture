@@ -588,8 +588,11 @@ export function CaptureScreen({
     onResume().catch((err: unknown) => setSaveError(errorMessage(err)))
   }
 
+  // Ending closes the session: back to the list, where it shows as past.
+  // It's ended on this phone at once; the server catches up behind.
   function end() {
-    onEnd().catch((err: unknown) => setSaveError(errorMessage(err)))
+    onEnd().catch((err: unknown) => console.warn('Ending the session failed', err))
+    onBack()
   }
 
   // Swipe right from the left edge: back to the session list, as from a

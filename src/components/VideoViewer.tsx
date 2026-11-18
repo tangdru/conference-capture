@@ -3,6 +3,7 @@ import type { VideoItem } from '../types'
 import { useVideoUrl } from '../hooks/useVideoUrl'
 import { useLocalVideo } from '../videoClips'
 import { formatClipDuration, formatClock } from '../format'
+import { Capacitor } from '@capacitor/core'
 import { PlayIcon } from './InlineIcons'
 import './VideoViewer.css'
 
@@ -14,6 +15,8 @@ interface VideoViewerProps {
   /** The session is listening: the mic holds the sound, so it plays muted. */
   listening?: boolean
 }
+
+const native = Capacitor.isNativePlatform()
 
 /** Shortest part a trim can keep. */
 const MIN_KEEP_MS = 500
@@ -120,7 +123,9 @@ export function VideoViewer({ item, onClose, onTrim, listening }: VideoViewerPro
 
   function handleTouchStart(e: React.TouchEvent) {
     swiped.current = false
-    if (e.touches.length !== 1) {
+    // Drags on the strip trim or seek; they never close it.
+    const onStrip = (e.target as Element).closest?.('.video-trim, .video-seek')
+    if (e.touches.length !== 1 || onStrip) {
       swipe.current = null
       return
     }
@@ -201,23 +206,29 @@ export function VideoViewer({ item, onClose, onTrim, listening }: VideoViewerPro
   const played = Math.min(Math.max(positionMs / total, keptFrom), keptTo)
 
   return (
-    <div className="video-viewer" style={{ background: `rgba(0, 0, 0, ${Math.max(0.3, 1 - pull / 400)})` }}>
-      <div className="video-viewer__top-bar">
-        <span className="mono-timestamp">
-          {formatClock(item.timestamp)} · {formatClipDuration(endMs - startMs)}
-        </span>
+    <div
+      className="video-viewer"
+      style={{ background: `rgba(0, 0, 0, ${Math.max(0.3, 1 - pull / 400)})` }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={() => { swipe.current = null; setSettling(true); setPull(0) }}
+    >
+      {/* No ✕ on the phone: swipe down closes it, as for a photo. */}
+      {!native && (
         <button className="video-viewer__close" onClick={onClose} aria-label="Close video">
           ✕
         </button>
+      )}
+      <div className="video-viewer__space">
+        <span className="mono-timestamp">
+          {formatClock(item.timestamp)} · {formatClipDuration(endMs - startMs)}
+        </span>
       </div>
 
       <div
         className={`video-viewer__stage${settling ? ' video-viewer__stage--settling' : ''}`}
         style={pull ? { transform: `translateY(${pull}px) scale(${Math.max(0.85, 1 - pull / 1500)})` } : undefined}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={() => { swipe.current = null; setSettling(true); setPull(0) }}
         onClick={() => {
           if (swiped.current) return
           togglePlay()
@@ -307,6 +318,14 @@ export function VideoViewer({ item, onClose, onTrim, listening }: VideoViewerPro
           )}
         </div>
       )}
+
+      <div className="video-viewer__space">
+        {native && (
+          <span className="video-viewer__hint">
+            Swipe down to return to notes<span className="video-viewer__chevron"> ↓</span>
+          </span>
+        )}
+      </div>
     </div>
   )
 }

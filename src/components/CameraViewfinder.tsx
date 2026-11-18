@@ -338,7 +338,7 @@ export function CameraViewfinder({ onCapture, onClose, onRemember, remembered = 
       <div className="viewfinder__bottom-bar">
         <span className="viewfinder__hint">
           Swipe down to return to notes
-          {shots.length > 0 && <span className="viewfinder__chevron"> ↓</span>}
+          <span className="viewfinder__chevron"> ↓</span>
         </span>
         <div className="viewfinder__controls">
           <button className="viewfinder__shutter" onClick={capture} aria-label="Capture photo" />

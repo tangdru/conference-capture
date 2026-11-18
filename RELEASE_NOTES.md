@@ -10,12 +10,12 @@ changes.
   review. When sending a build to Friends, combine the notes of every build
   since the last one Friends got (marked below).
 
-**Last build sent to Friends: 89** (added 2026-11-15 and approved at
-once -- "Testing"; Friends had build 81).
+**Last build sent to Friends: 97** (added 2026-11-17 and approved at
+once -- "Testing"; Friends had build 89).
 
 ---
 
-## Build 97 — internal
+## Build 97 — internal, Friends
 
 Uploaded 2026-11-17. End takes you back to the session list. The camera's
 swipe-down arrow shows from the start. Video player: no ✕ (swipe down to
@@ -36,6 +36,40 @@ VIDEO PLAYER
 - The trim strip is shorter and closer under the video.
 - "Swipe down to return to notes ↓" shows at the bottom; swiping down anywhere closes it.
 - Dragging the trim handles never closes it.
+```
+
+Friends What to Test (builds 90–97 combined):
+
+```
+New since build 89:
+
+VIDEO CLIPS
+- In the camera, HOLD the shutter (or a volume button) to record a video clip, up to 30 seconds. A quick tap still takes a photo.
+- Clips have sound, whether or not the session is transcribing.
+- Back in the session, a "Video clip" row shows at the time you started, with its first frame and length.
+- Tap it to play. Tap the video to pause or play. Swipe down to close.
+- While the session is transcribing, clips play without sound (the microphone is busy). Pause the session to hear them.
+- Drag the handles on the strip of frames to trim a clip. Tap the strip to jump to a point.
+- Swipe a clip row left: Save to Photos saves the part you kept; Delete removes it.
+- Clips stay on your phone for now. They don't upload or appear in presentations yet.
+
+END A SESSION
+- Tap End at the top right of a recording or paused session. The microphone stops, the Lock Screen recording goes away, and you're back on the session list with the session under past sessions.
+- An ended session can still be edited: notes, photos, stars, trimming, presentations.
+- Starting a new session while one is recording ends the old one.
+
+RECORDING IN ANOTHER SESSION
+- While a talk is recording, tapping record in another session asks first: Continue reading, Record here (ends the other talk), or Go to that talk.
+- Tapping record in a session that ended a while ago asks: Resume recording, New session, or Cancel.
+
+CAMERA
+- The teal arrow next to "Swipe down to return to notes" now shows from the start.
+
+FIXES
+- Opening a session that was left recording no longer takes the microphone from the talk you're recording.
+- Moving the microphone between sessions no longer saves the last line in both.
+- After switching sessions, transcription starts again right away.
+- If a phone call interrupts transcription and it can't restart, the message tells you to pause and resume to restart transcription.
 ```
 
 ## Build 96 — internal

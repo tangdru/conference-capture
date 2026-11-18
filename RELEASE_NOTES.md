@@ -15,6 +15,23 @@ once -- "Testing"; Friends had build 81).
 
 ---
 
+## Build 96 — internal
+
+Uploaded 2026-11-17. New wording in the record box, and the video player's
+small play button by the trim strip is gone (tap the video to play or pause).
+
+What to Test:
+
+```
+RECORD BOX
+- While a talk is recording, open an older session and tap record. The box offers: Continue reading, Record here (ends the other talk), or Go to that talk.
+- With nothing recording, tap record in a session that ended a while ago. The box offers: Resume recording, New session, or Cancel.
+
+VIDEO PLAYER
+- No play button next to the trim strip. Tap the video to play or pause; the big play symbol shows while it's paused.
+- The trim strip now uses the full width; trimming and tapping to jump still work.
+```
+
 ## Build 95 — internal
 
 Uploaded 2026-11-17. End session button, and a check before recording in a

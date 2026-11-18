@@ -15,6 +15,29 @@ once -- "Testing"; Friends had build 81).
 
 ---
 
+## Build 97 — internal
+
+Uploaded 2026-11-17. End takes you back to the session list. The camera's
+swipe-down arrow shows from the start. Video player: no ✕ (swipe down to
+close), time centred above the video, shorter strip closer to it, and a
+swipe-down hint at the bottom.
+
+What to Test:
+
+```
+END
+- Tap End in a session: it ends and you're back on the session list, with the session under past sessions.
+
+CAMERA
+- Open the camera: the teal ↓ next to "Swipe down to return to notes" shows before you take a photo.
+
+VIDEO PLAYER
+- No ✕. The time and length sit centred in the space above the video.
+- The trim strip is shorter and closer under the video.
+- "Swipe down to return to notes ↓" shows at the bottom; swiping down anywhere closes it.
+- Dragging the trim handles never closes it.
+```
+
 ## Build 96 — internal
 
 Uploaded 2026-11-17. New wording in the record box, and the video player's

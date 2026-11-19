@@ -156,7 +156,7 @@ const DEFAULT_OPTIONS: PresentationOptions = {
   theme: 'auto',
   accent: 'auto',
   length: 'full',
-  photos: 'all',
+  photos: 'smart',
   audioClips: 'all',
   videoClips: 'all',
   photoLayout: 'full',
@@ -608,9 +608,25 @@ async function generateDeckPart(
 }
 
 /** The photos the options put in the presentation: all, starred, or none
- * (smart offers Claude all of them, and it picks). */
-function choosePhotos<T extends { starred: boolean | null }>(rows: T[], options: PresentationOptions): T[] {
-  return chooseMedia(rows, options.photos)
+ * (smart offers Claude all of them, and it picks). Blurry ones never go in,
+ * unless starred. */
+function choosePhotos<T extends { starred: boolean | null; payload?: Record<string, unknown> | null }>(
+  rows: T[],
+  options: PresentationOptions,
+): T[] {
+  return chooseMedia(rows.filter((r) => !isBlurry(r)), options.photos)
+}
+
+/** The phone scores each photo's sharpness as it's saved (payload.sharpness:
+ * how crisp its crispest edges are, 0-1020, on the slide when one was found).
+ * On test slides: sharp ~160-280, soft but readable ~50, unreadable under 25.
+ * Photos from before build 100 have no score and are kept. Tune here, from
+ * real scores (cc_items payload->sharpness), with no app update needed. */
+const BLURRY_BELOW = 25
+
+function isBlurry(row: { starred: boolean | null; payload?: Record<string, unknown> | null }): boolean {
+  const score = row.payload?.sharpness
+  return typeof score === 'number' && score < BLURRY_BELOW && !row.starred
 }
 
 function chooseMedia<T extends { starred: boolean | null }>(rows: T[], choice: Media): T[] {
@@ -748,7 +764,7 @@ async function pickSlidePhotos(
       type: 'text',
       text: `An attendee photographed slides during a conference talk. Below are groups of photos taken one after another that may show the same slide. A slide that builds up (bullets or parts appearing one step at a time) is often photographed at every step, and a slide is sometimes photographed twice.
 
-For each group, decide which photos the attendee's write-up doesn't need: a photo is redundant only when another photo in the SAME group shows the same slide with everything it shows (a later, fuller step of the build, or a clearer shot of the same thing). Keep any photo that shows something no other photo in its group shows: a different slide, a step whose content is replaced rather than added to, or a different part of a page. When unsure, keep it. Ignore the video-call window, cursor and room around the slide.`,
+For each group, decide which photos the attendee's write-up doesn't need: a photo is redundant only when another photo in the SAME group shows the same slide with everything it shows (a later, fuller step of the build, or a clearer shot of the same thing -- of two shots of the same thing, keep the sharper one). Keep any photo that shows something no other photo in its group shows: a different slide, a step whose content is replaced rather than added to, or a different part of a page. When unsure, keep it. Ignore the video-call window, cursor and room around the slide.`,
     }]
     batch.forEach((piece, g) => {
       content.push({ type: 'text', text: `Group ${g + 1}:` })

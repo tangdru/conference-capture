@@ -200,6 +200,11 @@ final class PhotoUploadQueue: NSObject, URLSessionTaskDelegate {
             var row = row
             row["text"] = scan.text
             row["photo_path"] = originalPath
+            // Scored on the slide when one was found, so the room around it
+            // (often out of focus on purpose) doesn't count.
+            if let sharpness = SlideScan.sharpness(scan.flattened ?? jpeg) {
+                row["payload"] = ["sharpness": sharpness] as JSObject
+            }
             var uploads = [Upload(file: "original.jpg", objectPath: originalPath)]
             var displayFile = "original.jpg"
             if let flattened = scan.flattened,

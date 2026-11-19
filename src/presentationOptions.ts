@@ -58,7 +58,8 @@ export interface PresentationOptions {
   saveReferences: boolean
 }
 
-/** Today's presentation, as it was before these options existed. */
+/** Today's presentation, as it was before these options existed (photos
+ * Smart since 2026-11-19, so blurry and repeat shots stay out). */
 export const DEFAULT_PRESENTATION_OPTIONS: PresentationOptions = {
   tldr: true,
   quotes: true,
@@ -72,7 +73,7 @@ export const DEFAULT_PRESENTATION_OPTIONS: PresentationOptions = {
   theme: 'auto',
   accent: 'auto',
   length: 'full',
-  photos: 'all',
+  photos: 'smart',
   audioClips: 'all',
   videoClips: 'all',
   photoLayout: 'full',

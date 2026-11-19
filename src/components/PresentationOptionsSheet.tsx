@@ -38,7 +38,7 @@ function mediaHint(value: Media, things: string): string {
   if (value === 'smart') return `Let Claude pick the ${things} that fit the story contextually`
   if (value === 'starred') return `Only ${things} you starred`
   if (value === 'none') return `No ${things}`
-  return `Every one of your ${things}`
+  return things === 'photos' ? 'Every one of your photos, except blurry ones' : `Every one of your ${things}`
 }
 
 const LAYOUT: { key: BooleanKey; label: string; hint: string }[] = [

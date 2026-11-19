@@ -1,3 +1,4 @@
+import ImageIO
 import Capacitor
 import CoreImage
 import UIKit
@@ -61,6 +62,51 @@ enum SlideScan {
             .filter { !$0.isEmpty }
             .joined(separator: "\n")
         return (text, flattened)
+    }
+
+    // MARK: - Sharpness
+
+    /// How crisp the photo's crispest edges are: the 99.5th percentile of the
+    /// Laplacian's size on a 1024 px greyscale copy (0-1020). Text in focus
+    /// gives strong edges whatever else is on the slide; blur flattens them.
+    /// On test slides: sharp ~160-280, soft but readable ~50, unreadable
+    /// under 25. generate-deck decides what counts as too blurry, so the
+    /// cutoff can change without an app update. Slow-ish -- off the main thread.
+    static func sharpness(_ jpeg: Data) -> Int? {
+        guard let source = CGImageSourceCreateWithData(jpeg as CFData, nil) else { return nil }
+        let thumb: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: 1024,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, thumb as CFDictionary) else { return nil }
+        let w = image.width, h = image.height
+        guard w > 2, h > 2 else { return nil }
+        var gray = [UInt8](repeating: 0, count: w * h)
+        let drawn = gray.withUnsafeMutableBytes { buffer -> Bool in
+            guard let ctx = CGContext(
+                data: buffer.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w,
+                space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue
+            ) else { return false }
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+            return true
+        }
+        guard drawn else { return nil }
+        var counts = [Int](repeating: 0, count: 1021)
+        for y in 1..<(h - 1) {
+            for x in 1..<(w - 1) {
+                let i = y * w + x
+                let edge = Int(gray[i - 1]) + Int(gray[i + 1]) + Int(gray[i - w]) + Int(gray[i + w]) - 4 * Int(gray[i])
+                counts[abs(edge)] += 1
+            }
+        }
+        let wanted = Int(Double((w - 2) * (h - 2)) * 0.995)
+        var seen = 0
+        for (level, count) in counts.enumerated() {
+            seen += count
+            if seen >= wanted { return level }
+        }
+        return 1020
     }
 
     // MARK: - Finding the slide

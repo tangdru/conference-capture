@@ -39,6 +39,15 @@ export class DeckError extends Error {}
  * talk's whole story. */
 type Media = 'smart' | 'all' | 'starred' | 'none'
 
+/** Same rule as generate-deck: the phone's sharpness score (payload.sharpness)
+ * under this means too blurry to use. Keep the two in step. */
+const BLURRY_BELOW = 25
+
+function isBlurry(row: { starred: boolean | null; payload: Record<string, unknown> | null }): boolean {
+  const score = row.payload?.sharpness
+  return typeof score === 'number' && score < BLURRY_BELOW && !row.starred
+}
+
 function chooseMedia<T extends { starred: boolean | null }>(rows: T[], choice: Media): T[] {
   if (choice === 'none') return []
   return choice === 'starred' ? rows.filter((r) => r.starred) : rows
@@ -89,7 +98,7 @@ const DEFAULT_OPTIONS: PresentationOptions = {
   theme: 'auto',
   accent: 'auto',
   length: 'full',
-  photos: 'all',
+  photos: 'smart',
   audioClips: 'all',
   videoClips: 'all',
   photoLayout: 'full',
@@ -218,7 +227,8 @@ async function loadMaterial(admin: SupabaseClient, userId: string, sessionId: st
 
   const allPhotos = rows.filter((r) => r.type === 'photo' && r.photo_path)
   const notes = rows.filter((r) => r.type === 'note' && r.text)
-  const photos = chooseMedia(allPhotos, options.photos)
+  // Blurry ones never go in, unless starred (see isBlurry).
+  const photos = chooseMedia(allPhotos.filter((r) => !isBlurry(r)), options.photos)
   const unplaced = (r: Row) => !r.placement_locked && r.position === null
   return {
     session: session as Session,
@@ -312,7 +322,7 @@ ${presentationRequirements(o)}`
     `Photo and audio placeholders here name their entry (like ${m.photos[0] ? photoToken(m.photos[0]) : 'PHOTO_1a2b3c4d'}): use them exactly as listed wherever the requirements mention placeholders like PHOTO_1, AUDIO_1 or VIDEO_1 (and VIDEO_1_POSTER becomes the clip's token followed by _POSTER).`,
   ]
   if (o.photos !== 'none' && o.skipRepeatSlides && m.photos.length > 1) {
-    extra.push('A slide that builds up step by step is often photographed at every step, and a slide is sometimes photographed twice. Leave a photo out only when another photo of the SAME slide shows everything it does (a later, fuller step, or a clearer shot); keep any photo that shows something the others don\'t, and always keep ★ photos. When unsure, keep it.')
+    extra.push('A slide that builds up step by step is often photographed at every step, and a slide is sometimes photographed twice. Leave a photo out only when another photo of the SAME slide shows everything it does (a later, fuller step, or a clearer shot -- of two shots of the same thing, keep the sharper one); keep any photo that shows something the others don\'t, and always keep ★ photos. When unsure, keep it.')
   }
   // Sparkle's organizeSession, asked in the same chat.
   const tasks = m.entryKinds.map((k) => ASKS[k])

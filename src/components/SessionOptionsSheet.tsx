@@ -22,12 +22,6 @@ type BooleanKey = {
   [K in keyof SessionOptions]: SessionOptions[K] extends boolean ? K : never
 }[keyof SessionOptions]
 
-// The buttons beside the camera button while a talk is recording.
-const BUTTONS: { key: BooleanKey; label: string; hint: string }[] = [
-  { key: 'rememberThis', label: 'Remember this', hint: 'A star to mark a key moment' },
-  { key: 'chuisAudio', label: 'Chui’s audio', hint: 'Keeps a clip of the speaker’s voice' },
-]
-
 // Chui's audio settings, shown under it while it's on.
 const CLIP_SWITCHES: { key: BooleanKey; label: string; hint: string }[] = [
   { key: 'snapToSentences', label: 'Snap to sentences', hint: 'Starts and ends each clip at a pause, not mid-word' },
@@ -125,7 +119,33 @@ export function SessionOptionsSheet({ userId, onBack }: SessionOptionsSheetProps
       <div className="app-menu__body">
         {error && <p className="pres-options__error" role="alert">{error}</p>}
 
-        <h2 className="app-menu__section-title">During a talk</h2>
+        <label className="session-options__slider">
+          <span className="session-options__slider-top">
+            <span>
+              Stay live after a pause
+              <span className="app-menu__hint">How long a paused session stays at the top of your sessions</span>
+            </span>
+            <span className="session-options__value">{seconds(options.liveWindowS)}</span>
+          </span>
+          <input
+            type="range"
+            min={LIVE_WINDOW_MIN_S}
+            max={LIVE_WINDOW_MAX_S}
+            step={30}
+            value={options.liveWindowS}
+            onChange={(e) => slide('liveWindowS', Number(e.target.value))}
+            style={
+              {
+                '--fill': `${((options.liveWindowS - LIVE_WINDOW_MIN_S) / (LIVE_WINDOW_MAX_S - LIVE_WINDOW_MIN_S)) * 100}%`,
+              } as React.CSSProperties
+            }
+          />
+          <span className="session-options__range" aria-hidden="true">
+            <span>{seconds(LIVE_WINDOW_MIN_S)}</span>
+            <span>{seconds(LIVE_WINDOW_MAX_S)}</span>
+          </span>
+        </label>
+
         <ul className="app-menu__list">
           <li>
             <label className="app-menu__row">
@@ -176,161 +196,26 @@ export function SessionOptionsSheet({ userId, onBack }: SessionOptionsSheetProps
               </div>
             </div>
           </li>
-        </ul>
-        <label className="session-options__slider">
-          <span className="session-options__slider-top">
-            <span>
-              Stay live after a pause
-              <span className="app-menu__hint">How long a paused session stays at the top of your sessions</span>
-            </span>
-            <span className="session-options__value">{seconds(options.liveWindowS)}</span>
-          </span>
-          <input
-            type="range"
-            min={LIVE_WINDOW_MIN_S}
-            max={LIVE_WINDOW_MAX_S}
-            step={30}
-            value={options.liveWindowS}
-            onChange={(e) => slide('liveWindowS', Number(e.target.value))}
-            style={
-              {
-                '--fill': `${((options.liveWindowS - LIVE_WINDOW_MIN_S) / (LIVE_WINDOW_MAX_S - LIVE_WINDOW_MIN_S)) * 100}%`,
-              } as React.CSSProperties
-            }
-          />
-          <span className="session-options__range" aria-hidden="true">
-            <span>{seconds(LIVE_WINDOW_MIN_S)}</span>
-            <span>{seconds(LIVE_WINDOW_MAX_S)}</span>
-          </span>
-        </label>
 
-        <h2 className="app-menu__section-title">In the session bar</h2>
-        <p className="pres-options__section-hint">
-          Buttons beside the camera while a talk is recording. Turning one off hides it; nothing you captured is removed.
-        </p>
-        <ul className="app-menu__list">
-          {BUTTONS.map(({ key, label, hint }) => (
-            <li key={key}>
-              <label className="app-menu__row">
-                <span className="app-menu__label">
-                  {label}
-                  <span className="app-menu__hint">
-                    {key === 'chuisAudio' && !options.liveTranscript ? 'Needs Live transcript: clips come from its microphone' : hint}
-                  </span>
-                </span>
-                <input
-                  type="checkbox"
-                  role="switch"
-                  className="pres-options__switch"
-                  checked={options[key]}
-                  disabled={key === 'chuisAudio' && !options.liveTranscript}
-                  aria-expanded={key === 'chuisAudio' ? clipsOpen : undefined}
-                  aria-controls={key === 'chuisAudio' ? 'session-options-clips' : undefined}
-                  onChange={(e) => set(key, e.target.checked)}
-                />
-              </label>
-              {key === 'chuisAudio' && (
-                <div
-                  id="session-options-clips"
-                  className={`session-options__more${clipsOpen ? ' is-open' : ''}`}
-                  aria-hidden={!clipsOpen}
-                  inert={!clipsOpen}
-                >
-                  <div className="session-options__more-inner">
-                    <p className="session-options__group">Clip length</p>
-                    {CLIP_SLIDERS.map(({ key: k, label: l, max }) => (
-                      <label key={k} className="session-options__slider">
-                        <span className="session-options__slider-top">
-                          <span>{l}</span>
-                          <span className="session-options__value">{seconds(options[k])}</span>
-                        </span>
-                        <input
-                          type="range"
-                          min={0}
-                          max={max}
-                          step={1}
-                          value={options[k]}
-                          onChange={(e) => slide(k, Number(e.target.value))}
-                          style={{ '--fill': `${(options[k] / max) * 100}%` } as React.CSSProperties}
-                        />
-                        <span className="session-options__range" aria-hidden="true">
-                          <span>0</span>
-                          <span>{seconds(max)}</span>
-                        </span>
-                      </label>
-                    ))}
-                    <ul className="app-menu__list">
-                      {CLIP_SWITCHES.map(({ key: k, label: l, hint: h }) => (
-                        <li key={k}>
-                          <label className="app-menu__row">
-                            <span className="app-menu__label">
-                              {l}
-                              <span className="app-menu__hint">{h}</span>
-                            </span>
-                            <input
-                              type="checkbox"
-                              role="switch"
-                              className="pres-options__switch"
-                              checked={options[k]}
-                              onChange={(e) => set(k, e.target.checked)}
-                            />
-                          </label>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
-
-        <h2 className="app-menu__section-title">Video clips</h2>
-        <p className="pres-options__section-hint">Hold the shutter in the camera to record one.</p>
-        <ul className="app-menu__list">
-          <Choice
-            label="Longest clip"
-            hint="Recording stops by itself at this length. Let go of the shutter to stop sooner."
-            value={String(options.videoMaxS)}
-            choices={[['15', '15 sec'], ['30', '30 sec'], ['60', '1 min']]}
-            onChange={(v) => set('videoMaxS', Number(v) as SessionOptions['videoMaxS'])}
-          />
-          <Choice
-            label="Upload clips"
-            hint={
-              options.videoUploads === 'off'
-                ? 'Clips stay on this phone: they don’t appear on your other devices or in presentations'
-                : options.videoUploads === 'wifi'
-                  ? 'Clips wait on the phone until you’re on Wi-Fi (about 13 MB per 30 sec)'
-                  : 'Clips upload straight away, on mobile data too (about 13 MB per 30 sec)'
-            }
-            value={options.videoUploads}
-            choices={[['wifi', 'Wi-Fi only'], ['always', 'Always'], ['off', 'Off']]}
-            onChange={(v) => set('videoUploads', v)}
-          />
           <li>
             <label className="app-menu__row">
               <span className="app-menu__label">
-                Show Claude video frames
+                Remember this
                 <span className="app-menu__hint">
-                  Claude can’t watch video, so it’s shown a few stills from each clip when building a presentation. They
-                  take some of the 20 pictures Claude can look at, after your slide photos. Off: clips are placed by
-                  when they were recorded and what was said.
+                  A star button beside the camera while recording, to mark a key moment. Off hides the button; stars you
+                  made stay.
                 </span>
               </span>
               <input
                 type="checkbox"
                 role="switch"
                 className="pres-options__switch"
-                checked={options.videoFramesForClaude}
-                onChange={(e) => set('videoFramesForClaude', e.target.checked)}
+                checked={options.rememberThis}
+                onChange={(e) => set('rememberThis', e.target.checked)}
               />
             </label>
           </li>
-        </ul>
 
-        <h2 className="app-menu__section-title">Photos</h2>
-        <ul className="app-menu__list">
           <Choice
             label="Photo size"
             hint={
@@ -342,6 +227,133 @@ export function SessionOptionsSheet({ userId, onBack }: SessionOptionsSheetProps
             choices={[['standard', 'Standard'], ['smaller', 'Smaller']]}
             onChange={(v) => set('photoQuality', v)}
           />
+
+          <li>
+            <label className="app-menu__row">
+              <span className="app-menu__label">
+                Chui’s audio
+                <span className="app-menu__hint">
+                  {options.liveTranscript
+                    ? 'A button beside the camera while recording that keeps a clip of the speaker’s voice. Off hides the button; clips you made stay.'
+                    : 'Needs Live transcript: clips come from its microphone'}
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                role="switch"
+                className="pres-options__switch"
+                checked={options.chuisAudio}
+                disabled={!options.liveTranscript}
+                aria-expanded={clipsOpen}
+                aria-controls="session-options-clips"
+                onChange={(e) => set('chuisAudio', e.target.checked)}
+              />
+            </label>
+            <div
+              id="session-options-clips"
+              className={`session-options__more${clipsOpen ? ' is-open' : ''}`}
+              aria-hidden={!clipsOpen}
+              inert={!clipsOpen}
+            >
+              <div className="session-options__more-inner">
+                <p className="session-options__group">Clip length</p>
+                {CLIP_SLIDERS.map(({ key: k, label: l, max }) => (
+                  <label key={k} className="session-options__slider">
+                    <span className="session-options__slider-top">
+                      <span>{l}</span>
+                      <span className="session-options__value">{seconds(options[k])}</span>
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={max}
+                      step={1}
+                      value={options[k]}
+                      onChange={(e) => slide(k, Number(e.target.value))}
+                      style={{ '--fill': `${(options[k] / max) * 100}%` } as React.CSSProperties}
+                    />
+                    <span className="session-options__range" aria-hidden="true">
+                      <span>0</span>
+                      <span>{seconds(max)}</span>
+                    </span>
+                  </label>
+                ))}
+                <ul className="app-menu__list">
+                  {CLIP_SWITCHES.map(({ key: k, label: l, hint: h }) => (
+                    <li key={k}>
+                      <label className="app-menu__row">
+                        <span className="app-menu__label">
+                          {l}
+                          <span className="app-menu__hint">{h}</span>
+                        </span>
+                        <input
+                          type="checkbox"
+                          role="switch"
+                          className="pres-options__switch"
+                          checked={options[k]}
+                          onChange={(e) => set(k, e.target.checked)}
+                        />
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </li>
+
+          <li>
+            <div className="app-menu__row">
+              <span className="app-menu__label">
+                Video clips
+                <span className="app-menu__hint">Hold the shutter in the camera to record one.</span>
+              </span>
+            </div>
+            <div className="session-options__more is-open">
+              <div className="session-options__more-inner">
+                <ul className="app-menu__list">
+                  <Choice
+                    label="Longest clip"
+                    hint="Recording stops by itself at this length. Let go of the shutter to stop sooner."
+                    value={String(options.videoMaxS)}
+                    choices={[['15', '15 sec'], ['30', '30 sec'], ['60', '1 min']]}
+                    onChange={(v) => set('videoMaxS', Number(v) as SessionOptions['videoMaxS'])}
+                  />
+                  <Choice
+                    label="Upload clips"
+                    hint={
+                      options.videoUploads === 'off'
+                        ? 'Clips stay on this phone: they don’t appear on your other devices or in presentations'
+                        : options.videoUploads === 'wifi'
+                          ? 'Clips wait on the phone until you’re on Wi-Fi (about 13 MB per 30 sec)'
+                          : 'Clips upload straight away, on mobile data too (about 13 MB per 30 sec)'
+                    }
+                    value={options.videoUploads}
+                    choices={[['wifi', 'Wi-Fi only'], ['always', 'Always'], ['off', 'Off']]}
+                    onChange={(v) => set('videoUploads', v)}
+                  />
+                  <li>
+                    <label className="app-menu__row">
+                      <span className="app-menu__label">
+                        Show Claude video frames
+                        <span className="app-menu__hint">
+                          Claude can’t watch video, so it’s shown a few stills from each clip when building a
+                          presentation. They take some of the 20 pictures Claude can look at, after your slide photos.
+                          Off: clips are placed by when they were recorded and what was said.
+                        </span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        role="switch"
+                        className="pres-options__switch"
+                        checked={options.videoFramesForClaude}
+                        onChange={(e) => set('videoFramesForClaude', e.target.checked)}
+                      />
+                    </label>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </li>
         </ul>
       </div>
     </div>

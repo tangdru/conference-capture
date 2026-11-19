@@ -15,6 +15,24 @@ once -- "Testing"; Friends had build 89).
 
 ---
 
+## Build 99 — internal
+
+Uploaded 2026-11-19. Session options reordered into one list (Stay live,
+Live transcript, Remember this, Chui's audio, Video clips), with a new
+Video clips on/off switch. Photo size hidden for now; every photo is
+standard.
+
+What to Test:
+
+```
+SESSION OPTIONS
+- The list reads: Stay live, Live transcript, Remember this, Chui's audio, Video clips. No Photo size.
+- Video clips: turn it off. Its settings fold away, and in the camera holding the shutter just takes a photo when you let go.
+- Turn it back on: holding the shutter records a clip again.
+```
+
+---
+
 ## Build 98 — internal
 
 Uploaded 2026-11-19. Video clips upload (with a poster and up to 4 stills

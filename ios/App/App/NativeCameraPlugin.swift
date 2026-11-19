@@ -132,6 +132,8 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin {
         if let show = call.getBool("showClip") { camera.showClip = show }
         if let remembered = call.getBool("remembered") { camera.remembered = remembered }
         if let boost = call.getBool("videoBoost") { camera.videoBoost = boost }
+        if let seconds = call.getDouble("videoMaxS"), seconds > 0 { camera.videoMaxSeconds = seconds }
+        if let smaller = call.getBool("smallerPhotos") { CameraEngine.smallerPhotos = smaller }
         if call.options["clipEndsAt"] != nil {
             let ms = call.getDouble("clipEndsAt")
             camera.clipEndsAt = ms.map { Date(timeIntervalSince1970: $0 / 1000) }

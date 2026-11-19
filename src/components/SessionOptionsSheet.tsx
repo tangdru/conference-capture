@@ -80,7 +80,7 @@ export function SessionOptionsSheet({ userId, onBack }: SessionOptionsSheetProps
       .catch(() => setError('Couldn’t save to your account. It’s set on this phone.'))
   }
 
-  function set(key: BooleanKey, value: boolean) {
+  function set<K extends keyof SessionOptions>(key: K, value: SessionOptions[K]) {
     const next = { ...options, [key]: value }
     setOptions(next)
     save(next)
@@ -284,7 +284,104 @@ export function SessionOptionsSheet({ userId, onBack }: SessionOptionsSheetProps
             </li>
           ))}
         </ul>
+
+        <h2 className="app-menu__section-title">Video clips</h2>
+        <p className="pres-options__section-hint">Hold the shutter in the camera to record one.</p>
+        <ul className="app-menu__list">
+          <Choice
+            label="Longest clip"
+            hint="Recording stops by itself at this length. Let go of the shutter to stop sooner."
+            value={String(options.videoMaxS)}
+            choices={[['15', '15 sec'], ['30', '30 sec'], ['60', '1 min']]}
+            onChange={(v) => set('videoMaxS', Number(v) as SessionOptions['videoMaxS'])}
+          />
+          <Choice
+            label="Upload clips"
+            hint={
+              options.videoUploads === 'off'
+                ? 'Clips stay on this phone: they don’t appear on your other devices or in presentations'
+                : options.videoUploads === 'wifi'
+                  ? 'Clips wait on the phone until you’re on Wi-Fi (about 13 MB per 30 sec)'
+                  : 'Clips upload straight away, on mobile data too (about 13 MB per 30 sec)'
+            }
+            value={options.videoUploads}
+            choices={[['wifi', 'Wi-Fi only'], ['always', 'Always'], ['off', 'Off']]}
+            onChange={(v) => set('videoUploads', v)}
+          />
+          <li>
+            <label className="app-menu__row">
+              <span className="app-menu__label">
+                Show Claude video frames
+                <span className="app-menu__hint">
+                  Claude can’t watch video, so it’s shown a few stills from each clip when building a presentation. They
+                  take some of the 20 pictures Claude can look at, after your slide photos. Off: clips are placed by
+                  when they were recorded and what was said.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                role="switch"
+                className="pres-options__switch"
+                checked={options.videoFramesForClaude}
+                onChange={(e) => set('videoFramesForClaude', e.target.checked)}
+              />
+            </label>
+          </li>
+        </ul>
+
+        <h2 className="app-menu__section-title">Photos</h2>
+        <ul className="app-menu__list">
+          <Choice
+            label="Photo size"
+            hint={
+              options.photoQuality === 'smaller'
+                ? 'About a third of the storage; small text on a busy slide may be harder to read'
+                : 'Full detail, so small text on slides stays readable'
+            }
+            value={options.photoQuality}
+            choices={[['standard', 'Standard'], ['smaller', 'Smaller']]}
+            onChange={(v) => set('photoQuality', v)}
+          />
+        </ul>
       </div>
     </div>
+  )
+}
+
+function Choice<T extends string>({
+  label,
+  hint,
+  value,
+  choices,
+  onChange,
+}: {
+  label: string
+  hint?: string
+  value: T
+  choices: [T, string][]
+  onChange: (value: T) => void
+}) {
+  return (
+    <li>
+      <div className="app-menu__row pres-options__stack">
+        <span className="app-menu__label">
+          {label}
+          {hint && <span className="app-menu__hint">{hint}</span>}
+        </span>
+        <div className="pres-options__segmented" role="radiogroup" aria-label={label}>
+          {choices.map(([v, text]) => (
+            <button
+              key={v}
+              role="radio"
+              aria-checked={value === v}
+              className={`pres-options__segment${value === v ? ' is-selected' : ''}`}
+              onClick={() => onChange(v)}
+            >
+              {text}
+            </button>
+          ))}
+        </div>
+      </div>
+    </li>
   )
 }

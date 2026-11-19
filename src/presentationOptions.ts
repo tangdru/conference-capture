@@ -7,7 +7,12 @@ export type Motion = 'still' | 'scrolly'
 export type Charts = 'interactive' | 'photo'
 export type Theme = 'auto' | 'light' | 'dark'
 export type Length = 'full' | 'short'
-export type Photos = 'all' | 'starred' | 'none'
+/** Which photos, audio clips or video clips go in. Smart: Claude picks the
+ * ones that tell the talk's whole story and leaves out the rest. */
+export type Media = 'smart' | 'all' | 'starred' | 'none'
+export type Photos = Media
+export type PhotoLayout = 'full' | 'gallery'
+export type ReadingLevel = 'expert' | 'general' | 'plain'
 export type Voice = 'neutral' | 'first_person' | 'brief'
 
 export interface PresentationOptions {
@@ -25,6 +30,19 @@ export interface PresentationOptions {
   accent: string
   length: Length
   photos: Photos
+  audioClips: Media
+  videoClips: Media
+  /** Full: each photo the width of the text. Gallery: a grid of smaller
+   * photos in each chapter that open full size when tapped. */
+  photoLayout: PhotoLayout
+  /** A chapter of the audience's questions and the speaker's answers, when
+   * the talk had them. */
+  qa: boolean
+  /** A list of the acronyms and terms at the end, as well as in the text. */
+  glossary: boolean
+  /** Expert: keeps the field's terms as they are. General: explains them
+   * briefly. Plain: everyday words throughout. */
+  readingLevel: ReadingLevel
   /** Leave out photos of a slide that only repeat another photo of it (a
    * slide that builds up step by step, photographed at each step). */
   skipRepeatSlides: boolean
@@ -55,6 +73,12 @@ export const DEFAULT_PRESENTATION_OPTIONS: PresentationOptions = {
   accent: 'auto',
   length: 'full',
   photos: 'all',
+  audioClips: 'all',
+  videoClips: 'all',
+  photoLayout: 'full',
+  qa: true,
+  glossary: true,
+  readingLevel: 'expert',
   skipRepeatSlides: true,
   voice: 'neutral',
   language: 'auto',

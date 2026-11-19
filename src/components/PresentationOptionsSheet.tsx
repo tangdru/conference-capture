@@ -5,6 +5,7 @@ import {
   LANGUAGES,
   fetchPresentationOptions,
   savePresentationOptions,
+  type Media,
   type PresentationOptions,
 } from '../presentationOptions'
 import './AppMenu.css'
@@ -26,7 +27,18 @@ const INCLUDED: { key: BooleanKey; label: string; hint: string }[] = [
   { key: 'quotes', label: 'Speaker quotes', hint: 'Their best lines, set apart' },
   { key: 'actionItems', label: 'Action items', hint: 'What the speaker said they’d do' },
   { key: 'references', label: 'References', hint: 'Links and follow-ups at the end' },
+  { key: 'qa', label: 'Q&A', hint: 'Audience questions and the speaker’s answers, when there were any' },
+  { key: 'glossary', label: 'Glossary', hint: 'Acronyms and terms explained in a list at the end' },
 ]
+
+const MEDIA_CHOICES: [Media, string][] = [['smart', 'Smart'], ['all', 'All'], ['starred', 'Starred'], ['none', 'None']]
+
+function mediaHint(value: Media, things: string): string {
+  if (value === 'smart') return `Claude picks the ${things} that tell the whole story`
+  if (value === 'starred') return `Only ${things} you starred`
+  if (value === 'none') return `No ${things}`
+  return `Every one of your ${things}`
+}
 
 const LAYOUT: { key: BooleanKey; label: string; hint: string }[] = [
   { key: 'chapterBar', label: 'Chapter bar', hint: 'Sticks to the top as you scroll' },
@@ -111,9 +123,9 @@ export function PresentationOptionsSheet({ userId, onBack }: PresentationOptions
               <ToggleRows rows={INCLUDED} options={options} onChange={set} />
               <Choice
                 label="Photos"
-                hint={options.photos === 'starred' ? 'Only photos you starred' : options.photos === 'none' ? 'Text only' : 'Every photo you took'}
+                hint={mediaHint(options.photos, 'photos')}
                 value={options.photos}
-                choices={[['all', 'All'], ['starred', 'Starred'], ['none', 'None']]}
+                choices={MEDIA_CHOICES}
                 onChange={(v) => set('photos', v)}
               />
               {options.photos !== 'none' && (
@@ -127,11 +139,32 @@ export function PresentationOptionsSheet({ userId, onBack }: PresentationOptions
                   onChange={set}
                 />
               )}
+              <Choice
+                label="Audio clips"
+                hint={mediaHint(options.audioClips, 'audio clips')}
+                value={options.audioClips}
+                choices={MEDIA_CHOICES}
+                onChange={(v) => set('audioClips', v)}
+              />
+              <Choice
+                label="Video clips"
+                hint={mediaHint(options.videoClips, 'video clips')}
+                value={options.videoClips}
+                choices={MEDIA_CHOICES}
+                onChange={(v) => set('videoClips', v)}
+              />
             </ul>
 
             <h2 className="app-menu__section-title">Layout and style</h2>
             <ul className="app-menu__list">
               <ToggleRows rows={LAYOUT} options={options} onChange={set} />
+              <Choice
+                label="Photo layout"
+                hint={options.photoLayout === 'gallery' ? 'Smaller photos in a grid; tap one to see it full size' : 'Each photo the full width of the text'}
+                value={options.photoLayout}
+                choices={[['full', 'Full width'], ['gallery', 'Gallery']]}
+                onChange={(v) => set('photoLayout', v)}
+              />
               <Choice
                 label="Motion"
                 hint={options.motion === 'scrolly' ? 'Content animates in as you scroll' : 'A simple article; only charts move'}
@@ -201,6 +234,19 @@ export function PresentationOptionsSheet({ userId, onBack }: PresentationOptions
                 value={options.voice}
                 choices={[['neutral', 'Neutral'], ['first_person', 'My notes'], ['brief', 'Brief']]}
                 onChange={(v) => set('voice', v)}
+              />
+              <Choice
+                label="Reading level"
+                hint={
+                  options.readingLevel === 'plain'
+                    ? 'Everyday words; every technical term explained'
+                    : options.readingLevel === 'general'
+                      ? 'For a reader outside the field: terms explained briefly'
+                      : 'For people in the field: its terms kept as they are'
+                }
+                value={options.readingLevel}
+                choices={[['expert', 'Expert'], ['general', 'General'], ['plain', 'Plain']]}
+                onChange={(v) => set('readingLevel', v)}
               />
               <li>
                 <label className="app-menu__row">

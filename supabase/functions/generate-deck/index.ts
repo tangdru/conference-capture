@@ -105,6 +105,10 @@ function explain(err: unknown): string {
   return MESSAGES.unknown
 }
 
+/** Which photos or clips go in. Smart: Claude picks the ones that tell the
+ * talk's whole story. */
+type Media = 'smart' | 'all' | 'starred' | 'none'
+
 /** The account's Presentation options (cc_user_settings.presentation). Keep
  * in step with src/presentationOptions.ts in the app. */
 interface PresentationOptions {
@@ -120,7 +124,15 @@ interface PresentationOptions {
   theme: 'auto' | 'light' | 'dark'
   accent: string
   length: 'full' | 'short'
-  photos: 'all' | 'starred' | 'none'
+  photos: Media
+  audioClips: Media
+  videoClips: Media
+  photoLayout: 'full' | 'gallery'
+  qa: boolean
+  glossary: boolean
+  readingLevel: 'expert' | 'general' | 'plain'
+  /** From Session options (videoFramesForClaude): show Claude video frames. */
+  videoFrames: boolean
   skipRepeatSlides: boolean
   voice: 'neutral' | 'first_person' | 'brief'
   language: string
@@ -145,6 +157,13 @@ const DEFAULT_OPTIONS: PresentationOptions = {
   accent: 'auto',
   length: 'full',
   photos: 'all',
+  audioClips: 'all',
+  videoClips: 'all',
+  photoLayout: 'full',
+  qa: true,
+  glossary: true,
+  readingLevel: 'expert',
+  videoFrames: false,
   skipRepeatSlides: true,
   voice: 'neutral',
   language: 'auto',
@@ -478,10 +497,10 @@ async function generateDeckPart(
   const enrichmentRows = itemRows.filter((r) => r.type === 'enrichment' && r.payload)
   const highlightRows = itemRows.filter((r) => r.type === 'highlight')
   // The clip button's recordings, once their kept part has uploaded.
-  const audioRows = itemRows.filter((r) => r.type === 'audio' && typeof r.payload?.path === 'string')
+  const audioRows = chooseMedia(itemRows.filter((r) => r.type === 'audio' && typeof r.payload?.path === 'string'), options.audioClips)
   // Video clips, once their kept part has uploaded (with stills where the
   // picture changes, since Claude can't watch video).
-  const videoRows = itemRows.filter((r) => r.type === 'video' && typeof r.payload?.path === 'string')
+  const videoRows = chooseMedia(itemRows.filter((r) => r.type === 'video' && typeof r.payload?.path === 'string'), options.videoClips)
 
   // Links, not the photos themselves: a function has too little memory to
   // hold a session's worth of photos. Claude fetches them from the link, and
@@ -516,7 +535,8 @@ async function generateDeckPart(
     ? clips.map((c) => `- ${c.placeholder} [${c.elapsed}] (${c.length})${c.starred ? ' ★' : ''}${c.said ? ` -- said in it: "${c.said}"` : ''}`).join('\n')
     : '(None recorded.)'
   // Frames go after the photos: whatever room is left of the 20 images.
-  const room = MAX_PHOTOS_SHOWN - photos.filter((p) => p.shown).length
+  // (None unless Session options says to show Claude video frames.)
+  const room = options.videoFrames ? MAX_PHOTOS_SHOWN - photos.filter((p) => p.shown).length : 0
   const videos = await linkVideos(supabase, session.started_at, videoRows, transcriptSegments, photoLinks, room)
   const videosText = videos.length > 0
     ? videos.map((v) => `- ${v.placeholder} [${v.elapsed}] (${v.length})${v.starred ? ' ★' : ''}${v.frames.length ? ` -- ${v.frames.length} frame${v.frames.length === 1 ? '' : 's'} shown to you below` : ''}${v.said ? ` -- said during it: "${v.said}"` : ''}`).join('\n')
@@ -587,10 +607,15 @@ async function generateDeckPart(
   await startNextQueued(supabase, authHeader)
 }
 
-/** The photos the options put in the presentation: all, starred, or none. */
+/** The photos the options put in the presentation: all, starred, or none
+ * (smart offers Claude all of them, and it picks). */
 function choosePhotos<T extends { starred: boolean | null }>(rows: T[], options: PresentationOptions): T[] {
-  if (options.photos === 'none') return []
-  return options.photos === 'starred' ? rows.filter((r) => r.starred) : rows
+  return chooseMedia(rows, options.photos)
+}
+
+function chooseMedia<T extends { starred: boolean | null }>(rows: T[], choice: Media): T[] {
+  if (choice === 'none') return []
+  return choice === 'starred' ? rows.filter((r) => r.starred) : rows
 }
 
 /** Adds a link to `photoLinks` for each photo that doesn't have one yet. */
@@ -621,10 +646,15 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 async function loadOptions(supabase: ReturnType<typeof createClient>, ownerId: string): Promise<PresentationOptions> {
   const { data: settings } = await supabase
     .from('cc_user_settings')
-    .select('presentation')
+    .select('presentation, session_options')
     .eq('user_id', ownerId)
     .maybeSingle()
-  return { ...DEFAULT_OPTIONS, ...((settings?.presentation as Partial<PresentationOptions>) ?? {}) }
+  const session = (settings?.session_options ?? {}) as { videoFramesForClaude?: unknown }
+  return {
+    ...DEFAULT_OPTIONS,
+    ...((settings?.presentation as Partial<PresentationOptions>) ?? {}),
+    videoFrames: session.videoFramesForClaude === true,
+  }
 }
 
 interface DeckPhoto {
@@ -831,7 +861,7 @@ async function callClaude(
 
   const photosText = photos.length > 0
     ? photos.map((p) => `- ${p.placeholder} [${p.elapsed}]${p.starred ? ' ★' : ''}${p.shown ? '' : ' (not shown)'}${p.caption ? ` -- caption: "${p.caption}"` : ''}${formatSlideText(p.slideText)}`).join('\n')
-    : o.photos === 'all'
+    : o.photos === 'all' || o.photos === 'smart'
       ? '(No photos were captured for this talk.)'
       : '(Photos are left out of this presentation -- use no images or photo placeholders.)'
 
@@ -850,7 +880,7 @@ ${transcriptText}
 Extracted enrichment:
 ${enrichmentText}
 
-Photos available (shown to you below, in this order, except those marked "not shown" -- there were too many to send them all, so place those by their elapsed time and text; use every photo all the same):
+Photos available (shown to you below, in this order, except those marked "not shown" -- there were too many to send them all, so place those by their elapsed time and text; ${o.photos === 'smart' ? 'choose which to use as the requirements say' : 'use every photo all the same'}):
 ${photosText}
 
 Moments the attendee marked "Remember this" (tapped live, as it happened):
@@ -859,7 +889,7 @@ ${highlightsText}
 Audio clips the attendee recorded of the speaker (their own voice, about a minute each; what was said in each is from the transcript):
 ${clipsText}
 
-Video clips the attendee recorded (up to 30 seconds each, with sound -- a demo, an animated slide, the speaker on stage; you can't watch them, so a few frames from each, where the picture changes, are shown to you below, and what was said during each is from the transcript):
+Video clips the attendee recorded (up to a minute each, with sound -- a demo, an animated slide, the speaker on stage; you can't watch them${videos.some((v) => v.frames.length) ? ', so a few frames from some, where the picture changes, are shown to you below' : ', so go by when each was recorded and what was said during it'}; what was said during each is from the transcript):
 ${videosText}
 
 Links from QR codes on the attendee's photos (decoded on the phone, so exact):
@@ -934,6 +964,8 @@ function presentationRequirements(o: PresentationOptions): string {
     ? 'Keep it short: each chapter is its heading and one paragraph that sums the chapter up, plus at most one photo or chart if it is essential. No further detail.'
     : 'Open each chapter with its heading and one paragraph that sums the chapter up on its own; wrap everything after that paragraph (further paragraphs, photos, quotes, charts) in a single <div class="cc-more">. The app removes those divs to make a short version for quick sharing, so the page must read well without them, and nothing outside them may point into them.'
   structure.push(`Chapters: the talk divided into 3 to 8 chapters in the order it actually unfolded, each with a heading${times ? ' and its starting elapsed time' : ''}. Synthesize and organize the notes and transcript into clear prose -- don't dump either source verbatim. Use the transcript to fill gaps the notes left out${o.quotes ? ' and to surface direct quotes worth calling out' : ''}, but let the notes drive what the attendee found important. ${chapterBody}`)
+  if (o.qa) structure.push('Q&A: if the transcript has audience questions with the speaker\'s answers (usually near the end), a last chapter called "Q&A" with each question, short and tidied, and the gist of the answer. Leave it out entirely if there was no Q&A.')
+  if (o.glossary) structure.push('Glossary: a short list of the acronyms and technical terms the talk used, each with a one-line explanation, alphabetical -- in addition to explaining them in the text. Leave it out if there are fewer than three.')
   const closing: string[] = []
   if (o.actionItems && !o.tldr) closing.push('the action items, as a short list, if there are any')
   if (o.references) closing.push('the references (as links where there\'s a URL -- including every link from a QR code on a photo, titled by what the slide says it\'s for) and anything else worth following up on')
@@ -956,14 +988,19 @@ function presentationRequirements(o: PresentationOptions): string {
       : 'Charts: don\'t rebuild charts or make anything interactive; show the photo of the slide and describe what it showed in the text.',
     `The "Remember this" moments are the attendee's own signal of what mattered most. Each one ${keyMomentsWhere}, built from what was being said and shown at that point (a tap usually lands just after the thing it marks, so the transcript just before it is usually what it's about). Don't label them with the phrase "Remember this"; just let them read as the key moments. If there are none, ignore this.`,
     `Notes, transcript lines and photos marked ★ were starred by the attendee afterwards as entries that mattered most. Give them the same weight as the "Remember this" moments: ${o.tldr ? 'in the TL;DR and ' : ''}called out in their chapter. Don't show the ★ itself or call them "starred".`,
-    'Place each photo in the chapter that matches its elapsed time (not an appendix dumped at the end), full width of the text column, never cropped so a slide\'s content is cut off. Reference EACH photo using an <img> tag whose src is EXACTLY its placeholder token, e.g. <img src="PHOTO_1">. Do not invent placeholder names and do not attempt to embed real image data yourself.',
-    'Audio clips (if any are listed): place each one in the chapter that matches its elapsed time, at the point in the text where what\'s said in it fits, as <figure class="cc-audio"><audio controls preload="metadata" src="AUDIO_1"></audio><figcaption>...</figcaption></figure> -- the src EXACTLY its placeholder token. The caption is one line saying what the speaker says in the clip: a short quote of their strongest words in it, or a brief paraphrase if the transcript is garbled. No time in the caption. The clips are recordings the attendee chose to keep, so mark them clearly as the speaker\'s voice (e.g. a small "Listen" label or speaker icon) and style the player to fit the theme, the full width of the text column. Use every clip once; don\'t invent placeholders.',
-    'Video clips (if any are listed): place each one in the chapter that matches its elapsed time, at the point in the text where what it shows fits, as <figure class="cc-video"><video controls playsinline preload="metadata" poster="VIDEO_1_POSTER" src="VIDEO_1"></video><figcaption>...</figcaption></figure> -- src EXACTLY its placeholder token and poster that token followed by _POSTER (leave poster out if the clip has no frames listed). The caption is one line saying what the clip shows, from its frames and what was said during it. No time in the caption. Full width of the text column, the video at its own shape (width 100%, height auto, never cropped), styled to fit the theme. Use every clip once; don\'t invent placeholders.',
+    `${o.photos === 'smart' ? 'Choose the photos that together tell the talk\'s whole story: every slide that carries a key point, chart, diagram, result or example, the ones near the key moments, and every ★ photo. Leave out ones that add nothing to the page -- repeats and near-repeats of a slide, blurry or partial shots, title, agenda, transition and thank-you slides -- however many that is. ' : ''}Place each photo ${o.photos === 'smart' ? 'you use ' : ''}in the chapter that matches its elapsed time (not an appendix dumped at the end), ${o.photoLayout === 'gallery' ? 'as a gallery: the chapter\'s photos in a grid of thumbnails (2 or 3 across on a phone, more on a wide screen; each thumbnail shows the whole photo, object-fit: contain on a quiet background, never cropped), each one wrapped in a link to the same placeholder, e.g. <a href="PHOTO_1"><img src="PHOTO_1"></a>, that opens it full size -- with JavaScript, in a lightbox that closes with a tap, Escape or a swipe; without it, the link still works. A single photo in a chapter sits full width' : 'full width of the text column, never cropped so a slide\'s content is cut off'}. Reference ${o.photos === 'smart' ? 'each photo you use' : 'EACH photo'} using an <img> tag whose src is EXACTLY its placeholder token, e.g. <img src="PHOTO_1">. Do not invent placeholder names and do not attempt to embed real image data yourself.`,
+    'Audio clips (if any are listed): place each one in the chapter that matches its elapsed time, at the point in the text where what\'s said in it fits, as <figure class="cc-audio"><audio controls preload="metadata" src="AUDIO_1"></audio><figcaption>...</figcaption></figure> -- the src EXACTLY its placeholder token. The caption is one line saying what the speaker says in the clip: a short quote of their strongest words in it, or a brief paraphrase if the transcript is garbled. No time in the caption. The clips are recordings the attendee chose to keep, so mark them clearly as the speaker\'s voice (e.g. a small "Listen" label or speaker icon) and style the player to fit the theme, the full width of the text column. ' + (o.audioClips === 'smart' ? 'Use only the clips that add something the text can\'t -- the speaker\'s strongest or most telling moments -- each at most once; leave out the rest.' : 'Use every clip once.') + ' Don\'t invent placeholders.',
+    'Video clips (if any are listed): place each one in the chapter that matches its elapsed time, at the point in the text where what it shows fits, as <figure class="cc-video"><video controls playsinline preload="metadata" poster="VIDEO_1_POSTER" src="VIDEO_1"></video><figcaption>...</figcaption></figure> -- src EXACTLY its placeholder token and poster that token followed by _POSTER (leave poster out if the clip has no frames listed). The caption is one line saying what the clip shows, from its frames and what was said during it. No time in the caption. Full width of the text column, the video at its own shape (width 100%, height auto, never cropped), styled to fit the theme. ' + (o.videoClips === 'smart' ? 'Use only the clips that show something the photos and text can\'t -- a demo, an animation, something moving -- each at most once; leave out the rest.' : 'Use every clip once.') + ' Don\'t invent placeholders.',
     'Work acronym expansions into the text where each term first appears, not as a list.',
     'In the <head>, add <meta name="cc-cover" content="PHOTO_n"> naming the ONE photo that best shows what this talk was about -- a key chart, diagram, result or core idea -- never the title slide, an agenda, a photo of the speaker or audience, or a thank-you/questions slide. The app shows it as the talk\'s thumbnail. Leave the tag out if there are no photos.',
     `${o.theme === 'auto' ? 'Pick a visual theme (color palette, type) that fits the subject matter of the talk.' : `Use a ${o.theme} theme (${o.theme === 'dark' ? 'dark background, light text' : 'light background, dark text'}), with type that fits the subject of the talk.`}${/^#[0-9a-fA-F]{6}$/.test(o.accent) ? ` Use ${o.accent} as the accent color (links, rules, highlights, chart emphasis), adjusted only if needed for readable contrast.` : ''} Keep it tasteful and readable: a comfortable text column (about 65 characters wide), generous spacing, legibility over spectacle. On a narrow phone screen keep at least 20px between all text and the left and right edges of the screen (padding on the page or its main column), so nothing touches the edge.`,
   ]
   if (!times) rules.push("Don't show elapsed times (like 12:40) anywhere on the page.")
+  rules.push(o.readingLevel === 'plain'
+    ? 'Reading level: plain language. Short sentences and everyday words; explain every technical term simply where it first appears, and prefer the plain word wherever one exists.'
+    : o.readingLevel === 'general'
+      ? 'Reading level: for a smart reader from outside the field. Keep the talk\'s technical terms, but explain each briefly where it first appears.'
+      : 'Reading level: for people in the field. Use its technical terms as the speaker did, without explaining the basics.')
   if (o.voice === 'first_person') rules.push("Voice: write as the attendee's own notes, in the first person (\"I came away with...\", \"The speaker showed us...\").")
   if (o.voice === 'brief') rules.push('Voice: write for a busy reader -- short sentences, plain words, bullet points where they help, no flourishes.')
   rules.push(o.language === 'auto'

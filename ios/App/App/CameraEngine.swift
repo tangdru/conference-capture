@@ -443,10 +443,16 @@ final class CameraEngine: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureVide
 
     // MARK: - Helpers
 
+    /// Session options › Photos › Photo size. Standard keeps 2560 px at 0.85
+    /// (about 835 KB); smaller is 1920 px at 0.7 (about a third of that),
+    /// still enough to read a slide.
+    static var smallerPhotos = false
+
     private static func encode(_ image: UIImage, degrees: Int, _ done: @escaping (Result<Data, Error>) -> Void) {
+        let smaller = smallerPhotos
         DispatchQueue.global(qos: .userInitiated).async {
-            let rendered = render(image, rotatedBy: degrees, maxEdge: 2560)
-            if let jpeg = rendered.jpegData(compressionQuality: 0.85) {
+            let rendered = render(image, rotatedBy: degrees, maxEdge: smaller ? 1920 : 2560)
+            if let jpeg = rendered.jpegData(compressionQuality: smaller ? 0.7 : 0.85) {
                 done(.success(jpeg))
             } else {
                 done(.failure(Failure.unavailable("Couldn't save the photo")))

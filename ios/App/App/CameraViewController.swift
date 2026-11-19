@@ -24,6 +24,8 @@ final class CameraViewController: UIViewController, UIGestureRecognizerDelegate 
     var clipEndsAt: Date? { didSet { if isViewLoaded { clipTick() } } }
     /// Session options › Chui's audio › Voice boost, for video clips' sound.
     var videoBoost = false
+    /// Session options › Video clips › Longest clip.
+    var videoMaxSeconds = VideoClipRecorder.maxSeconds
 
     // What it tells the page.
     var onPhoto: ((Data) -> Void)?
@@ -835,7 +837,7 @@ final class CameraViewController: UIViewController, UIGestureRecognizerDelegate 
     private func videoTick() {
         guard let started = videoStartedAt else { return }
         let elapsed = Date().timeIntervalSince(started)
-        if elapsed >= VideoClipRecorder.maxSeconds {
+        if elapsed >= videoMaxSeconds {
             endVideo()
             return
         }
@@ -843,10 +845,11 @@ final class CameraViewController: UIViewController, UIGestureRecognizerDelegate 
         let text = NSMutableAttributedString(string: "● ", attributes: [
             .font: UIFont.systemFont(ofSize: 11), .foregroundColor: Palette.error,
         ])
-        text.append(NSAttributedString(string: String(format: "0:%02d", seconds), attributes: [
+        text.append(NSAttributedString(string: String(format: "%d:%02d", seconds / 60, seconds % 60), attributes: [
             .font: UIFont.monospacedDigitSystemFont(ofSize: 15, weight: .semibold), .foregroundColor: Palette.textPrimary,
         ]))
-        text.append(NSAttributedString(string: " / 0:\(Int(VideoClipRecorder.maxSeconds))", attributes: [
+        let most = Int(videoMaxSeconds)
+        text.append(NSAttributedString(string: String(format: " / %d:%02d", most / 60, most % 60), attributes: [
             .font: UIFont.monospacedDigitSystemFont(ofSize: 15, weight: .regular), .foregroundColor: Palette.textSecondary,
         ]))
         videoTime.attributedText = text

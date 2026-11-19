@@ -203,8 +203,12 @@ export function startVideoUploads(listener: UploadedListener): () => void {
   }
 }
 
+/** Session options › Video clips › Upload: off keeps them waiting on the
+ * phone; Wi-Fi only holds them while on mobile data. */
 async function mayUploadNow(): Promise<boolean> {
-  if (!getSessionOptions().wifiOnlyUploads) return true
+  const when = getSessionOptions().videoUploads
+  if (when === 'off') return false
+  if (when === 'always') return true
   try {
     return (await Clips.network()).unmetered
   } catch {

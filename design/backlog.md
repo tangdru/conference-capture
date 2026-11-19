@@ -34,6 +34,16 @@ audio** (off: hides the clip button). Turning an option off only hides or
 stops something; it never removes anything already captured. Nothing
 is waiting to be built here (2026-11-15).
 
+*Dropped 2026-11-19:* naming sessions from the calendar. Naming them from
+their content (when a presentation is built) works better.
+
+*Built 2026-11-19:* **Video clips** (longest clip 15 s / 30 s / 1 min, default
+30 s; upload Wi-Fi only / always / off, default Wi-Fi only; show Claude video
+frames, default off) and **Photos** (photo size standard / smaller, default
+standard). Presentation options gained Smart / All / Starred / None for photos,
+audio clips and video clips (default All), photo layout (full width / gallery),
+Q&A and Glossary (on), and reading level (expert / general / plain; expert).
+
 *Built 2026-11-14 (after build 86), under "During a talk":* **Live
 transcript** (on; off keeps the mic off, so no clips either), **Show
 transcript while live** (on; off hides transcript entries while recording,
@@ -65,10 +75,6 @@ exist, the menu might simply say "Options" with two sections.
   silent today. Push needs APNs (paid developer program, see
   `native-app-migration.md`); a local notification on return is a cheaper
   first step.
-- **Name sessions from the calendar.** Read the event happening now (EventKit,
-  with permission) and use it as the session title instead of "Session".
-  (Untitled sessions are now named from their content when a presentation
-  is generated, 2026-10-31.)
 - **Faster capture.** Action Button / Control Center / Lock Screen control to
   take a slide photo, and App Intents ("Hey Siri, start a session").
 - **Small native polish.** Haptic on note save; Spotlight indexing of

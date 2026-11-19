@@ -35,6 +35,19 @@ export interface SessionOptions {
   keepTrimmedOnly: boolean
   /** Whether shared presentations (link or download) play the clips. */
   clipsInShared: boolean
+  // Video clips (hold the shutter in the camera).
+  /** The longest a clip records before it stops by itself. */
+  videoMaxS: 15 | 30 | 60
+  /** When clips upload: whenever there's signal, only on Wi-Fi, or never
+   * (they stay on the phone). */
+  videoUploads: 'always' | 'wifi' | 'off'
+  /** Show Claude a few frames of each clip when it builds a presentation.
+   * Off: clips are placed by their time and what was said. */
+  videoFramesForClaude: boolean
+  // Photos.
+  /** Standard: 2560 px, the detail a dense slide needs. Smaller: 1920 px at
+   * a lower quality, about a third of the size. */
+  photoQuality: 'standard' | 'smaller'
 }
 
 export const CLIP_BEFORE_MAX_S = 60
@@ -55,6 +68,10 @@ export const DEFAULT_SESSION_OPTIONS: SessionOptions = {
   wifiOnlyUploads: false,
   keepTrimmedOnly: true,
   clipsInShared: false,
+  videoMaxS: 30,
+  videoUploads: 'wifi',
+  videoFramesForClaude: false,
+  photoQuality: 'standard',
 }
 
 const STORAGE_KEY = 'cc-session-options'

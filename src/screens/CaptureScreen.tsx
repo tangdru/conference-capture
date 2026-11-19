@@ -6,7 +6,6 @@ import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'
 import { useSwipeBack } from '../hooks/useSwipeBack'
 import { Keyboard } from '@capacitor/keyboard'
 import { useKeyboardHeight } from '../hooks/useKeyboardHeight'
-import { maybeStartSessionTour } from '../tour'
 import { PHOTOS_DENIED_MESSAGE, saveToPhotoLibrary } from '../native/photoLibrary'
 import type { AudioItem, PhotoItem, Session, TimelineItemData, VideoItem } from '../types'
 import { formatShortElapsed, formatSessionSubtitle, formatDurationCompact } from '../format'
@@ -475,12 +474,6 @@ export function CaptureScreen({
     }
     window.addEventListener('online', handleOnline)
     return () => window.removeEventListener('online', handleOnline)
-  }, [])
-
-  // The session tour, if finishing the home tour queued it.
-  useEffect(() => {
-    const t = window.setTimeout(maybeStartSessionTour, 700)
-    return () => window.clearTimeout(t)
   }, [])
 
   // Hide the bottom action row while typing (a note or the title) so the

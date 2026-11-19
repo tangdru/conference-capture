@@ -78,3 +78,118 @@
 .driver-popover.cc-tour .driver-popover-arrow-side-right { border-right-color: var(--bg-elevated); }
 .driver-popover.cc-tour .driver-popover-arrow-side-top { border-top-color: var(--bg-elevated); }
 .driver-popover.cc-tour .driver-popover-arrow-side-bottom { border-bottom-color: var(--bg-elevated); }
+
+/* "During the talk": a drawing of a session's bottom bar, built from the
+   same sizes and colors as the real one, with a key to each part. */
+.driver-popover.cc-tour--wide {
+  max-width: min(340px, calc(100vw - 24px));
+}
+
+.tour-bar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  column-gap: 8px;
+  margin: 12px 0 14px;
+  padding: 10px 10px;
+  border-radius: 12px;
+  background: var(--bg-base, #0f0f0d);
+  border: 1px solid var(--border);
+}
+
+.tour-bar__rec {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.tour-bar__dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--recording-dot);
+}
+
+.tour-bar__camera {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--accent-subtle);
+  border: 1px solid rgba(0, 240, 224, 0.35);
+}
+
+.tour-bar__camera svg {
+  width: 22px;
+  height: 22px;
+}
+
+.tour-bar__end {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 2px;
+}
+
+.tour-bar__btn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+}
+
+.tour-bar__btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+.tour-bar__btn--ask svg {
+  width: 19px;
+  height: 19px;
+}
+
+.tour-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.tour-legend li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.tour-legend__icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+}
+
+.tour-legend__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.tour-legend__plus {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--accent);
+}

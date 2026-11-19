@@ -153,6 +153,8 @@ function itemFromRow(row: ItemRow): TimelineItemData | null {
       id: row.id,
       type: 'video',
       videoPath: typeof p.path === 'string' ? p.path : row.video_path ?? '',
+      posterPath: typeof p.poster === 'string' ? p.poster : undefined,
+      frames: Array.isArray(p.frames) ? p.frames.filter((f) => f && typeof f.path === 'string') : undefined,
       durationMs,
       trimStartMs: typeof p.trimStartMs === 'number' ? p.trimStartMs : 0,
       trimEndMs: typeof p.trimEndMs === 'number' ? p.trimEndMs : durationMs,
@@ -594,7 +596,10 @@ export async function deleteSession(session: Session): Promise<void> {
 
 function filesOf(item: TimelineItemData): StoredFile[] {
   if (item.type === 'photo' && item.photoPath) return [{ bucket: PHOTOS_BUCKET, path: item.photoPath }]
-  if (item.type === 'video' && item.videoPath) return [{ bucket: VIDEOS_BUCKET, path: item.videoPath }]
+  if (item.type === 'video') {
+    const paths = [item.videoPath, item.posterPath, ...(item.frames ?? []).map((f) => f.path)]
+    return [...new Set(paths.filter((p): p is string => !!p))].map((path) => ({ bucket: VIDEOS_BUCKET, path }))
+  }
   if (item.type === 'audio' && item.audioPath) return [{ bucket: VIDEOS_BUCKET, path: item.audioPath }]
   return []
 }
@@ -650,12 +655,16 @@ export interface VideoPayload {
   height: number | null
   /** The kept part, uploaded to cc-videos. */
   path: string | null
+  /** Its poster frame and the stills where the picture changes (cc-videos). */
+  poster?: string | null
+  frames?: { path: string; atMs: number }[]
 }
 
 export function videoPayload(item: VideoItem): VideoPayload {
   return {
     startedAt: item.startedAt ?? null, trimStartMs: item.trimStartMs, trimEndMs: item.trimEndMs,
     width: item.width ?? null, height: item.height ?? null, path: item.videoPath || null,
+    poster: item.posterPath ?? null, frames: item.frames ?? [],
   }
 }
 
@@ -674,6 +683,23 @@ export async function addVideoClip(
     payload: videoPayload(item) as unknown as Record<string, unknown>, item_timestamp: new Date(item.timestamp).toISOString(),
   })
   return item
+}
+
+/** A clip's kept part has uploaded: where it and its stills went, merged into
+ * the saved details (the phone is online, having just uploaded). Changes
+ * still waiting in the outbox go first, so they can't overwrite this. */
+export async function patchVideoUpload(
+  _sessionId: string,
+  itemId: string,
+  uploaded: { videoPath: string; posterPath: string | undefined; frames: { path: string; atMs: number }[] },
+): Promise<void> {
+  await flushOutbox()
+  const { data, error } = await supabase.from('cc_timeline_items').select('payload').eq('id', itemId).maybeSingle()
+  if (error) throw error
+  if (!data) return
+  const payload = { ...((data.payload ?? {}) as Record<string, unknown>), path: uploaded.videoPath, poster: uploaded.posterPath ?? null, frames: uploaded.frames }
+  const { error: updateError } = await supabase.from('cc_timeline_items').update({ payload, video_path: uploaded.videoPath }).eq('id', itemId)
+  if (updateError) throw updateError
 }
 
 /** Saves a clip's length and trim. */
@@ -853,17 +879,18 @@ export async function addVideo(
   }
 }
 
-const videoUrlCache = new Map<string, string>()
+// Signed links rather than downloads: a video streams as it plays, and a
+// poster doesn't wait for anything else.
+const videoUrlCache = new Map<string, { url: string; until: number }>()
 
+/** A link to a file in cc-videos (a clip, or its poster), good for an hour. */
 export async function resolveVideoUrl(path: string): Promise<string> {
   const cached = videoUrlCache.get(path)
-  if (cached) return cached
-
-  const { data, error } = await supabase.storage.from(VIDEOS_BUCKET).download(path)
-  if (error) throw error
-  const url = URL.createObjectURL(data)
-  videoUrlCache.set(path, url)
-  return url
+  if (cached && cached.until > Date.now()) return cached.url
+  const { data, error } = await supabase.storage.from(VIDEOS_BUCKET).createSignedUrl(path, 60 * 60)
+  if (error || !data) throw error ?? new Error('No link')
+  videoUrlCache.set(path, { url: data.signedUrl, until: Date.now() + 50 * 60_000 })
+  return data.signedUrl
 }
 
 export async function addTranscriptSegment(

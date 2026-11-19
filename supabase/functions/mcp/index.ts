@@ -77,11 +77,11 @@ const TOOLS = [
   {
     name: 'get_photos',
     title: 'Look at photos',
-    description: `Returns photos (usually slides) as images, by the photo ids get_session lists. At most ${MAX_PHOTOS} per call.`,
+    description: `Returns photos (usually slides) as images, by the photo ids get_session lists. A video clip's id returns a few frames from it, where the picture changes. At most ${MAX_PHOTOS} ids per call.`,
     inputSchema: {
       type: 'object',
       properties: {
-        photo_ids: { type: 'array', items: { type: 'string' }, description: `Up to ${MAX_PHOTOS} photo ids.` },
+        photo_ids: { type: 'array', items: { type: 'string' }, description: `Up to ${MAX_PHOTOS} photo or video clip ids.` },
       },
       required: ['photo_ids'],
     },
@@ -432,7 +432,12 @@ async function getSession(admin: SupabaseClient, userId: string, sessionId: stri
         lines.push(`[${at}] Audio clip${row.duration_ms ? ` (${Math.round(row.duration_ms / 1000)} s)` : ''}${row.text ? `: ${row.text}` : ''}`)
         break
       case 'video':
-        lines.push(`[${at}] Video${row.duration_ms ? ` (${Math.round(row.duration_ms / 1000)} s)` : ''}${row.caption ? `: ${row.caption}` : ''}`)
+      {
+        const p = row.payload ?? {}
+        const kept = typeof p.trimEndMs === 'number' && typeof p.trimStartMs === 'number' ? p.trimEndMs - p.trimStartMs : row.duration_ms
+        const frames = Array.isArray(p.frames) ? p.frames.length : 0
+        lines.push(`[${at}] Video clip ${row.id}${kept ? ` (${Math.round(Number(kept) / 1000)} s)` : ''}${frames ? ` -- ${frames} frame${frames === 1 ? '' : 's'} to look at with get_photos` : typeof p.path === 'string' ? '' : ' (still only on the phone)'}${row.caption ? `: ${row.caption}` : ''}`)
+      }
         break
       case 'enrichment': {
         const p = row.payload ?? {}
@@ -453,9 +458,9 @@ async function getPhotos(admin: SupabaseClient, userId: string, ids: unknown): P
 
   const { data, error } = await admin
     .from('cc_timeline_items')
-    .select('id, session_id, photo_path, caption, item_timestamp, text')
+    .select('id, session_id, type, payload, photo_path, caption, item_timestamp, text')
     .eq('owner_id', userId)
-    .eq('type', 'photo')
+    .in('type', ['photo', 'video'])
     .in('id', wanted)
   if (error) throw error
   const rows = (data ?? []) as ItemRow[]
@@ -464,6 +469,24 @@ async function getPhotos(admin: SupabaseClient, userId: string, ids: unknown): P
   const content: Content[] = []
   for (const id of wanted) {
     const row = rows.find((r) => r.id === id)
+    if (row?.type === 'video') {
+      const s = sessions.get(row.session_id)
+      const list = row.payload?.frames
+      const frames = (Array.isArray(list) ? list : []) as { path?: unknown; atMs?: unknown }[]
+      const label = `Video clip ${id}${s ? ` -- "${s.title}" at ${formatElapsed(s.started_at, row.item_timestamp)}` : ''}`
+      if (frames.length === 0) {
+        content.push({ type: 'text', text: `${label}: no frames yet (not uploaded from the phone).` })
+        continue
+      }
+      for (const frame of frames) {
+        if (typeof frame.path !== 'string') continue
+        const { data: blob } = await admin.storage.from('cc-videos').download(frame.path)
+        if (!blob) continue
+        content.push({ type: 'text', text: `${label}, frame ${Math.round(Number(frame.atMs ?? 0) / 1000)} s into the clip` })
+        content.push({ type: 'image', data: encodeBase64(new Uint8Array(await blob.arrayBuffer())), mimeType: 'image/jpeg' })
+      }
+      continue
+    }
     if (!row?.photo_path) {
       content.push({ type: 'text', text: `Photo ${id}: not found.` })
       continue

@@ -201,6 +201,89 @@ final class VideoClipRecorder {
         return out
     }
 
+    /// Up to `limit` stills from the kept part where the picture changed, for
+    /// Claude (which can't watch video) and as the poster elsewhere. The first
+    /// is always near the start; after that a frame is kept when it differs
+    /// enough from the last one kept. Temporary JPEGs, with their time from
+    /// the kept part's start. Call off the main thread.
+    static func keyFrames(id: String, startMs: Int, endMs: Int, limit: Int = 4) -> [(url: URL, atMs: Int)] {
+        let asset = AVURLAsset(url: videoURL(id))
+        guard asset.tracks(withMediaType: .video).first != nil else { return [] }
+        let totalMs = Int((asset.duration.seconds * 1000).rounded())
+        let from = max(0, startMs)
+        let to = endMs > from ? min(endMs, totalMs) : totalMs
+        guard to > from else { return [] }
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.requestedTimeToleranceBefore = CMTime(value: 1, timescale: 10)
+        generator.requestedTimeToleranceAfter = CMTime(value: 1, timescale: 10)
+
+        // A small grey picture every half second (at most 60), compared.
+        let first = from + min(500, (to - from) / 2)
+        let step = max(500, (to - first) / 60)
+        var samples: [(ms: Int, grey: [UInt8])] = []
+        generator.maximumSize = CGSize(width: 64, height: 64)
+        var ms = first
+        while ms < to {
+            if let image = try? generator.copyCGImage(at: CMTime(value: CMTimeValue(ms), timescale: 1000), actualTime: nil),
+               let grey = greyscale(image, side: 32) {
+                samples.append((ms, grey))
+            }
+            ms += step
+        }
+        guard let start = samples.first else { return [] }
+        func difference(_ a: [UInt8], _ b: [UInt8]) -> Double {
+            zip(a, b).reduce(0.0) { $0 + abs(Double($1.0) - Double($1.1)) } / Double(a.count * 255)
+        }
+        // A slide's next bullet or a demo's new panel is a small change to
+        // the whole picture; a hand's shake is smaller still.
+        var kept: [(ms: Int, change: Double)] = [(start.ms, .infinity)]
+        var last = start.grey
+        for sample in samples.dropFirst() {
+            let change = difference(last, sample.grey)
+            // At least 2 s apart, so a shaky hand doesn't fill the four.
+            if change > 0.03, sample.ms - kept[kept.count - 1].ms >= 2000 {
+                kept.append((sample.ms, change))
+                last = sample.grey
+            }
+        }
+        // Little changed: the end of a longer clip still shows where it got to.
+        if kept.count == 1, let end = samples.last, end.ms - start.ms >= 5000, difference(start.grey, end.grey) > 0.01 {
+            kept.append((end.ms, 0))
+        }
+        // Too many: the opening frame and the biggest changes, in time order.
+        if kept.count > limit {
+            kept = [kept[0]] + kept.dropFirst().sorted { $0.change > $1.change }.prefix(limit - 1).sorted { $0.ms < $1.ms }
+        }
+
+        generator.maximumSize = CGSize(width: 1280, height: 1280)
+        var out: [(url: URL, atMs: Int)] = []
+        for (i, frame) in kept.enumerated() {
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(id)-k\(i).jpg")
+            guard let image = try? generator.copyCGImage(at: CMTime(value: CMTimeValue(frame.ms), timescale: 1000), actualTime: nil),
+                  let jpeg = UIImage(cgImage: image).jpegData(compressionQuality: 0.75),
+                  (try? jpeg.write(to: url, options: .atomic)) != nil
+            else { continue }
+            out.append((url, frame.ms - from))
+        }
+        withExtendedLifetime(asset) {}
+        return out
+    }
+
+    private static func greyscale(_ image: CGImage, side: Int) -> [UInt8]? {
+        var pixels = [UInt8](repeating: 0, count: side * side)
+        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(
+                data: buffer.baseAddress, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side,
+                space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue
+            ) else { return false }
+            context.interpolationQuality = .low
+            context.draw(image, in: CGRect(x: 0, y: 0, width: side, height: side))
+            return true
+        }
+        return drawn ? pixels : nil
+    }
+
     /// Keep only the trimmed part: the clip's file becomes the kept part.
     static func commitTrim(id: String, startMs: Int, endMs: Int, startedAt: Int) throws -> Saved? {
         let cut = try exportTrimmed(id: id, startMs: startMs, endMs: endMs)

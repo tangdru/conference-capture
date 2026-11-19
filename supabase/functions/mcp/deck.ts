@@ -132,6 +132,7 @@ interface Material {
   enrichment: Row[]
   highlights: Row[]
   clips: Row[]
+  videos: Row[]
   /** Kinds of entry to save: wanted in the options and not hidden by the user. */
   entryKinds: EntryKind[]
   /** Last build's entries, replaced by a save. */
@@ -142,6 +143,7 @@ interface Material {
 
 const photoToken = (row: Row) => `PHOTO_${row.id.slice(0, 8)}`
 const clipToken = (row: Row) => `AUDIO_${row.id.slice(0, 8)}`
+const videoToken = (row: Row) => `VIDEO_${row.id.slice(0, 8)}`
 
 async function loadMaterial(admin: SupabaseClient, userId: string, sessionId: string): Promise<Material> {
   const { data: session, error } = await admin
@@ -204,6 +206,7 @@ async function loadMaterial(admin: SupabaseClient, userId: string, sessionId: st
     enrichment: rows.filter((r) => r.type === 'enrichment' && r.payload),
     highlights: rows.filter((r) => r.type === 'highlight'),
     clips: rows.filter((r) => r.type === 'audio' && typeof r.payload?.path === 'string'),
+    videos: rows.filter((r) => r.type === 'video' && typeof r.payload?.path === 'string'),
     entryKinds,
     oldEntries: (entryRows ?? []).filter((r) => !r.excluded && entryKinds.includes(r.subtype as EntryKind)),
     movable: [...notes, ...photos.filter((r) => r.text || r.caption)].filter(unplaced),
@@ -239,6 +242,14 @@ export async function preparePresentation(admin: SupabaseClient, userId: string,
       return `- ${clipToken(c)} [${elapsed}] (${length})${c.starred ? ' ★' : ''}${said ? ` -- said in it: "${said}"` : ''}`
     }).join('\n')
     : '(None recorded.)'
+  const videosText = m.videos.length > 0
+    ? m.videos.map((v) => {
+      const { elapsed, length, said } = describeClip(startedAt, v, m.transcript)
+      const list = v.payload?.frames
+      const frames = Array.isArray(list) ? list.length : 0
+      return `- ${videoToken(v)} [${elapsed}] (${length})${v.starred ? ' ★' : ''} (video id ${v.id}${frames ? `, ${frames} frame${frames === 1 ? '' : 's'}` : ', no frames'})${said ? ` -- said during it: "${said}"` : ''}`
+    }).join('\n')
+    : '(None recorded.)'
 
   const instructions = `You are building a web page someone can keep as a personal resource, or share with friends and colleagues, as a record of a conference talk they attended titled "${unnamed ? '(not named yet)' : session.title}". This is NOT a slide deck -- there is no click/arrow-key/swipe navigation of any kind. It reads like a well-edited article: the takeaways first, then the detail for anyone who wants it.
 
@@ -262,6 +273,9 @@ ${formatHighlights(startedAt, m.highlights, m.transcript, m.notes)}
 Audio clips the attendee recorded of the speaker (their own voice, about a minute each; what was said in each is from the transcript):
 ${clipsText}
 
+Video clips the attendee recorded (up to 30 seconds each, with sound -- a demo, an animated slide, the speaker on stage; look at each one's frames with get_photos by its video id, and what was said during it is from the transcript):
+${videosText}
+
 Links from QR codes on the attendee's photos (decoded on the phone, so exact):
 ${formatQrLinks(startedAt, m.allPhotos)}
 
@@ -269,7 +283,7 @@ Requirements:
 ${presentationRequirements(o)}`
 
   const extra: string[] = [
-    `Photo and audio placeholders here name their entry (like ${m.photos[0] ? photoToken(m.photos[0]) : 'PHOTO_1a2b3c4d'}): use them exactly as listed wherever the requirements mention placeholders like PHOTO_1 or AUDIO_1.`,
+    `Photo and audio placeholders here name their entry (like ${m.photos[0] ? photoToken(m.photos[0]) : 'PHOTO_1a2b3c4d'}): use them exactly as listed wherever the requirements mention placeholders like PHOTO_1, AUDIO_1 or VIDEO_1 (and VIDEO_1_POSTER becomes the clip's token followed by _POSTER).`,
   ]
   if (o.photos !== 'none' && o.skipRepeatSlides && m.photos.length > 1) {
     extra.push('A slide that builds up step by step is often photographed at every step, and a slide is sometimes photographed twice. Leave a photo out only when another photo of the SAME slide shows everything it does (a later, fuller step, or a clearer shot); keep any photo that shows something the others don\'t, and always keep ★ photos. When unsure, keep it.')
@@ -317,13 +331,19 @@ export async function savePresentation(
   // Link only the photos and clips the page uses.
   const usedPhotos = m.allPhotos.filter((p) => page.includes(photoToken(p)))
   const usedClips = m.clips.filter((c) => page.includes(clipToken(c)))
+  const usedVideos = m.videos.filter((v) => page.includes(videoToken(v)))
+  const posterOf = (v: Row) => (typeof v.payload?.poster === 'string' ? v.payload.poster : null)
+  const videoLinks = await signedLinks(admin, VIDEOS_BUCKET, usedVideos.flatMap((v) => [String(v.payload!.path), ...(posterOf(v) ? [posterOf(v)!] : [])]))
   const photoLinks = await signedLinks(admin, PHOTOS_BUCKET, usedPhotos.map((p) => p.photo_path!))
   const clipLinks = await signedLinks(admin, VIDEOS_BUCKET, usedClips.map((c) => String(c.payload!.path)))
   const replacements = [
     ...usedPhotos.filter((p) => photoLinks[p.photo_path!]).map((p) => ({ placeholder: photoToken(p), url: photoLinks[p.photo_path!] })),
     ...usedClips.filter((c) => clipLinks[String(c.payload!.path)]).map((c) => ({ placeholder: clipToken(c), url: clipLinks[String(c.payload!.path)] })),
+    // The poster first: its token begins with the video's.
+    ...usedVideos.filter((v) => posterOf(v) && videoLinks[posterOf(v)!]).map((v) => ({ placeholder: `${videoToken(v)}_POSTER`, url: videoLinks[posterOf(v)!] })),
+    ...usedVideos.filter((v) => videoLinks[String(v.payload!.path)]).map((v) => ({ placeholder: videoToken(v), url: videoLinks[String(v.payload!.path)] })),
   ]
-  const unknown = [...new Set(page.match(/\b(?:PHOTO|AUDIO)_[0-9a-f]{8}\b/g) ?? [])].filter(
+  const unknown = [...new Set(page.match(/\b(?:PHOTO|AUDIO|VIDEO)_[0-9a-f]{8}\b/g) ?? [])].filter(
     (t) => !replacements.some((r) => r.placeholder === t),
   )
 
@@ -364,7 +384,7 @@ export async function savePresentation(
 
   const shownTitle = newTitle ?? session.title
   const notes = [
-    `Saved. "${shownTitle}" now has this presentation in the Conference Capture app (about ${minutes} min to read, ${usedPhotos.length} photo${usedPhotos.length === 1 ? '' : 's'}${usedClips.length ? `, ${usedClips.length} audio clip${usedClips.length === 1 ? '' : 's'}` : ''}${coverPhotoId ? ', with a cover photo' : ''}).`,
+    `Saved. "${shownTitle}" now has this presentation in the Conference Capture app (about ${minutes} min to read, ${usedPhotos.length} photo${usedPhotos.length === 1 ? '' : 's'}${usedClips.length ? `, ${usedClips.length} audio clip${usedClips.length === 1 ? '' : 's'}` : ''}${usedVideos.length ? `, ${usedVideos.length} video clip${usedVideos.length === 1 ? '' : 's'}` : ''}${coverPhotoId ? ', with a cover photo' : ''}).`,
   ]
   if (newTitle) notes.push(`The session was renamed "${newTitle}".`)
   if (organized) notes.push(organized)
@@ -647,6 +667,7 @@ function presentationRequirements(o: PresentationOptions): string {
     `Notes, transcript lines and photos marked ★ were starred by the attendee afterwards as entries that mattered most. Give them the same weight as the "Remember this" moments: ${o.tldr ? 'in the TL;DR and ' : ''}called out in their chapter. Don't show the ★ itself or call them "starred".`,
     'Place each photo in the chapter that matches its elapsed time (not an appendix dumped at the end), full width of the text column, never cropped so a slide\'s content is cut off. Reference EACH photo using an <img> tag whose src is EXACTLY its placeholder token, e.g. <img src="PHOTO_1">. Do not invent placeholder names and do not attempt to embed real image data yourself.',
     'Audio clips (if any are listed): place each one in the chapter that matches its elapsed time, at the point in the text where what\'s said in it fits, as <figure class="cc-audio"><audio controls preload="metadata" src="AUDIO_1"></audio><figcaption>...</figcaption></figure> -- the src EXACTLY its placeholder token. The caption is one line saying what the speaker says in the clip: a short quote of their strongest words in it, or a brief paraphrase if the transcript is garbled. No time in the caption. The clips are recordings the attendee chose to keep, so mark them clearly as the speaker\'s voice (e.g. a small "Listen" label or speaker icon) and style the player to fit the theme, the full width of the text column. Use every clip once; don\'t invent placeholders.',
+    'Video clips (if any are listed): place each one in the chapter that matches its elapsed time, at the point in the text where what it shows fits, as <figure class="cc-video"><video controls playsinline preload="metadata" poster="VIDEO_1_POSTER" src="VIDEO_1"></video><figcaption>...</figcaption></figure> -- src EXACTLY its placeholder token and poster that token followed by _POSTER (leave poster out if the clip has no frames listed). The caption is one line saying what the clip shows, from its frames and what was said during it. No time in the caption. Full width of the text column, the video at its own shape (width 100%, height auto, never cropped), styled to fit the theme. Use every clip once; don\'t invent placeholders.',
     'Work acronym expansions into the text where each term first appears, not as a list.',
     'In the <head>, add <meta name="cc-cover" content="PHOTO_n"> naming the ONE photo that best shows what this talk was about -- a key chart, diagram, result or core idea -- never the title slide, an agenda, a photo of the speaker or audience, or a thank-you/questions slide. The app shows it as the talk\'s thumbnail. Leave the tag out if there are no photos.',
     `${o.theme === 'auto' ? 'Pick a visual theme (color palette, type) that fits the subject matter of the talk.' : `Use a ${o.theme} theme (${o.theme === 'dark' ? 'dark background, light text' : 'light background, dark text'}), with type that fits the subject of the talk.`}${/^#[0-9a-fA-F]{6}$/.test(o.accent) ? ` Use ${o.accent} as the accent color (links, rules, highlights, chart emphasis), adjusted only if needed for readable contrast.` : ''} Keep it tasteful and readable: a comfortable text column (about 65 characters wide), generous spacing, legibility over spectacle. On a narrow phone screen keep at least 20px between all text and the left and right edges of the screen (padding on the page or its main column), so nothing touches the edge.`,

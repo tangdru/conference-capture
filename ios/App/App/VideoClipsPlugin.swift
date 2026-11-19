@@ -11,6 +11,7 @@ public class VideoClipsPlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "info", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "exportTrimmed", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "keyFrames", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "commitTrim", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "remove", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "saveToPhotos", returnType: CAPPluginReturnPromise),
@@ -42,6 +43,18 @@ public class VideoClipsPlugin: CAPPlugin, CAPBridgedPlugin {
             } catch {
                 call.reject("Couldn't cut the clip: \(error.localizedDescription)")
             }
+        }
+    }
+
+    /// { frames: [{ path, atMs }] }: stills where the kept part's picture
+    /// changes (temporary JPEGs; the first doubles as its poster).
+    @objc func keyFrames(_ call: CAPPluginCall) {
+        guard let id = call.getString("id") else { return call.reject("No clip") }
+        let startMs = call.getInt("startMs") ?? 0
+        let endMs = call.getInt("endMs") ?? 0
+        queue.async {
+            let frames = VideoClipRecorder.keyFrames(id: id, startMs: startMs, endMs: endMs)
+            call.resolve(["frames": frames.map { ["path": $0.url.absoluteString, "atMs": $0.atMs] }])
         }
     }
 

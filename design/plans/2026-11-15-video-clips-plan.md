@@ -1,6 +1,22 @@
 # Video clips
 
-**Status: agreed 2026-11-15. Steps 1-2 built (2026-11-16, builds 90-92 and step 2); steps 3-5 to do.** Requested 2026-11-10 (backlog,
+**Status: agreed 2026-11-15. Steps 1-2 built (2026-11-16, builds 90-92 and step 2); steps 3-5 built 2026-11-18 (after build 97).**
+
+As built for steps 3-5 (2026-11-18), where it differs from below:
+- Uploads use a JS queue like audio clips (src/videoClips.ts), not the photo
+  background queue: it carries on at the next launch or when the signal
+  returns, and follows "Upload on Wi-Fi only". Files:
+  `<user>/<session>/<id>-<start>-<end>.mp4` plus `...-k0.jpg`..`-k3.jpg`.
+- The phone picks up to 4 stills (`VideoClips.keyFrames`): one near the
+  start, then a frame whenever the picture changes enough (32x32 grey
+  compare, over 3%, at least 2 s apart), or the end of a long, still clip.
+  The first is the poster. Saved in the payload as `poster` and `frames`.
+- generate-deck: VIDEO_n / VIDEO_n_POSTER placeholders, frames shown to
+  Claude after the photos within the 20-image limit. Connector: VIDEO_<id8>,
+  and get_photos takes a video id and returns its frames.
+- The page keeps a 1-year signed link to each video (posters get embedded like
+  photos); the app makes fresh links each time it opens or shares one.
+  Clips in shared presentations off also removes videos. Requested 2026-11-10 (backlog,
 Capture). Andrew's decisions on 2026-11-15:
 
 1. Up to **30 seconds** per clip, for now.

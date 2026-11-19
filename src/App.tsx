@@ -8,7 +8,7 @@ import type { PhotoItem, Session, TimelineItemData } from './types'
 import * as db from './db'
 import { clearCachedSessions, readCachedSessions, saveCachedSessions } from './sessionCache'
 import { cachedDeckKeys, clearCachedDecks, deckKey, readCachedDeck, saveCachedDeck } from './deckCache'
-import { cleanDeckHtml, compactDeckPhotos, viewingHtml, hasPhotoLinks, hasShortVersion, shortDeckHtml, withoutClips } from './deck'
+import { cleanDeckHtml, compactDeckPhotos, viewingHtml, hasPhotoLinks, hasShortVersion, shortDeckHtml, withFreshVideoLinks, withoutClips } from './deck'
 import { AuthGate, signOut } from './auth/AuthGate'
 import { AddEmailSheet } from './auth/AddEmailSheet'
 import { HomeScreen } from './screens/HomeScreen'
@@ -30,6 +30,7 @@ import { onPhotoUploaded, pendingPhotos, syncPhotoUploadAuth } from './photoUplo
 import { onOutboxProblem, startOutbox } from './itemOutbox'
 import { startDeckUploads, uploadDeckLater } from './deckUploads'
 import { startClipUploads } from './audioClips'
+import { startVideoUploads } from './videoClips'
 import { nextSessionTitle } from './sessionTitle'
 import { listSavedShares, lookupShared, openSavedShare, removeSavedShare, saveShare, prepareShareLink, publishShare, stopSharing, tokenFromLink, sharedWithClips, noteSharedWithClips, type SavedShare } from './sharing'
 import { getSessionOptions } from './sessionOptions'
@@ -46,6 +47,9 @@ const PREFETCH_DECKS = 12
 
 type Route = { screen: 'home' } | { screen: 'capture'; sessionId: string; focusItemId?: string }
 
+
+/** A shared page's links to its video clips (too big to embed) last a year. */
+const SHARED_VIDEO_LINK_SECONDS = 365 * 24 * 60 * 60
 export default function App() {
   return <AuthGate>{(authSession) => <AuthedApp authSession={authSession} />}</AuthGate>
 }
@@ -96,6 +100,21 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
           prev?.map((s) =>
             s.id === sessionId
               ? { ...s, items: s.items.map((i) => (i.id === itemId && i.type === 'audio' ? { ...i, audioPath: path } : i)) }
+              : s,
+          ) ?? prev,
+        ),
+      ),
+    [],
+  )
+
+  // The same for video clips: the entry learns where its cut and stills went.
+  useEffect(
+    () =>
+      startVideoUploads((sessionId, itemId, uploaded) =>
+        setSessions((prev) =>
+          prev?.map((s) =>
+            s.id === sessionId
+              ? { ...s, items: s.items.map((i) => (i.id === itemId && i.type === 'video' ? { ...i, ...uploaded } : i)) }
               : s,
           ) ?? prev,
         ),
@@ -569,7 +588,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       // A new tab works in a browser, but the native app can't pass a blob:
       // URL to Safari -- show the page full-screen in-app there instead.
       if (Capacitor.isNativePlatform()) {
-        setOpenDeck({ title: session.title, html: viewingHtml(await loadDeckHtml(session, session.deckPath)) })
+        setOpenDeck({ title: session.title, html: viewingHtml(await withFreshVideoLinks(await loadDeckHtml(session, session.deckPath))) })
         return
       }
       // The tab opens now, while this still counts as the user's tap (a popup
@@ -578,7 +597,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       // plain text, which showed the page's source with garbled dashes.
       const tab = window.open('', '_blank')
       if (tab) tab.opener = null
-      const html = await loadDeckHtml(session, session.deckPath)
+      const html = await withFreshVideoLinks(await loadDeckHtml(session, session.deckPath))
       const url = URL.createObjectURL(new Blob([viewingHtml(html)], { type: 'text/html;charset=utf-8' }))
       if (tab) tab.location.href = url
       else window.open(url, '_blank', 'noopener')
@@ -620,7 +639,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
         const deckPath = session.deckPath
         void publishShare(userId, session.id, session.title, link, async () => {
           const html = await loadDeckHtml(session, deckPath)
-          return withClips ? html : withoutClips(html)
+          return withClips ? withFreshVideoLinks(html, SHARED_VIDEO_LINK_SECONDS) : withoutClips(html)
         })
           .then(() => noteSharedWithClips(session.id, withClips))
           .catch((err) => setHomeError(errorMessage(err)))
@@ -639,7 +658,7 @@ function AuthedApp({ authSession }: { authSession: AuthSession }) {
       const length = await chooseDeckLength(fullHtml)
       if (!length) return
       const chosen = length === 'short' ? shortDeckHtml(fullHtml) : fullHtml
-      const html = getSessionOptions().clipsInShared ? chosen : withoutClips(chosen)
+      const html = getSessionOptions().clipsInShared ? await withFreshVideoLinks(chosen, SHARED_VIDEO_LINK_SECONDS) : withoutClips(chosen)
       const baseName = session.title.replace(/[^\w\- ]+/g, '').trim() || 'presentation'
       const fileName = `${baseName}${length === 'short' ? ' - TLDR' : ''}.html`
       // Download: the page itself as a file, through the share sheet -- save

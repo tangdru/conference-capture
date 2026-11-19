@@ -227,7 +227,7 @@ export function CaptureScreen({
 
   function trimVideo(item: VideoItem) {
     onUpdateLocal((s) => ({ ...s, items: s.items.map((i) => (i.id === item.id ? item : i)) }))
-    setVideoTrim(session.id, item).catch((err: unknown) => setSaveError(errorMessage(err)))
+    setVideoTrim(session.id, userId, item).catch((err: unknown) => setSaveError(errorMessage(err)))
   }
 
   async function saveVideoToAlbum(item: VideoItem) {

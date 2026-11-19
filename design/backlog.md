@@ -16,7 +16,7 @@ on the native app is in `native-app-migration.md`.
 
 ## Capture
 
-*Dropped 2026-11-15:* an explicit End session, and a session photo album.
+*Dropped 2026-11-15:* a session photo album. (End session was dropped then, but built in builds 95-97.)
 Ask during a live session works through the Claude connector.
 
 - **Video clips: tap for a photo, hold the shutter for video.** Agreed

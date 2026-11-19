@@ -1,3 +1,4 @@
+import { supabase, VIDEOS_BUCKET } from './supabaseClient'
 import type { Session } from './types'
 
 /** Whether anything was captured (notes, photos, transcript, enrichment)
@@ -37,7 +38,8 @@ export function cleanDeckHtml(html: string): string {
 // scaled down the same way.
 const PHOTO_MAX_SIDE = 1600
 const PHOTO_QUALITY = 0.78
-const PHOTO_LINK = /https:\/\/[^"'\s)]+\/storage\/v1\/object\/sign\/cc-photos\/[^"'\s)]+/g
+// Video clips' poster frames (JPEGs in cc-videos) are embedded the same way.
+const PHOTO_LINK = /https:\/\/[^"'\s)]+\/storage\/v1\/object\/sign\/(?:cc-photos\/[^"'\s)]+|cc-videos\/[^"'\s)?]+\.jpg[^"'\s)]*)/g
 // Audio clips are linked the same way and embedded as they are (a minute is
 // well under a megabyte).
 const CLIP_LINK = /https:\/\/[^"'\s)]+\/storage\/v1\/object\/sign\/cc-videos\/[^"'\s)]+\.m4a[^"'\s)]*/g
@@ -155,6 +157,10 @@ function withoutPhotos(html: string, links: string[]): string {
     const figure = img.closest('figure')
     ;(figure ?? img).remove()
   })
+  // A video's poster that's gone: the video stays, without it.
+  doc.querySelectorAll('video[poster]').forEach((video) => {
+    if (wanted.has(video.getAttribute('poster') ?? '')) video.removeAttribute('poster')
+  })
   const doctype = /^\s*<!doctype[^>]*>/i.exec(html)?.[0] ?? '<!DOCTYPE html>'
   return `${doctype}\n${doc.documentElement.outerHTML}`
 }
@@ -177,12 +183,12 @@ export function hasShortVersion(html: string): boolean {
   return html.includes('cc-more')
 }
 
-/** The page without its audio clips (Session options: clips in shared
- * presentations off): each clip's figure, caption and all. */
+/** The page without its audio and video clips (Session options: clips in
+ * shared presentations off): each clip's figure, caption and all. */
 export function withoutClips(html: string): string {
-  if (!/<audio[\s>]/i.test(html)) return html
+  if (!/<(audio|video)[\s>]/i.test(html)) return html
   const doc = new DOMParser().parseFromString(html, 'text/html')
-  doc.querySelectorAll('audio').forEach((audio) => {
+  doc.querySelectorAll('audio, video').forEach((audio) => {
     const figure = audio.closest('figure')
     ;(figure ?? audio).remove()
   })
@@ -234,4 +240,29 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 export function viewingHtml(html: string): string {
   const close = html.toLowerCase().lastIndexOf('</body>')
   return close === -1 ? html + VIEWING_FIXES : html.slice(0, close) + VIEWING_FIXES + html.slice(close)
+}
+
+// Video clips are too big to embed, so the page keeps links to them. Those
+// run out (a year, when the page was made), so the links are made again each
+// time the presentation is opened or shared -- on the owner's account only.
+const VIDEO_LINK = /https:\/\/[^"'\s)]+\/storage\/v1\/object\/sign\/cc-videos\/([^"'\s)?]+\.mp4)(?:\?[^"'\s)]*)?/g
+
+/** The page with fresh links to its video clips, good for `seconds`. Leaves
+ * a link as it was if a new one can't be made (no signal, not the owner). */
+export async function withFreshVideoLinks(html: string, seconds = 24 * 60 * 60): Promise<string> {
+  const found = [...html.matchAll(VIDEO_LINK)]
+  if (!found.length) return html
+  const byPath = new Map(found.map((m) => [decodeURIComponent(m[1]), m[0]]))
+  try {
+    const { data, error } = await supabase.storage.from(VIDEOS_BUCKET).createSignedUrls([...byPath.keys()], seconds)
+    if (error || !data) return html
+    let result = html
+    for (const link of data) {
+      const old = link.path ? byPath.get(link.path) : undefined
+      if (old && link.signedUrl && !link.error) result = result.split(old).join(link.signedUrl)
+    }
+    return result
+  } catch {
+    return html
+  }
 }

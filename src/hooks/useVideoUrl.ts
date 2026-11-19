@@ -27,3 +27,21 @@ export function useVideoUrl(item: VideoItem): string | undefined {
 
   return url
 }
+
+/** A link to a video clip's uploaded poster frame, if it has one. */
+export function usePosterUrl(path: string | undefined): string | undefined {
+  const [url, setUrl] = useState<string>()
+  useEffect(() => {
+    if (!path) return
+    let cancelled = false
+    resolveVideoUrl(path)
+      .then((resolved) => {
+        if (!cancelled) setUrl(resolved)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [path])
+  return path ? url : undefined
+}

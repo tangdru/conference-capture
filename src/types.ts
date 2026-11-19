@@ -43,6 +43,10 @@ export interface VideoItem {
   dataUrl?: string
   /** The kept part in the cc-videos bucket; '' until uploaded. */
   videoPath: string
+  /** Uploaded with it (cc-videos): its first frame, and the stills where the
+   * picture changes (the first is the poster), timed from the kept part's start. */
+  posterPath?: string
+  frames?: { path: string; atMs: number }[]
   /** The whole recording, trims included. */
   durationMs: number
   /** The part kept (played, saved to Photos, uploaded). */

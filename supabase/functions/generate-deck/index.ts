@@ -479,6 +479,9 @@ async function generateDeckPart(
   const highlightRows = itemRows.filter((r) => r.type === 'highlight')
   // The clip button's recordings, once their kept part has uploaded.
   const audioRows = itemRows.filter((r) => r.type === 'audio' && typeof r.payload?.path === 'string')
+  // Video clips, once their kept part has uploaded (with stills where the
+  // picture changes, since Claude can't watch video).
+  const videoRows = itemRows.filter((r) => r.type === 'video' && typeof r.payload?.path === 'string')
 
   // Links, not the photos themselves: a function has too little memory to
   // hold a session's worth of photos. Claude fetches them from the link, and
@@ -512,13 +515,19 @@ async function generateDeckPart(
   const clipsText = clips.length > 0
     ? clips.map((c) => `- ${c.placeholder} [${c.elapsed}] (${c.length})${c.starred ? ' ★' : ''}${c.said ? ` -- said in it: "${c.said}"` : ''}`).join('\n')
     : '(None recorded.)'
+  // Frames go after the photos: whatever room is left of the 20 images.
+  const room = MAX_PHOTOS_SHOWN - photos.filter((p) => p.shown).length
+  const videos = await linkVideos(supabase, session.started_at, videoRows, transcriptSegments, photoLinks, room)
+  const videosText = videos.length > 0
+    ? videos.map((v) => `- ${v.placeholder} [${v.elapsed}] (${v.length})${v.starred ? ' ★' : ''}${v.frames.length ? ` -- ${v.frames.length} frame${v.frames.length === 1 ? '' : 's'} shown to you below` : ''}${v.said ? ` -- said during it: "${v.said}"` : ''}`).join('\n')
+    : '(None recorded.)'
   const highlightsText = formatHighlights(session.started_at, highlightRows, transcriptSegments, notes)
   // From every photo, shown in the page or not (a repeat slide, or photos
   // left out): a QR code's link belongs in the references either way.
   const qrLinksText = formatQrLinks(session.started_at, photoRows)
   const { text, finished } = await callClaude(
     apiKey, title, session.started_at, notes, transcriptSegments, enrichmentRows, photos, highlightsText, qrLinksText,
-    clipsText, written, invokedAt + ROUND_BUDGET_MS, options,
+    clipsText, videos, videosText, written, invokedAt + ROUND_BUDGET_MS, options,
   )
   written += text
 
@@ -546,7 +555,12 @@ async function generateDeckPart(
   // The slide Claude named as the talk's most telling image, for the card.
   const coverPlaceholder = /<meta\s+name=["']cc-cover["']\s+content=["'](PHOTO_\d+)["']/i.exec(page)?.[1]
   const coverPhotoId = photos.find((p) => p.placeholder === coverPlaceholder)?.id ?? null
-  const finalHtml = substitutePhotos(page, [...photos, ...clips])
+  const finalHtml = substitutePhotos(page, [
+    ...photos,
+    ...clips,
+    ...videos.map((v) => ({ placeholder: v.placeholder, url: v.url })),
+    ...videos.filter((v) => v.posterUrl).map((v) => ({ placeholder: `${v.placeholder}_POSTER`, url: v.posterUrl! })),
+  ])
 
   const deckPath = `${session.owner_id}/${sessionId}/deck.html`
   const { error: uploadError } = await supabase.storage
@@ -801,6 +815,8 @@ async function callClaude(
   highlightsText: string,
   qrLinksText: string,
   clipsText: string,
+  videos: DeckVideo[],
+  videosText: string,
   writtenSoFar: string,
   deadline: number,
   o: PresentationOptions,
@@ -843,6 +859,9 @@ ${highlightsText}
 Audio clips the attendee recorded of the speaker (their own voice, about a minute each; what was said in each is from the transcript):
 ${clipsText}
 
+Video clips the attendee recorded (up to 30 seconds each, with sound -- a demo, an animated slide, the speaker on stage; you can't watch them, so a few frames from each, where the picture changes, are shown to you below, and what was said during each is from the transcript):
+${videosText}
+
 Links from QR codes on the attendee's photos (decoded on the phone, so exact):
 ${qrLinksText}
 
@@ -853,6 +872,12 @@ ${presentationRequirements(o)}`
   for (const photo of photos.filter((p) => p.shown)) {
     content.push({ type: 'text', text: `Here is ${photo.placeholder}:` })
     content.push({ type: 'image', source: { type: 'url', url: photo.url } })
+  }
+  for (const video of videos) {
+    for (const frame of video.frames) {
+      content.push({ type: 'text', text: `A frame from ${video.placeholder}, ${frame.at} into the clip (to see what it shows -- never place a frame as an image):` })
+      content.push({ type: 'image', source: { type: 'url', url: frame.url } })
+    }
   }
   // Every round re-sends this same prompt; caching it keeps later rounds cheap.
   content[content.length - 1].cache_control = { type: 'ephemeral' }
@@ -933,6 +958,7 @@ function presentationRequirements(o: PresentationOptions): string {
     `Notes, transcript lines and photos marked ★ were starred by the attendee afterwards as entries that mattered most. Give them the same weight as the "Remember this" moments: ${o.tldr ? 'in the TL;DR and ' : ''}called out in their chapter. Don't show the ★ itself or call them "starred".`,
     'Place each photo in the chapter that matches its elapsed time (not an appendix dumped at the end), full width of the text column, never cropped so a slide\'s content is cut off. Reference EACH photo using an <img> tag whose src is EXACTLY its placeholder token, e.g. <img src="PHOTO_1">. Do not invent placeholder names and do not attempt to embed real image data yourself.',
     'Audio clips (if any are listed): place each one in the chapter that matches its elapsed time, at the point in the text where what\'s said in it fits, as <figure class="cc-audio"><audio controls preload="metadata" src="AUDIO_1"></audio><figcaption>...</figcaption></figure> -- the src EXACTLY its placeholder token. The caption is one line saying what the speaker says in the clip: a short quote of their strongest words in it, or a brief paraphrase if the transcript is garbled. No time in the caption. The clips are recordings the attendee chose to keep, so mark them clearly as the speaker\'s voice (e.g. a small "Listen" label or speaker icon) and style the player to fit the theme, the full width of the text column. Use every clip once; don\'t invent placeholders.',
+    'Video clips (if any are listed): place each one in the chapter that matches its elapsed time, at the point in the text where what it shows fits, as <figure class="cc-video"><video controls playsinline preload="metadata" poster="VIDEO_1_POSTER" src="VIDEO_1"></video><figcaption>...</figcaption></figure> -- src EXACTLY its placeholder token and poster that token followed by _POSTER (leave poster out if the clip has no frames listed). The caption is one line saying what the clip shows, from its frames and what was said during it. No time in the caption. Full width of the text column, the video at its own shape (width 100%, height auto, never cropped), styled to fit the theme. Use every clip once; don\'t invent placeholders.',
     'Work acronym expansions into the text where each term first appears, not as a list.',
     'In the <head>, add <meta name="cc-cover" content="PHOTO_n"> naming the ONE photo that best shows what this talk was about -- a key chart, diagram, result or core idea -- never the title slide, an agenda, a photo of the speaker or audience, or a thank-you/questions slide. The app shows it as the talk\'s thumbnail. Leave the tag out if there are no photos.',
     `${o.theme === 'auto' ? 'Pick a visual theme (color palette, type) that fits the subject matter of the talk.' : `Use a ${o.theme} theme (${o.theme === 'dark' ? 'dark background, light text' : 'light background, dark text'}), with type that fits the subject of the talk.`}${/^#[0-9a-fA-F]{6}$/.test(o.accent) ? ` Use ${o.accent} as the accent color (links, rules, highlights, chart emphasis), adjusted only if needed for readable contrast.` : ''} Keep it tasteful and readable: a comfortable text column (about 65 characters wide), generous spacing, legibility over spectacle. On a narrow phone screen keep at least 20px between all text and the left and right edges of the screen (padding on the page or its main column), so nothing touches the edge.`,
@@ -1339,6 +1365,90 @@ async function linkClips(
         starred: !!r.starred,
       }
     })
+}
+
+interface DeckVideo {
+  placeholder: string
+  url: string
+  posterUrl: string | null
+  elapsed: string
+  length: string
+  said: string
+  starred: boolean
+  /** The frames Claude is shown, with their time into the clip. */
+  frames: { url: string; at: string }[]
+}
+
+/** Links to the video clips' kept parts, posters and frames (a year, like
+ * photos: the page keeps the video links, since a video is too big to embed),
+ * with what was said during each. At most `room` frames in all, shared out
+ * so every clip gets its first frame before any gets a second. */
+async function linkVideos(
+  supabase: ReturnType<typeof createClient>,
+  startedAt: string,
+  // deno-lint-ignore no-explicit-any -- rows as the untyped client returns them
+  rows: any[],
+  transcriptSegments: { text: string | null; item_timestamp: string }[],
+  links: Record<string, string>,
+  room: number,
+): Promise<DeckVideo[]> {
+  const key = (path: string) => `video:${path}`
+  // deno-lint-ignore no-explicit-any
+  const framesOf = (r: any): { path: string; atMs: number }[] =>
+    Array.isArray(r.payload.frames) ? r.payload.frames.filter((f: { path?: unknown }) => typeof f?.path === 'string') : []
+  const paths = rows.flatMap((r) => [r.payload.path as string, ...(typeof r.payload.poster === 'string' ? [r.payload.poster] : []), ...framesOf(r).map((f) => f.path)])
+  const missing = [...new Set(paths.filter((path) => !links[key(path)]))]
+  if (missing.length > 0) {
+    const { data: signed, error } = await supabase.storage.from(VIDEOS_BUCKET).createSignedUrls(missing, PHOTO_LINK_SECONDS)
+    if (error) throw error
+    for (const link of signed ?? []) {
+      if (link.error || !link.path || !link.signedUrl) continue
+      links[key(link.path)] = link.signedUrl
+    }
+  }
+  const linked = rows.filter((r) => links[key(r.payload.path)])
+  // Round-robin the frame budget across clips.
+  const allowed = linked.map(() => 0)
+  let left = Math.max(0, room)
+  for (let more = true; more && left > 0;) {
+    more = false
+    linked.forEach((r, i) => {
+      if (left > 0 && allowed[i] < framesOf(r).length) {
+        allowed[i]++
+        left--
+        more = true
+      }
+    })
+  }
+  return linked.map((r, i) => {
+    const clipStart = typeof r.payload.startedAt === 'number' ? r.payload.startedAt : new Date(r.item_timestamp).getTime()
+    const trimStart = Number(r.payload.trimStartMs ?? 0)
+    const trimEnd = Number(r.payload.trimEndMs ?? r.duration_ms ?? 0)
+    const from = clipStart + trimStart
+    const to = clipStart + trimEnd
+    const said = transcriptSegments
+      .filter((t) => {
+        const at = new Date(t.item_timestamp).getTime()
+        return at >= from - 5_000 && at <= to + 5_000
+      })
+      .map((t) => t.text)
+      .join(' ')
+    const seconds = Math.max(0, Math.round((trimEnd - trimStart) / 1000))
+    const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+    const poster = typeof r.payload.poster === 'string' ? links[key(r.payload.poster)] ?? null : null
+    return {
+      placeholder: `VIDEO_${i + 1}`,
+      url: links[key(r.payload.path)],
+      posterUrl: poster,
+      elapsed: formatElapsed(startedAt, new Date(from).toISOString()),
+      length: clock(seconds),
+      said,
+      starred: !!r.starred,
+      frames: framesOf(r).slice(0, allowed[i])
+        .filter((f) => links[key(f.path)])
+        .map((f) => ({ url: links[key(f.path)], at: clock(Math.round(Number(f.atMs ?? 0) / 1000)) })),
+    }
+  })
 }
 
 /** Each "Remember this" tap with what was said and noted around it --

@@ -12,7 +12,7 @@ import type {
 } from '../types'
 import { formatClock, formatClipDuration } from '../format'
 import { usePhotoUrl } from '../hooks/usePhotoUrl'
-import { useVideoUrl } from '../hooks/useVideoUrl'
+import { usePosterUrl, useVideoUrl } from '../hooks/useVideoUrl'
 import { useLocalVideo } from '../videoClips'
 import { SwipeActions, DeleteIcon, ExcludeIcon, IncludeIcon, SaveIcon, StarActionIcon, type DragHandle } from './SwipeActions'
 import { CheckIcon, PauseIcon, PlayIcon, StarIcon } from './InlineIcons'
@@ -834,8 +834,10 @@ function TranscriptRow({ item }: { item: TranscriptItem }) {
 
 function VideoRow({ item, onTap }: { item: VideoItem; onTap: () => void }) {
   const localVideo = useLocalVideo(item.id)
-  // Recorded elsewhere and uploaded: the uploaded cut stands in as its picture.
-  const resolvedUrl = useVideoUrl(item)
+  // Recorded elsewhere and uploaded: its uploaded poster (older uploads have
+  // none, so the cut itself stands in).
+  const posterUrl = usePosterUrl(localVideo ? undefined : item.posterPath)
+  const resolvedUrl = useVideoUrl(localVideo || item.posterPath ? { ...item, videoPath: '' } : item)
   const keptMs = item.trimEndMs - item.trimStartMs
   const clipLabel = `Video, ${formatClipDuration(keptMs)}`
 
@@ -848,6 +850,8 @@ function VideoRow({ item, onTap }: { item: VideoItem; onTap: () => void }) {
       <div className="photo-row__thumb">
         {localVideo ? (
           <img className="photo-row__thumb-img" src={localVideo.poster} alt="" />
+        ) : posterUrl ? (
+          <img className="photo-row__thumb-img" src={posterUrl} alt="" />
         ) : (
           resolvedUrl && <video className="photo-row__thumb-img" src={resolvedUrl} muted playsInline preload="metadata" />
         )}

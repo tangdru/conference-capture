@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { VideoItem } from '../types'
-import { useVideoUrl } from '../hooks/useVideoUrl'
+import { usePosterUrl, useVideoUrl } from '../hooks/useVideoUrl'
 import { useLocalVideo } from '../videoClips'
 import { formatClipDuration, formatClock } from '../format'
 import { Capacitor } from '@capacitor/core'
@@ -34,6 +34,7 @@ const CLOSE_SPEED = 0.6 // px per ms
 export function VideoViewer({ item, onClose, onTrim, listening }: VideoViewerProps) {
   const localVideo = useLocalVideo(item.id)
   const remoteUrl = useVideoUrl(item)
+  const remotePoster = usePosterUrl(localVideo ? undefined : item.posterPath)
   const src = localVideo?.src ?? remoteUrl
   const videoRef = useRef<HTMLVideoElement>(null)
   const stripRef = useRef<HTMLDivElement>(null)
@@ -50,7 +51,8 @@ export function VideoViewer({ item, onClose, onTrim, listening }: VideoViewerPro
   // Only the phone that recorded it has the whole recording to trim; the
   // uploaded cut elsewhere is the kept part already.
   const whole = !!localVideo
-  const total = Math.max(item.durationMs, 1)
+  // Elsewhere the uploaded file is just the kept part.
+  const total = Math.max(whole ? item.durationMs : item.trimEndMs - item.trimStartMs, 1)
   const startMs = whole ? draft?.startMs ?? item.trimStartMs : 0
   const endMs = whole ? draft?.endMs ?? item.trimEndMs : total
   const canTrim = whole && !!onTrim
@@ -240,7 +242,7 @@ export function VideoViewer({ item, onClose, onTrim, listening }: VideoViewerPro
               ref={videoRef}
               className="video-viewer__video"
               src={src}
-              poster={localVideo?.poster}
+              poster={localVideo?.poster ?? remotePoster}
               autoPlay
               playsInline
               muted={listening}

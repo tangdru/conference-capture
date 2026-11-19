@@ -15,6 +15,31 @@ once -- "Testing"; Friends had build 89).
 
 ---
 
+## Build 100 — internal
+
+Uploaded 2026-11-19. The tutorial is one 8-step tour on the session list
+(with a drawing of a session's bar) and no longer pops up inside a session.
+Also in this build: Photos default to Smart, and the phone scores each
+photo's sharpness so presentations leave out blurry ones unless starred;
+Presentation options hide Audio/Video clips when they're off in Session
+options.
+
+What to Test:
+
+```
+TUTORIAL
+- Menu > Tutorial: 8 steps. Step 3 draws the session bar with a line for each button.
+- Make a presentation / Share: the first session's swipe panel opens behind the step.
+- Open a session: no tour pops up.
+
+PHOTOS
+- Make a presentation with a blurry photo: it's left out unless you starred it.
+- Presentation options > Photos: Smart is the default.
+- Turn Chui's audio or Video clips off in Session options: their rows disappear from Presentation options.
+```
+
+---
+
 ## Build 99 — internal
 
 Uploaded 2026-11-19. Session options reordered into one list (Stay live,

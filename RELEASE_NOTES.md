@@ -15,6 +15,39 @@ once -- "Testing"; Friends had build 89).
 
 ---
 
+## Build 98 — internal
+
+Uploaded 2026-11-19. Video clips upload (with a poster and up to 4 stills
+picked on the phone), play on the web and other devices, and go into
+presentations as players. New Session options (video clip length, uploads,
+frames for Claude, photo size) and Presentation options (Smart / All /
+Starred / None for photos, audio and video; gallery layout; Q&A; glossary;
+reading level). Sparkle v26 and connector v7 deployed alongside.
+
+What to Test:
+
+```
+VIDEO CLIPS
+- Record a clip in a session. On Wi-Fi it uploads within a minute; on mobile data it waits (Session options > Video clips > Upload clips: Wi-Fi only).
+- Open the session on the web: the clip's row shows its picture and the clip plays.
+- Trim a clip: the new cut uploads again.
+- Session options > Longest clip: try 15 sec and 1 min. The camera's timer shows the limit and stops there.
+- Upload clips: Off keeps clips on the phone only.
+
+PRESENTATIONS
+- Make a presentation of a session with a clip: the clip plays in it, with its picture before you press play.
+- Presentation options > Photos / Audio clips / Video clips: try Smart. Claude picks what tells the story and leaves the rest out.
+- Photo layout: Gallery shows a grid; tap a photo to see it full size.
+- Q&A and Glossary are on: a talk with audience questions gets a Q&A chapter; a glossary of terms at the end.
+- Reading level: try General or Plain.
+- Share with "Clips in shared presentations" off: videos are left out too.
+
+PHOTOS
+- Session options > Photos > Photo size: Smaller makes photos about a third the size. Check slide text is still readable.
+```
+
+---
+
 ## Build 97 — internal, Friends
 
 Uploaded 2026-11-17. End takes you back to the session list. The camera's

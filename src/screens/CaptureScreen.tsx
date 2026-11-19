@@ -27,7 +27,7 @@ import { addRecordedClip, commitVideoTrims, removeVideoClip, saveVideoToPhotos, 
 import type { NativeVideoClip } from '../native/nativeCamera'
 import { ClipButton } from '../components/ClipButton'
 import { TranscribingIndicator, type TranscribingState } from '../components/TranscribingIndicator'
-import { useSessionOptions } from '../sessionOptions'
+import { PHOTO_SIZE_OPTION, useSessionOptions } from '../sessionOptions'
 import { elapsedFor, isSessionActive } from '../sessionActivity'
 import './CaptureScreen.css'
 
@@ -535,7 +535,7 @@ export function CaptureScreen({
     videoBoost: sessionOptions.voiceBoost,
     videoClips: sessionOptions.videoClips,
     videoMaxS: sessionOptions.videoMaxS,
-    smallerPhotos: sessionOptions.photoQuality === 'smaller',
+    smallerPhotos: PHOTO_SIZE_OPTION && sessionOptions.photoQuality === 'smaller',
   }
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return

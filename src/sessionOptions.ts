@@ -52,6 +52,10 @@ export interface SessionOptions {
   photoQuality: 'standard' | 'smaller'
 }
 
+/** Photo size is hidden for now (2026-11-19): every photo is standard,
+ * whatever was saved before. Set true to bring the option back. */
+export const PHOTO_SIZE_OPTION = false
+
 export const CLIP_BEFORE_MAX_S = 60
 export const CLIP_AFTER_MAX_S = 120
 export const LIVE_WINDOW_MIN_S = 30

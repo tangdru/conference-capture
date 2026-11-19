@@ -4,6 +4,7 @@ import {
   CLIP_BEFORE_MAX_S,
   LIVE_WINDOW_MAX_S,
   LIVE_WINDOW_MIN_S,
+  PHOTO_SIZE_OPTION,
   fetchSessionOptions,
   getSessionOptions,
   saveSessionOptions,
@@ -216,17 +217,19 @@ export function SessionOptionsSheet({ userId, onBack }: SessionOptionsSheetProps
             </label>
           </li>
 
-          <Choice
-            label="Photo size"
-            hint={
-              options.photoQuality === 'smaller'
-                ? 'About a third of the storage; small text on a busy slide may be harder to read'
-                : 'Full detail, so small text on slides stays readable'
-            }
-            value={options.photoQuality}
-            choices={[['standard', 'Standard'], ['smaller', 'Smaller']]}
-            onChange={(v) => set('photoQuality', v)}
-          />
+          {PHOTO_SIZE_OPTION && (
+            <Choice
+              label="Photo size"
+              hint={
+                options.photoQuality === 'smaller'
+                  ? 'About a third of the storage; small text on a busy slide may be harder to read'
+                  : 'Full detail, so small text on slides stays readable'
+              }
+              value={options.photoQuality}
+              choices={[['standard', 'Standard'], ['smaller', 'Smaller']]}
+              onChange={(v) => set('photoQuality', v)}
+            />
+          )}
 
           <li>
             <label className="app-menu__row">

@@ -8,6 +8,7 @@ import {
   type Media,
   type PresentationOptions,
 } from '../presentationOptions'
+import { useSessionOptions } from '../sessionOptions'
 import './AppMenu.css'
 import './PresentationOptionsSheet.css'
 
@@ -34,7 +35,7 @@ const INCLUDED: { key: BooleanKey; label: string; hint: string }[] = [
 const MEDIA_CHOICES: [Media, string][] = [['smart', 'Smart'], ['all', 'All'], ['starred', 'Starred'], ['none', 'None']]
 
 function mediaHint(value: Media, things: string): string {
-  if (value === 'smart') return `Claude picks the ${things} that tell the whole story`
+  if (value === 'smart') return `Let Claude pick the ${things} that fit the story contextually`
   if (value === 'starred') return `Only ${things} you starred`
   if (value === 'none') return `No ${things}`
   return `Every one of your ${things}`
@@ -58,6 +59,9 @@ const SAVED: { key: BooleanKey; label: string; hint: string }[] = [
 export function PresentationOptionsSheet({ userId, onBack }: PresentationOptionsSheetProps) {
   const [options, setOptions] = useState<PresentationOptions | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // A clip row shows only while its button is on in Session options. Hidden,
+  // it keeps its saved choice, so clips made before still go in as they did.
+  const { chuisAudio, videoClips } = useSessionOptions()
   const saveTimer = useRef<number | undefined>(undefined)
   const pending = useRef<PresentationOptions | null>(null)
 
@@ -139,20 +143,24 @@ export function PresentationOptionsSheet({ userId, onBack }: PresentationOptions
                   onChange={set}
                 />
               )}
-              <Choice
-                label="Audio clips"
-                hint={mediaHint(options.audioClips, 'audio clips')}
-                value={options.audioClips}
-                choices={MEDIA_CHOICES}
-                onChange={(v) => set('audioClips', v)}
-              />
-              <Choice
-                label="Video clips"
-                hint={mediaHint(options.videoClips, 'video clips')}
-                value={options.videoClips}
-                choices={MEDIA_CHOICES}
-                onChange={(v) => set('videoClips', v)}
-              />
+              {chuisAudio && (
+                <Choice
+                  label="Audio clips"
+                  hint={mediaHint(options.audioClips, 'audio clips')}
+                  value={options.audioClips}
+                  choices={MEDIA_CHOICES}
+                  onChange={(v) => set('audioClips', v)}
+                />
+              )}
+              {videoClips && (
+                <Choice
+                  label="Video clips"
+                  hint={mediaHint(options.videoClips, 'video clips')}
+                  value={options.videoClips}
+                  choices={MEDIA_CHOICES}
+                  onChange={(v) => set('videoClips', v)}
+                />
+              )}
             </ul>
 
             <h2 className="app-menu__section-title">Layout and style</h2>

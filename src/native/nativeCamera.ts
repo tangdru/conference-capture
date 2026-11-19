@@ -11,6 +11,8 @@ export interface NativeCameraOptions {
   clipEndsAt?: number | null
   /** Session options › Chui's audio › Voice boost, for video clips' sound. */
   videoBoost?: boolean
+  /** Session options › Video clips: off, holding the shutter takes a photo. */
+  videoClips?: boolean
   /** Session options › Video clips › Longest clip, in seconds. */
   videoMaxS?: number
   /** Session options › Photos › Photo size: true for the smaller photos. */

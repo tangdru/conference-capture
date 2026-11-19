@@ -533,6 +533,7 @@ export function CaptureScreen({
     remembered,
     clipEndsAt: activeClip?.endsAt ?? null,
     videoBoost: sessionOptions.voiceBoost,
+    videoClips: sessionOptions.videoClips,
     videoMaxS: sessionOptions.videoMaxS,
     smallerPhotos: sessionOptions.photoQuality === 'smaller',
   }
@@ -563,7 +564,7 @@ export function CaptureScreen({
   }, [])
   useEffect(() => {
     if (nativeCameraUp.current) void NativeCamera.update(cameraState).catch(() => {})
-  }, [cameraState.showRemember, cameraState.showClip, cameraState.remembered, cameraState.clipEndsAt, cameraState.videoBoost, cameraState.videoMaxS, cameraState.smallerPhotos])
+  }, [cameraState.showRemember, cameraState.showClip, cameraState.remembered, cameraState.clipEndsAt, cameraState.videoBoost, cameraState.videoClips, cameraState.videoMaxS, cameraState.smallerPhotos])
 
   async function openCamera() {
     if (!Capacitor.isNativePlatform() || nativeCameraFailed) {

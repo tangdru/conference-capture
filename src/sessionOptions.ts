@@ -36,6 +36,8 @@ export interface SessionOptions {
   /** Whether shared presentations (link or download) play the clips. */
   clipsInShared: boolean
   // Video clips (hold the shutter in the camera).
+  /** Off: holding the shutter just takes a photo. */
+  videoClips: boolean
   /** The longest a clip records before it stops by itself. */
   videoMaxS: 15 | 30 | 60
   /** When clips upload: whenever there's signal, only on Wi-Fi, or never
@@ -68,6 +70,7 @@ export const DEFAULT_SESSION_OPTIONS: SessionOptions = {
   wifiOnlyUploads: false,
   keepTrimmedOnly: true,
   clipsInShared: false,
+  videoClips: true,
   videoMaxS: 30,
   videoUploads: 'wifi',
   videoFramesForClaude: false,

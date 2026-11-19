@@ -302,13 +302,31 @@ export function SessionOptionsSheet({ userId, onBack }: SessionOptionsSheetProps
           </li>
 
           <li>
-            <div className="app-menu__row">
+            <label className="app-menu__row">
               <span className="app-menu__label">
                 Video clips
-                <span className="app-menu__hint">Hold the shutter in the camera to record one.</span>
+                <span className="app-menu__hint">
+                  {options.videoClips
+                    ? 'Hold the shutter in the camera to record one. Off: holding it just takes a photo; clips you made stay.'
+                    : 'Off: holding the shutter just takes a photo. Clips you made stay.'}
+                </span>
               </span>
-            </div>
-            <div className="session-options__more is-open">
+              <input
+                type="checkbox"
+                role="switch"
+                className="pres-options__switch"
+                checked={options.videoClips}
+                aria-expanded={options.videoClips}
+                aria-controls="session-options-video"
+                onChange={(e) => set('videoClips', e.target.checked)}
+              />
+            </label>
+            <div
+              id="session-options-video"
+              className={`session-options__more${options.videoClips ? ' is-open' : ''}`}
+              aria-hidden={!options.videoClips}
+              inert={!options.videoClips}
+            >
               <div className="session-options__more-inner">
                 <ul className="app-menu__list">
                   <Choice

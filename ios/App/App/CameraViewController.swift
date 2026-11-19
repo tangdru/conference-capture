@@ -24,6 +24,10 @@ final class CameraViewController: UIViewController, UIGestureRecognizerDelegate 
     var clipEndsAt: Date? { didSet { if isViewLoaded { clipTick() } } }
     /// Session options › Chui's audio › Voice boost, for video clips' sound.
     var videoBoost = false
+    /// Session options › Video clips: off, holding the shutter just takes a photo.
+    var videoClips = true {
+        didSet { if isViewLoaded { shutter.accessibilityHint = videoClips ? "Hold to record a video clip" : nil } }
+    }
     /// Session options › Video clips › Longest clip.
     var videoMaxSeconds = VideoClipRecorder.maxSeconds
 
@@ -359,7 +363,7 @@ final class CameraViewController: UIViewController, UIGestureRecognizerDelegate 
         shutterDisc.fillColor = Palette.accent.cgColor
         shutter.layer.addSublayer(shutterDisc)
         shutter.accessibilityLabel = "Capture photo"
-        shutter.accessibilityHint = "Hold to record a video clip"
+        shutter.accessibilityHint = videoClips ? "Hold to record a video clip" : nil
         shutter.addTarget(self, action: #selector(shutterDown), for: .touchDown)
         shutter.addTarget(self, action: #selector(shutterLetGo), for: [.touchUpOutside, .touchCancel])
         shutter.addTarget(self, action: #selector(shutterReleased), for: .touchUpInside)
@@ -662,8 +666,11 @@ final class CameraViewController: UIViewController, UIGestureRecognizerDelegate 
         holdTimer?.invalidate()
         guard errorLabel.isHidden, !videoBusy else { return }
         holdTimer = Timer.scheduledTimer(withTimeInterval: Self.holdSeconds, repeats: false) { [weak self] _ in
-            self?.holdTimer = nil
-            self?.startVideo()
+            // With video clips off a hold is just a slow press: the timer
+            // stays set, so letting go takes the photo.
+            guard let self, self.videoClips else { return }
+            self.holdTimer = nil
+            self.startVideo()
         }
     }
 

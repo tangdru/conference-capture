@@ -205,6 +205,17 @@ Deno.serve(async (req) => {
   return json(Array.isArray(body) ? replies : replies[0], 200)
 })
 
+/** Counts a connect or a tool run for the usage report (cc_connector_calls).
+ * Never fails the request: a lost row only shows as a gap in the counts. */
+async function logUse(admin: SupabaseClient, userId: string, tool: string, ok: boolean): Promise<void> {
+  try {
+    const { error } = await admin.from('cc_connector_calls').insert({ user_id: userId, tool: tool.slice(0, 64), ok })
+    if (error) console.error('mcp: use not logged', error.message)
+  } catch (err) {
+    console.error('mcp: use not logged', err)
+  }
+}
+
 async function userFor(admin: SupabaseClient, token: string): Promise<string | null> {
   const { data, error } = await admin.rpc('cc_mcp_user_for', { p_token: token })
   if (error) {
@@ -223,6 +234,7 @@ async function handle(admin: SupabaseClient, userId: string, msg: RpcMessage): P
 
   switch (msg.method) {
     case 'initialize': {
+      await logUse(admin, userId, 'connect', true)
       const asked = msg.params?.protocolVersion
       const protocolVersion = typeof asked === 'string' && PROTOCOL_VERSIONS.includes(asked) ? asked : PROTOCOL_VERSIONS[0]
       return rpcResult(msg.id, {
@@ -245,8 +257,10 @@ async function handle(admin: SupabaseClient, userId: string, msg: RpcMessage): P
       const args = (msg.params?.arguments ?? {}) as Record<string, unknown>
       try {
         const content = await callTool(admin, userId, String(name), args)
+        await logUse(admin, userId, String(name), true)
         return rpcResult(msg.id, { content })
       } catch (err) {
+        await logUse(admin, userId, String(name), false)
         const known = err instanceof ToolError || err instanceof DeckError
         if (!known) console.error(`mcp: ${name} failed`, err)
         const text = known ? (err as Error).message : 'Something went wrong reading Conference Capture, try again.'

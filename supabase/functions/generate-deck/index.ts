@@ -50,23 +50,65 @@ const RATE_LIMIT_RETRIES = 4
 // Turned on 2026-11-15, when Friends got build 89 (with the connector).
 const FREE_LIST_ONLY = true
 
+/** The shared Claude API key, and who it's being used for (so each call's
+ * tokens can be put down to them in cc_claude_usage). */
+interface ClaudeKey {
+  key: string
+  userId: string
+  sessionId: string | null
+}
+
 /** The Claude API key for this request: the shared one, for an account on the
  * free list (or for anyone while FREE_LIST_ONLY is off). */
-async function claudeKeyFor(supabase: ReturnType<typeof createClient>): Promise<string> {
+async function claudeKeyFor(supabase: ReturnType<typeof createClient>, sessionId: string | null): Promise<ClaudeKey> {
   const shared = Deno.env.get('ANTHROPIC_API_KEY')
   if (!shared) throw new Error('No Claude API key')
-  if (!FREE_LIST_ONLY) return shared
   const { data: userData } = await supabase.auth.getUser()
   const userId = userData?.user?.id
-  if (userId) {
-    const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
-      auth: { persistSession: false },
-    })
-    const { data, error } = await admin.rpc('cc_is_free_user', { p_user: userId })
-    if (error) throw new Error(`Couldn't check the free list: ${error.message}`)
-    if (data === true) return shared
-  }
+  if (!userId) throw new Error('Not on the free list')
+  if (!FREE_LIST_ONLY) return { key: shared, userId, sessionId }
+  const { data, error } = await adminClient().rpc('cc_is_free_user', { p_user: userId })
+  if (error) throw new Error(`Couldn't check the free list: ${error.message}`)
+  if (data === true) return { key: shared, userId, sessionId }
   throw new Error('Not on the free list')
+}
+
+function adminClient() {
+  return createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
+    auth: { persistSession: false },
+  })
+}
+
+/** Token counts from a Messages API response's `usage`. */
+interface ClaudeUsage {
+  input_tokens?: number
+  output_tokens?: number
+  cache_creation_input_tokens?: number
+  cache_read_input_tokens?: number
+}
+
+/** Puts one Claude call's tokens down to the person it was for. Never fails
+ * the presentation: a lost usage row only shows as a gap in the counts. */
+function recordUsage(apiKey: ClaudeKey, step: string, model: unknown, usage: ClaudeUsage | undefined, estimated = false): void {
+  if (!usage) return
+  const write = adminClient()
+    .from('cc_claude_usage')
+    .insert({
+      user_id: apiKey.userId,
+      session_id: apiKey.sessionId,
+      kind: 'presentation',
+      step,
+      model: String(model),
+      input_tokens: usage.input_tokens ?? 0,
+      output_tokens: usage.output_tokens ?? 0,
+      cache_write_tokens: usage.cache_creation_input_tokens ?? 0,
+      cache_read_tokens: usage.cache_read_input_tokens ?? 0,
+      estimated,
+    })
+    .then(({ error }) => {
+      if (error) console.error('usage: not recorded', error.message)
+    })
+  EdgeRuntime.waitUntil(write)
 }
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void }
@@ -246,7 +288,7 @@ Deno.serve(async (req) => {
   if (part === 0) {
     try {
       // No key: say so now, before anything is marked as building.
-      await claudeKeyFor(supabase)
+      await claudeKeyFor(supabase, sessionId)
       const start = await markGenerating(supabase, sessionId)
       if (start !== 'started') return jsonResponse({ [start]: true }, 202)
     } catch (err) {
@@ -370,18 +412,28 @@ async function startNextQueued(supabase: ReturnType<typeof createClient>, authHe
 
 /** A Claude request, sent again after a wait when Claude says it's getting
  * too many (429) or is overloaded (529). */
-async function claudeFetch(apiKey: string, body: Record<string, unknown>): Promise<Response> {
+async function claudeFetch(apiKey: ClaudeKey, body: Record<string, unknown>, step: string): Promise<Response> {
   for (let attempt = 0; ; attempt++) {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey,
+        'x-api-key': apiKey.key,
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify(body),
     })
-    if ((response.status !== 429 && response.status !== 529) || attempt >= RATE_LIMIT_RETRIES) return response
+    if ((response.status !== 429 && response.status !== 529) || attempt >= RATE_LIMIT_RETRIES) {
+      // A streamed reply's usage is counted as it's read (readMessageStream).
+      if (response.ok && !body.stream) {
+        EdgeRuntime.waitUntil(
+          response.clone().json()
+            .then((data: { usage?: ClaudeUsage }) => recordUsage(apiKey, step, body.model, data.usage))
+            .catch(() => {}),
+        )
+      }
+      return response
+    }
     const after = Number(response.headers.get('retry-after'))
     const waitMs = Math.min(30_000, Number.isFinite(after) && after > 0 ? after * 1000 : 10_000 * (attempt + 1))
     console.log(`Claude ${response.status}; trying again in ${waitMs / 1000}s`)
@@ -404,7 +456,7 @@ async function generateDeckPart(
   givenSkipped: string[] | null,
   invokedAt: number,
 ): Promise<void> {
-  const apiKey = await claudeKeyFor(supabase)
+  const apiKey = await claudeKeyFor(supabase, sessionId)
   // The app takes silence as a crash, so each round says it's still going.
   if (part > 0) {
     await supabase.from('cc_sessions').update({ deck_heartbeat_at: new Date().toISOString() }).eq('id', sessionId)
@@ -727,7 +779,7 @@ function groupSlideRuns(photos: { text: string | null; item_timestamp: string }[
  * builds up, or a repeat). Claude looks at each run of likely repeats;
  * starred photos are always kept, and anything unclear is kept. */
 async function pickSlidePhotos(
-  apiKey: string,
+  apiKey: ClaudeKey,
   photos: { id: string; url: string; text: string | null; caption: string | null; item_timestamp: string; starred: boolean | null }[],
   startedAt: string,
 ): Promise<string[]> {
@@ -786,7 +838,7 @@ For each group, decide which photos the attendee's write-up doesn't need: a phot
       thinking: { type: 'between_tools' },
       max_tokens: 2000,
       messages: [{ role: 'user', content }],
-    })
+    }, 'pick-slides')
     if (!response.ok) throw new Error(`Claude API ${response.status}: ${(await response.text()).slice(0, 300)}`)
     const data: { content?: { type: string; text?: string }[] } = await response.json()
     const raw = data.content?.find((b) => b.type === 'text')?.text?.trim() ?? ''
@@ -851,7 +903,7 @@ function formatSlideText(text: string): string {
 }
 
 async function callClaude(
-  apiKey: string,
+  apiKey: ClaudeKey,
   title: string,
   startedAt: string,
   notes: { text: string | null; item_timestamp: string; starred?: boolean }[],
@@ -948,14 +1000,21 @@ ${presentationRequirements(o)}`
     max_tokens: 48000,
     stream: true,
     messages,
-  })
+  }, 'write')
 
   if (!response.ok || !response.body) {
     const errText = await response.text()
     throw new Error(`Claude API error (${response.status}): ${errText.slice(0, 500)}`)
   }
 
-  const { text, stopReason, cutOff } = await readMessageStream(response.body, deadline)
+  const { text, stopReason, cutOff, usage } = await readMessageStream(response.body, deadline)
+  // A round cut off at its time limit never gets the final count, so its
+  // output is estimated from the text (about 3.5 characters a token).
+  recordUsage(
+    apiKey, 'write', ANTHROPIC_MODEL,
+    cutOff ? { ...usage, output_tokens: Math.max(usage.output_tokens ?? 0, Math.ceil(text.length / 3.5)) } : usage,
+    cutOff,
+  )
   if (stopReason === 'refusal') {
     throw new Error('Claude declined to generate this presentation')
   }
@@ -1034,11 +1093,14 @@ function presentationRequirements(o: PresentationOptions): string {
 async function readMessageStream(
   body: ReadableStream<Uint8Array>,
   deadline: number,
-): Promise<{ text: string; stopReason: string | null; cutOff: boolean }> {
+): Promise<{ text: string; stopReason: string | null; cutOff: boolean; usage: ClaudeUsage }> {
   const reader = body.pipeThrough(new TextDecoderStream()).getReader()
   let buffer = ''
   let text = ''
   let stopReason: string | null = null
+  // Input and cache counts arrive with message_start; the final output count
+  // with message_delta.
+  let usage: ClaudeUsage = {}
   for (;;) {
     let timer: number | undefined
     const timeout = new Promise<null>((resolve) => {
@@ -1049,7 +1111,7 @@ async function readMessageStream(
     if (result === null) {
       // Keep only whole events: text from a half-read line is dropped.
       await reader.cancel().catch(() => {})
-      return { text, stopReason, cutOff: true }
+      return { text, stopReason, cutOff: true, usage }
     }
     const { done, value } = result
     if (done) break
@@ -1062,14 +1124,17 @@ async function readMessageStream(
       const event = JSON.parse(line.slice(5))
       if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
         text += event.delta.text
-      } else if (event.type === 'message_delta' && event.delta?.stop_reason) {
-        stopReason = event.delta.stop_reason
+      } else if (event.type === 'message_start' && event.message?.usage) {
+        usage = { ...event.message.usage }
+      } else if (event.type === 'message_delta') {
+        if (event.delta?.stop_reason) stopReason = event.delta.stop_reason
+        if (event.usage) usage = { ...usage, ...event.usage }
       } else if (event.type === 'error') {
         throw new Error(`Claude API error: ${event.error?.message ?? 'stream failed'}`)
       }
     }
   }
-  return { text, stopReason, cutOff: false }
+  return { text, stopReason, cutOff: false, usage }
 }
 
 function formatEnrichment(rows: { subtype: string | null; payload: Record<string, unknown> | null }[]): string {
@@ -1134,7 +1199,7 @@ interface SessionRow {
  *    and the transcript never move.
  * Returns whether the session changed. */
 async function organizeSession(
-  apiKey: string,
+  apiKey: ClaudeKey,
   supabase: ReturnType<typeof createClient>,
   session: { id: string; owner_id: string; started_at: string },
   allRows: SessionRow[],
@@ -1208,7 +1273,7 @@ ${tasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
 
 Return ONLY one JSON object with exactly these keys: ${keys.join(', ')}. No markdown fences, no commentary.`,
     }],
-  })
+  }, 'organize')
   if (!response.ok) throw new Error(`Claude API ${response.status}: ${(await response.text()).slice(0, 300)}`)
   const data: { content?: { type: string; text?: string }[] } = await response.json()
   const raw = data.content?.find((b) => b.type === 'text')?.text?.trim() ?? ''
@@ -1320,7 +1385,7 @@ Return ONLY one JSON object with exactly these keys: ${keys.join(', ')}. No mark
 /** A short title for the talk from what was captured, or null if there's too
  * little to tell what it was about. */
 async function nameSession(
-  apiKey: string,
+  apiKey: ClaudeKey,
   notes: { text: string | null }[],
   transcriptSegments: { text: string | null }[],
   photoRows: { text: string | null; caption: string | null }[],
@@ -1346,7 +1411,7 @@ async function nameSession(
       role: 'user',
       content: `Here is what an attendee captured during one conference talk. Give the talk a title for their list of sessions: what it was about, 2 to 7 words, Title Case, no quotes or trailing punctuation. Use the talk's own title if a slide shows it. If there isn't enough here to tell what it was about, reply with exactly NONE.\n\n${material}`,
     }],
-  })
+  }, 'name')
   if (!response.ok) {
     console.error(`nameSession: Claude API ${response.status}: ${(await response.text()).slice(0, 300)}`)
     return null

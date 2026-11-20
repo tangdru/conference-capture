@@ -51,21 +51,45 @@ const FREE_LIST_ONLY = true
 
 /** The Claude API key for this request: the shared one, for an account on the
  * free list (or for anyone while FREE_LIST_ONLY is off). */
-async function claudeKeyFor(supabase: ReturnType<typeof createClient>): Promise<string> {
+async function claudeKeyFor(supabase: ReturnType<typeof createClient>): Promise<{ key: string; userId: string }> {
   const shared = Deno.env.get('ANTHROPIC_API_KEY')
   if (!shared) throw new Error('No Claude API key')
-  if (!FREE_LIST_ONLY) return shared
   const { data: userData } = await supabase.auth.getUser()
   const userId = userData?.user?.id
-  if (userId) {
-    const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
-      auth: { persistSession: false },
-    })
-    const { data, error } = await admin.rpc('cc_is_free_user', { p_user: userId })
-    if (error) throw new Error(`Couldn't check the free list: ${error.message}`)
-    if (data === true) return shared
-  }
+  if (!userId) throw new Error('Not on the free list')
+  if (!FREE_LIST_ONLY) return { key: shared, userId }
+  const { data, error } = await adminClient().rpc('cc_is_free_user', { p_user: userId })
+  if (error) throw new Error(`Couldn't check the free list: ${error.message}`)
+  if (data === true) return { key: shared, userId }
   throw new Error('Not on the free list')
+}
+
+function adminClient() {
+  return createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
+    auth: { persistSession: false },
+  })
+}
+
+/** Puts one answer's tokens down to the person who asked (cc_claude_usage).
+ * Never fails the answer: a lost row only shows as a gap in the counts. */
+async function recordUsage(
+  userId: string,
+  sessionId: string | null,
+  usage: { input_tokens?: number; output_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } | undefined,
+): Promise<void> {
+  if (!usage) return
+  const { error } = await adminClient().from('cc_claude_usage').insert({
+    user_id: userId,
+    session_id: sessionId,
+    kind: 'ask',
+    step: 'answer',
+    model: ANTHROPIC_MODEL,
+    input_tokens: usage.input_tokens ?? 0,
+    output_tokens: usage.output_tokens ?? 0,
+    cache_write_tokens: usage.cache_creation_input_tokens ?? 0,
+    cache_read_tokens: usage.cache_read_input_tokens ?? 0,
+  })
+  if (error) console.error('usage: not recorded', error.message)
 }
 
 // Answers are read while the talk is fresh, often during it -- a faster
@@ -190,7 +214,7 @@ ${GROUND_RULES}
 Captured material:
 ${material}`
 
-  return await callClaude(supabase, system, history, question)
+  return await callClaude(supabase, system, history, question, sessionId)
 }
 
 /** Across every session: each is labelled S1, S2... in the prompt and
@@ -281,13 +305,19 @@ async function allPages(
   }
 }
 
-async function callClaude(supabase: ReturnType<typeof createClient>, system: string, history: Turn[], question: string): Promise<string> {
+async function callClaude(
+  supabase: ReturnType<typeof createClient>,
+  system: string,
+  history: Turn[],
+  question: string,
+  sessionId: string | null = null,
+): Promise<string> {
   const apiKey = await claudeKeyFor(supabase)
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': apiKey,
+      'x-api-key': apiKey.key,
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
@@ -301,7 +331,12 @@ async function callClaude(supabase: ReturnType<typeof createClient>, system: str
     const errText = await response.text()
     throw new Error(`Claude API error (${response.status}): ${errText.slice(0, 300)}`)
   }
-  const data: { stop_reason?: string; content?: { type: string; text?: string }[] } = await response.json()
+  const data: {
+    stop_reason?: string
+    content?: { type: string; text?: string }[]
+    usage?: Parameters<typeof recordUsage>[2]
+  } = await response.json()
+  await recordUsage(apiKey.userId, sessionId, data.usage)
   if (data.stop_reason === 'refusal') throw new Error('Claude declined to answer this')
   const answer = data.content?.find((b) => b.type === 'text')?.text?.trim()
   if (!answer) throw new Error('Claude returned no answer')

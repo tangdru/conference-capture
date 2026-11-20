@@ -1,6 +1,7 @@
 # Backlog
 
-Ideas agreed worth doing but not scheduled yet (2026-10-31). Newest thinking
+Ideas agreed worth doing but not scheduled yet (2026-10-31; tidied
+2026-11-20). Newest thinking
 on the native app is in `native-app-migration.md`.
 
 ## Top ticket (on hold)
@@ -19,11 +20,13 @@ on the native app is in `native-app-migration.md`.
 *Dropped 2026-11-15:* a session photo album. (End session was dropped then, but built in builds 95-97.)
 Ask during a live session works through the Claude connector.
 
-- **Video clips: tap for a photo, hold the shutter for video.** Agreed
-  2026-11-15: up to 30 s, 720p, played in presentations, played and trimmed
-  in the session like audio clips; Andrew moves Supabase to Pro for storage.
-  Full plan: `design/plans/2026-11-15-video-clips-plan.md`. (Requested
-  2026-11-10.)
+*Built 2026-11-19 (builds 98-99):* **video clips**. Tap the shutter for a
+photo, hold it for video (up to 30 s by default, 720p). Clips are played and
+trimmed in the session like audio clips, upload with poster frames, and play
+in presentations. Plan: `design/plans/2026-11-15-video-clips-plan.md`.
+**Not yet tried on a real phone.**
+
+Nothing else is waiting here.
 
 ## Session options
 
@@ -65,6 +68,13 @@ presentations (Sparkle v20) with a caption.
 *Dropped 2026-11-15:* building the presentation automatically when a session
 ends (presentations are made in Claude through the connector, which the app
 can't start), and a date format setting for session names.
+
+*Built 2026-11-19 (build 99):* one list in the order Stay live, Live
+transcript, Remember this, Chui's audio, Video clips, with a **Video clips**
+on/off switch (off: holding the shutter just takes a photo). **Photo size** is
+hidden for now and every photo is standard (`PHOTO_SIZE_OPTION` in
+`src/sessionOptions.ts` brings it back). Presentations' Photos default changed
+to Smart, which leaves out blurry photos unless starred (build 100).
 
 Open naming question: once capture settings and presentation settings both
 exist, the menu might simply say "Options" with two sections.
@@ -108,10 +118,16 @@ and starring any entry (2026-11-01). Rough order of value.
 
 ## Product
 
-- **Save Ask conversations** per session so they can be continued later,
-  and/or save an answer as a note on the session.
-- **Record the cost of each AI call** (token usage) to see what each
-  question and sparkle really costs.
+*Dropped 2026-11-20:* **Save Ask conversations**. Ask now hands off to the
+Claude app (build 84), which keeps the chats itself.
+
+*Built 2026-11-20:* **recording the cost of each AI call**. Spend per person
+on the shared key is in `cc_claude_usage`, with `cc_claude_usage_by_user` and
+`cc_usage_report` views. Use in Claude connects and tool runs are counted too.
+
+*Built 2026-11-19 (build 100):* **tutorial** as one 8-step tour on the
+session list, with a drawing of a session's bar. It no longer pops up inside
+a session.
 
 - **Export a written summary** to Notes, email or Notion, alongside the deck.
 
@@ -123,7 +139,9 @@ opens it), plus Pin. The rest, roughly in order:
 
 - **Build all of a day's presentations at once.** One tap runs Sparkle on
   every session of the day without a presentation, which also names the many
-  sessions still called "Session".
+  sessions still called "Session". *Blocked (2026-11-20):* presentations are
+  now made in the Claude app, one chat per session, so the app can't start
+  them in bulk. Revisit only if presentations are made on the server again.
 - **Events.** Group days into an event (e.g. "IEEE VIS 2026"), suggested from
   dates or made by hand, with its own page of talks. Needs the day groups.
 - **Event digest.** One presentation for a day or event: themes across the
@@ -146,15 +164,20 @@ opens it), plus Pin. The rest, roughly in order:
 
 ## Storage and cost
 
+*Update 2026-11-20:* the project is on **Supabase Pro** (100 GB). 1.82 GB is
+used (photos 1.16 GB, presentations 505 MB, shared copies 155 MB). Storage
+isn't a concern. Presentations keep shrunk copies of their photos on purpose:
+they then work offline, never show broken links and download as one file.
+The notes below are from before Pro.
+
 Considered 2026-11-08, not decided. Supabase holds the main copy of
 everything; the phone only queues items until they upload, plus Remember this
 clips. Usage then: about 110 MB (photos 86 MB at ~0.9 MB each, presentations
 13 MB, database 12 MB). The free plan has 1 GB of files; one busy conference
 day is roughly 150-200 MB per person; Pro is $25/month for 100 GB.
 
-- **Smaller photos.** Compress slide photos harder (about half the size);
-  Claude still reads the text fine. Cheapest win, do first if storage grows.
-- **Watch usage** and move to Supabase Pro only near 1 GB.
+- **Smaller photos.** Built as the Photo size option (build 98), then hidden
+  in build 99; every photo is standard.
 - **Sync only what changed.** The app now shows the copy saved on the phone
   at once, then reloads everything. Next step: ask only for entries new or
   changed since the last sync. Needs an updated-at time on entries and a
